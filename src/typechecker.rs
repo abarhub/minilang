@@ -688,3 +688,24 @@ impl TypeChecker {
         self.find_field_in_class(class_name, field)
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  API de test : parse + typecheck une source, retourne les erreurs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Parse + typecheck une source mini.
+/// Retourne Ok(()) si aucune erreur, Err(messages) sinon.
+pub fn check_source(src: &str) -> Result<(), Vec<String>> {
+    use chumsky::Parser;
+    let program = crate::parser::program_parser()
+        .parse(src)
+        .map_err(|errs| {
+            errs.iter().map(|e| e.to_string()).collect::<Vec<_>>()
+        })?;
+    let errors = TypeChecker::new(&program).check(&program);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.iter().map(|e| e.0.clone()).collect())
+    }
+}

@@ -4,19 +4,16 @@
 //  RUST_LOG=debug cargo run -- example.mini
 // ─────────────────────────────────────────────────────────────────────────────
 
-mod ast;
-mod interpreter;
-mod parser;
-mod typechecker;
+// Les modules sont exposés via lib.rs.
 
 use std::{env, fs, process};
 
 use chumsky::Parser;
 use log::{error, info, warn};
 
-use ast::*;
-use interpreter::Interpreter;
-use typechecker::TypeChecker;
+use mini_parser::ast::*;
+use mini_parser::interpreter::Interpreter;
+use mini_parser::typechecker::TypeChecker;
 
 fn main() {
     env_logger::Builder::from_env(
@@ -38,7 +35,7 @@ fn main() {
 
     // ── Parsing ───────────────────────────────────────────────────────────────
     info!("Parsing...");
-    let program = match parser::program_parser().parse(source.as_str()) {
+    let program = match mini_parser::parser::program_parser().parse(source.as_str()) {
         Ok(p)  => { info!("AST construit ✓"); p }
         Err(errors) => {
             for e in &errors { error!("Syntaxe : {}", e); }
@@ -107,10 +104,10 @@ fn print_interface(i: &InterfaceDef) {
 
 fn print_class(c: &ClassDef) {
     let tps = if c.type_params.is_empty() { String::new() }
-    else { format!("<{}>", c.type_params.join(", ")) };
+              else { format!("<{}>", c.type_params.join(", ")) };
     let ext = c.parent.as_deref().map(|p| format!(" extends {}", p)).unwrap_or_default();
     let imp = if c.implements.is_empty() { String::new() }
-    else { format!(" implements {}", c.implements.join(", ")) };
+              else { format!(" implements {}", c.implements.join(", ")) };
     println!("class {}{}{}{} {{", c.name, tps, ext, imp);
     for f in &c.fields { println!("{}  {} {};", pad(0), f.ty, f.name); }
     for ctor in &c.constructors {
@@ -216,10 +213,10 @@ fn fmt_expr(e: &Expr) -> String {
         }
         Expr::New { class_name, type_args, args } => {
             let ta = if type_args.is_empty() { String::new() }
-            else {
-                let ts: Vec<String> = type_args.iter().map(|t| t.to_string()).collect();
-                format!("<{}>", ts.join(", "))
-            };
+                     else {
+                         let ts: Vec<String> = type_args.iter().map(|t| t.to_string()).collect();
+                         format!("<{}>", ts.join(", "))
+                     };
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
             format!("new {}{}({})", class_name, ta, a.join(", "))
         }

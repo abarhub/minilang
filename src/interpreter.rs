@@ -653,3 +653,20 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         _ => false,
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  API de test : exécute une source directement, retourne le code de sortie
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Parse + exécute une source mini, retourne le code de sortie de main().
+/// Utilisé par les tests d'intégration.
+pub fn run_source(src: &str) -> Result<i64, String> {
+    use chumsky::Parser;
+    let program = crate::parser::program_parser()
+        .parse(src)
+        .map_err(|errs| {
+            errs.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n")
+        })?;
+    let mut interp = Interpreter::new(&program);
+    interp.run(&program).map_err(|e| e.to_string())
+}

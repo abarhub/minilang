@@ -3,6 +3,16 @@ name = "test_parse"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "mini_parser"
+path = "src/main.rs"
+
+
+[lib]
+name = "mini_parser"
+path = "src/lib.rs"
+
+
 [dependencies]
 chumsky  = "0.9"
 log      = "0.4"
