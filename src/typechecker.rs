@@ -132,6 +132,17 @@ impl TypeChecker {
         self.errors.push(TypeError(msg));
     }
 
+    /// Variante de `infer_expr` qui enregistre l'erreur dans `self.errors`
+    /// au lieu de la retourner, et renvoie `None` en cas d'échec.
+    /// Cela évite que les `if let Ok(t) = self.infer_expr(...)` ignorent
+    /// silencieusement les erreurs de type (ex. `true + false`).
+    fn infer(&mut self, expr: &Expr, env: &TypeEnv) -> Option<Type> {
+        match self.infer_expr(expr, env) {
+            Ok(t)  => Some(t),
+            Err(e) => { self.errors.push(e); None }
+        }
+    }
+
     // ── Programme ─────────────────────────────────────────────────────────────
 
     fn check_program(&mut self, program: &Program) {
@@ -246,7 +257,7 @@ impl TypeChecker {
         match stmt {
             Stmt::VarDecl { ty, name, init } => {
                 if let Some(expr) = init {
-                    if let Ok(expr_ty) = self.infer_expr(expr, env) {
+                    if let Some(expr_ty) = self.infer(expr, env) {
                         if !self.is_compatible(&expr_ty, ty) {
                             self.err(format!(
                                 "Déclaration '{}' : type {} incompatible avec {}",
@@ -259,13 +270,12 @@ impl TypeChecker {
             }
 
             Stmt::Assign { target, value } => {
-                let val_ty = self.infer_expr(value, env);
-                // Cherche le type de la cible (variable locale ou champ de this)
+                let val_ty = self.infer(value, env);
                 let target_ty = env.get(target)
                     .cloned()
                     .or_else(|| self.field_type_of_current_class(target));
 
-                if let (Ok(vt), Some(tt)) = (val_ty, target_ty) {
+                if let (Some(vt), Some(tt)) = (val_ty, target_ty) {
                     if !self.is_compatible(&vt, &tt) {
                         self.err(format!("Affectation '{}' : {} incompatible avec {}", target, vt, tt));
                     }
@@ -273,7 +283,7 @@ impl TypeChecker {
             }
 
             Stmt::FieldAssign { object, field, value } => {
-                let val_ty = self.infer_expr(value, env);
+                let val_ty = self.infer(value, env);
                 let obj_ty = if object == "this" {
                     self.current_class.as_ref().map(|c| Type::UserDefined(c.clone()))
                 } else {
@@ -284,7 +294,7 @@ impl TypeChecker {
                 if let Some(ot) = obj_ty {
                     match self.find_field_type_of(&ot, field) {
                         Some(ft) => {
-                            if let Ok(vt) = val_ty {
+                            if let Some(vt) = val_ty {
                                 if !self.is_compatible(&vt, &ft) {
                                     self.err(format!(
                                         "Affectation {}.{} : {} incompatible avec {}",
@@ -294,7 +304,6 @@ impl TypeChecker {
                             }
                         }
                         None => {
-                            // Avertissement seulement pour champs hérités / génériques
                             warn!("Champ inconnu '{}.{}' (peut être un champ hérité)", object, field);
                         }
                     }
@@ -302,13 +311,13 @@ impl TypeChecker {
             }
 
             Stmt::Print(args) => {
-                for a in args { let _ = self.infer_expr(a, env); }
+                for a in args { self.infer(a, env); }
             }
 
             Stmt::Return(expr) => {
                 let ret = self.expected_return.clone();
                 if let Some(e) = expr {
-                    if let Ok(ty) = self.infer_expr(e, env) {
+                    if let Some(ty) = self.infer(e, env) {
                         if !self.is_compatible(&ty, &ret) {
                             self.err(format!("return {} mais attendu {}", ty, ret));
                         }
@@ -318,13 +327,13 @@ impl TypeChecker {
                 }
             }
 
-            Stmt::ExprStmt(e) => { let _ = self.infer_expr(e, env); }
+            Stmt::ExprStmt(e) => { self.infer(e, env); }
 
             Stmt::If { condition, then_body, else_body } => {
-                if let Ok(ct) = self.infer_expr(condition, env) {
-                    if ct != Type::Bool {
-                        self.err(format!("Condition du if doit être bool, trouvé {}", ct));
-                    }
+                match self.infer(condition, env) {
+                    Some(ct) if ct != Type::Bool =>
+                        self.err(format!("Condition du if doit être bool, trouvé {}", ct)),
+                    _ => {}
                 }
                 env.push();
                 for s in then_body { self.check_stmt(s, env); }
@@ -337,10 +346,10 @@ impl TypeChecker {
             }
 
             Stmt::While { condition, body } | Stmt::DoWhile { body, condition } => {
-                if let Ok(ct) = self.infer_expr(condition, env) {
-                    if ct != Type::Bool {
-                        self.err(format!("Condition du while doit être bool, trouvé {}", ct));
-                    }
+                match self.infer(condition, env) {
+                    Some(ct) if ct != Type::Bool =>
+                        self.err(format!("Condition du while doit être bool, trouvé {}", ct)),
+                    _ => {}
                 }
                 env.push();
                 for s in body { self.check_stmt(s, env); }
@@ -349,15 +358,15 @@ impl TypeChecker {
 
             Stmt::For { init, condition, update, body } => {
                 env.push();
-                if let Some(s) = init    { self.check_stmt(s, env); }
+                if let Some(s) = init { self.check_stmt(s, env); }
                 if let Some(e) = condition {
-                    if let Ok(ct) = self.infer_expr(e, env) {
-                        if ct != Type::Bool {
-                            self.err(format!("Condition du for doit être bool, trouvé {}", ct));
-                        }
+                    match self.infer(e, env) {
+                        Some(ct) if ct != Type::Bool =>
+                            self.err(format!("Condition du for doit être bool, trouvé {}", ct)),
+                        _ => {}
                     }
                 }
-                if let Some(s) = update  { self.check_stmt(s, env); }
+                if let Some(s) = update { self.check_stmt(s, env); }
                 env.push();
                 for s in body { self.check_stmt(s, env); }
                 env.pop();
@@ -449,7 +458,7 @@ impl TypeChecker {
             Expr::FunctionCall { name, args } => {
                 // print est une pseudo-fonction builtin
                 if name == "print" {
-                    for a in args { let _ = self.infer_expr(a, env); }
+                    for a in args { self.infer(a, env); }
                     return Ok(Type::Void);
                 }
 

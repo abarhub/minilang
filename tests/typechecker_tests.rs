@@ -363,6 +363,7 @@ fn test_error_arithmetic_on_bool() {
 
 #[test]
 fn test_error_logic_on_int() {
+    // && attend deux bool, pas deux int
     assert_error(
         r#"int main() { bool b = 1 && 2; return 0; }"#,
         "bool",
