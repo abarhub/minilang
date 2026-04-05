@@ -1,0 +1,244 @@
+package com.example.zoo;
+
+import com.example.util.*;
+import com.example.math.MathHelper;
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
+
+interface Describable {
+    void describe();
+}
+
+interface Audible {
+    void makeSound();
+}
+
+// ── Classe générique Pair<A, B> ───────────────────────────────────────────────
+
+class Pair<A, B> {
+    A first;
+    B second;
+
+    Pair(A f, B s) {
+        first = f;
+        second = s;
+    }
+
+    void describe() {
+        print("Pair(", first, ",", second, ")");
+    }
+}
+
+// ── Classe de base Animal ─────────────────────────────────────────────────────
+
+class Animal implements Describable {
+    string name;
+    int    age;
+
+    // Constructeur par défaut
+    Animal(string n, int a) {
+        name = n;
+        age  = a;
+    }
+
+    string getName() { return name; }
+    int    getAge()  { return age;  }
+
+    void describe() {
+        print("Animal:", name, "| age:", age);
+    }
+
+    // Méthode utilitaire : renvoie age dans 5 ans
+    int ageInFiveYears() {
+        return age + 5;
+    }
+}
+
+// ── Classe dérivée Dog ────────────────────────────────────────────────────────
+
+class Dog extends Animal implements Audible {
+    string breed;
+    int    tricks;
+
+    Dog(string n, int a, string b) {
+        name   = n;
+        age    = a;
+        breed  = b;
+        tricks = 0;
+    }
+
+    void learnTrick() {
+        tricks = tricks + 1;
+    }
+
+    // Override
+    void describe() {
+        print("Chien:", name, "| race:", breed, "| tours:", tricks);
+    }
+
+    void makeSound() {
+        print(name, "aboie : Woof!");
+    }
+
+    // Renvoie une note sur 10 basée sur les tours et l'age
+    float score() {
+        float base = tricks * 2.0;
+        float bonus = age * 0.5;
+        return base + bonus;
+    }
+}
+
+// ── Classe GuideDog (héritage 3 niveaux) ─────────────────────────────────────
+
+class GuideDog extends Dog {
+    string owner;
+
+    GuideDog(string n, int a, string b, string o) {
+        name  = n;
+        age   = a;
+        breed = b;
+        owner = o;
+    }
+
+    void describe() {
+        print("Chien guide:", name, "| race:", breed, "| proprio:", owner);
+    }
+}
+
+// ── Classe MathUtils (démo expressions) ──────────────────────────────────────
+
+class MathUtils {
+    int value;
+
+    MathUtils(int v) {
+        value = v;
+    }
+
+    // Factorielle (while)
+    int factorial() {
+        int result = 1;
+        int i = value;
+        while (i > 1) {
+            result = result * i;
+            i = i - 1;
+        }
+        return result;
+    }
+
+    // Puissance entière (for style C)
+    int power(int exp) {
+        int result = 1;
+        for (int i = 0; i < exp; i = i + 1) {
+            result = result * value;
+        }
+        return result;
+    }
+
+    // Suite de Fibonacci jusqu'à n (do-while)
+    void printFib(int n) {
+        int a = 0;
+        int b = 1;
+        int count = 0;
+        do {
+            print("fib[", count, "] =", a);
+            int tmp = a + b;
+            a = b;
+            b = tmp;
+            count = count + 1;
+        } while (count < n);
+    }
+
+    // Démo modulo et puissance d'opérateur **
+    void demoOps() {
+        int x = 17;
+        int m = x % 5;
+        print("17 % 5 =", m);
+
+        // ** = puissance via opérateur
+        float base = 2.0;
+        float pw = base ** 10.0;
+        print("2.0 ** 10.0 =", pw);
+
+        // Concaténation de strings
+        string hello = "Hello" + ", " + "World!";
+        print(hello);
+
+        // Expressions composées
+        float r = (3.0 + 4.0) * 2.0 - 1.0 / 2.0;
+        print("(3+4)*2 - 1/2 =", r);
+    }
+}
+
+// ── Point d'entrée ────────────────────────────────────────────────────────────
+
+int main() {
+
+    // ── Constructeurs ─────────────────────────────────────────────────────────
+    Animal a = new Animal("Félix", 4);
+    a.describe();
+
+    Dog d = new Dog("Rex", 3, "Labrador");
+    d.learnTrick();
+    d.learnTrick();
+    d.learnTrick();
+    d.describe();
+    d.makeSound();
+
+    GuideDog g = new GuideDog("Buddy", 5, "Golden", "Alice");
+    g.describe();
+    g.makeSound();          // hérité de Dog
+
+    // ── Héritage de méthodes ──────────────────────────────────────────────────
+    print("Age de Rex dans 5 ans:", d.ageInFiveYears());
+    print("Score de Rex:", d.score());
+
+    // ── Type générique ────────────────────────────────────────────────────────
+    Pair<string, int> p = new Pair<string, int>("age de Buddy", 5);
+    p.describe();
+
+    // ── if / else if / else ───────────────────────────────────────────────────
+    int score = 75;
+    if (score >= 90) {
+        print("Mention : Très bien");
+    } else if (score >= 75) {
+        print("Mention : Bien");
+    } else if (score >= 60) {
+        print("Mention : Assez bien");
+    } else {
+        print("Mention : Insuffisant");
+    }
+
+    // ── Expressions arithmétiques ─────────────────────────────────────────────
+    MathUtils mu = new MathUtils(6);
+    print("6! =", mu.factorial());
+    print("6^4 =", mu.power(4));
+    mu.printFib(8);
+    mu.demoOps();
+
+    // ── for avec break / continue ─────────────────────────────────────────────
+    print("Pairs de 0 à 10 :");
+    for (int i = 0; i <= 10; i = i + 1) {
+        if (i % 2 != 0) {
+            continue;
+        }
+        if (i == 8) {
+            break;
+        }
+        print(" ", i);
+    }
+
+    // ── while ─────────────────────────────────────────────────────────────────
+    int n = 100;
+    int steps = 0;
+    while (n != 1) {
+        if (n % 2 == 0) {
+            n = n / 2;
+        } else {
+            n = n * 3 + 1;
+        }
+        steps = steps + 1;
+    }
+    print("Collatz(100) :", steps, "étapes");
+
+    return 0;
+}

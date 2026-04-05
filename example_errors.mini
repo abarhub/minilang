@@ -1,0 +1,60 @@
+// Ce fichier contient des erreurs de type intentionnelles.
+// Le typechecker doit les détecter et refuser l'exécution.
+
+interface Printable {
+    void display();
+    int getValue();
+}
+
+class Base {
+    int x;
+
+    Base(int v) {
+        x = v;
+    }
+
+    int getX() { return x; }
+}
+
+class Child extends Base implements Printable {
+    string label;
+
+    Child(int v, string l) {
+        x     = v;
+        label = l;
+    }
+
+    void display() {
+        print(label, "=", x);
+    }
+
+    int getValue() { return x; }
+}
+
+// ERREUR 1 : classe qui prétend implémenter Printable
+// mais n'implémente pas getValue()
+class BadImpl implements Printable {
+    void display() { print("ok"); }
+    // getValue() manquant !
+}
+
+int main() {
+    // ERREUR 2 : affectation d'un int là où string est attendu
+    string s = 42;
+
+    // ERREUR 3 : appel de méthode inexistante
+    Base b = new Base(10);
+    b.fly();
+
+    // ERREUR 4 : mauvais nombre de paramètres
+    Child c = new Child(1);  // manque le 2e argument
+
+    // ERREUR 5 : condition non booléenne
+    int n = 5;
+    if (n) {
+        print("jamais");
+    }
+
+    // ERREUR 6 : return du mauvais type
+    return "oops";
+}

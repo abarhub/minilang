@@ -1,0 +1,85 @@
+// ──────────────────────────────────────────────
+//  Exemple complet – toutes les fonctionnalités
+// ──────────────────────────────────────────────
+
+// Classe représentant un animal
+class Animal {
+    string name;
+    int    age;
+    bool   alive;
+
+    // Retourne le nom
+    string getName() {
+        return name;
+    }
+
+    // Modifie l'âge
+    void setAge(int a) {
+        age = a;
+    }
+
+    // Affiche les infos
+    void describe() {
+        print("Nom :", name, "| Age :", age);
+    }
+}
+
+// Classe représentant un zoo
+class Zoo {
+    string   location;
+    Animal   star;
+    int[]    capacites;
+
+    // Construit une description
+    string info(string extra) {
+        print("Zoo de", location, extra);
+        return location;
+    }
+
+    // Nombre total de places
+    int totalCapacity(int bonus) {
+        int total = bonus;
+        return total;
+    }
+}
+
+// ── Point d'entrée ──────────────────────────────────
+
+int main() {
+    // Déclarations de variables primitives
+    int    compteur = 0;
+    bool   actif    = true;
+    float  ratio    = 3.14;
+    double precision = 2.718281828;
+    string message  = "Bonjour";
+
+    // Tableau d'entiers
+    int[] notes;
+
+    // Variable de type classe
+    Animal a;
+    Zoo    z;
+
+    // Affectations
+    compteur = 42;
+    message  = "Hello, world!";
+
+    // Appel print avec plusieurs arguments
+    print("Compteur :", compteur, "| Actif :", actif);
+    print("Ratio :", ratio, "| Précision :", precision);
+    print(message);
+
+    // Accès à un champ (lecture)
+    print("Nom de l'animal :", a.name);
+
+    // Appel de méthode
+    a.describe();
+    a.setAge(5);
+
+    // Appel de méthode avec valeur de retour utilisée dans print
+    print("Nom récupéré :", a.getName());
+    print("Info zoo :", z.info("visite libre"));
+
+    // return obligatoire pour main
+    return 0;
+}
