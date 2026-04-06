@@ -1,19 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  mini_parser – point d'entrée
+//  main.rs – point d'entrée
 //  RUST_LOG=info  cargo run -- example.mini
-//  RUST_LOG=debug cargo run -- example.mini
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Les modules sont exposés via lib.rs.
-
-use std::{env, fs, process};
-
-use chumsky::Parser;
-use log::{error, info, warn};
-
 use mini_parser::ast::*;
 use mini_parser::interpreter::Interpreter;
 use mini_parser::typechecker::TypeChecker;
+
+use std::{env, fs, process};
+use chumsky::Parser;
+use log::{error, info};
 
 fn main() {
     env_logger::Builder::from_env(
@@ -21,19 +18,14 @@ fn main() {
     ).init();
 
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        error!("Usage: {} <fichier.mini>", args[0]);
-        process::exit(1);
-    }
+    if args.len() < 2 { error!("Usage: {} <fichier.mini>", args[0]); process::exit(1); }
     let path = &args[1];
     info!("Lecture de '{}'", path);
 
     let source = fs::read_to_string(path).unwrap_or_else(|e| {
-        error!("Impossible de lire '{}' : {}", path, e);
-        process::exit(1);
+        error!("Impossible de lire '{}' : {}", path, e); process::exit(1);
     });
 
-    // ── Parsing ───────────────────────────────────────────────────────────────
     info!("Parsing...");
     let program = match mini_parser::parser::program_parser().parse(source.as_str()) {
         Ok(p)  => { info!("AST construit ✓"); p }
@@ -43,21 +35,17 @@ fn main() {
         }
     };
 
-    // ── Affichage de l'AST ────────────────────────────────────────────────────
     print_program(&program);
 
-    // ── Vérification des types ────────────────────────────────────────────────
     info!("Vérification des types...");
     let tc = TypeChecker::new(&program);
     let type_errors = tc.check(&program);
     if !type_errors.is_empty() {
-        warn!("{} erreur(s) de type détectée(s) :", type_errors.len());
         for e in &type_errors { error!("  {}", e); }
         process::exit(1);
     }
     info!("Types OK ✓");
 
-    // ── Exécution ─────────────────────────────────────────────────────────────
     println!("\n{}\n  EXÉCUTION\n{}\n", "─".repeat(50), "─".repeat(50));
     let mut interp = Interpreter::new(&program);
     match interp.run(&program) {
@@ -66,28 +54,19 @@ fn main() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Affichage de l'AST
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Affichage de l'AST ────────────────────────────────────────────────────────
 
 fn pad(d: usize) -> String { "  ".repeat(d) }
 
 fn print_program(p: &Program) {
     println!("\n{}\n  AST\n{}", "─".repeat(50), "─".repeat(50));
-
-    if let Some(pkg) = &p.package {
-        println!("package {};", pkg.path);
-    }
-    for imp in &p.imports {
-        println!("import {};", imp.path);
-    }
+    if let Some(pkg) = &p.package { println!("package {};", pkg.path); }
+    for imp in &p.imports { println!("import {};", imp.path); }
     if p.package.is_some() || !p.imports.is_empty() { println!(); }
-
     for iface in &p.interfaces { print_interface(iface); println!(); }
-    for class in &p.classes    { print_class(class);     println!(); }
-
-    println!("int main()");
-    println!("{{");
+    for e in &p.enums          { print_enum(e);          println!(); }
+    for c in &p.classes        { print_class(c);         println!(); }
+    println!("int main() {{");
     for s in &p.main.body { print_stmt(s, 1); }
     println!("}}");
     println!("{}", "─".repeat(50));
@@ -102,6 +81,20 @@ fn print_interface(i: &InterfaceDef) {
     println!("}}");
 }
 
+fn print_enum(e: &EnumDef) {
+    println!("enum {} {{", e.name);
+    let variants: Vec<String> = e.variants.iter().map(|v| {
+        if v.fields.is_empty() { v.name.clone() }
+        else {
+            let fs: Vec<String> = v.fields.iter().map(|f| format!("{} {}", f.ty, f.name)).collect();
+            format!("{}({})", v.name, fs.join(", "))
+        }
+    }).collect();
+    println!("{}  {}", pad(0), variants.join(", "));
+    for m in &e.methods { println!(); print_method(m, 1); }
+    println!("}}");
+}
+
 fn print_class(c: &ClassDef) {
     let tps = if c.type_params.is_empty() { String::new() }
               else { format!("<{}>", c.type_params.join(", ")) };
@@ -111,9 +104,8 @@ fn print_class(c: &ClassDef) {
     println!("class {}{}{}{} {{", c.name, tps, ext, imp);
     for f in &c.fields { println!("{}  {} {};", pad(0), f.ty, f.name); }
     for ctor in &c.constructors {
-        println!();
         let ps: Vec<String> = ctor.params.iter().map(|p| format!("{} {}", p.ty, p.name)).collect();
-        println!("{}  {}({}) {{", pad(0), c.name, ps.join(", "));
+        println!(); println!("{}  {}({}) {{", pad(0), c.name, ps.join(", "));
         for s in &ctor.body { print_stmt(s, 2); }
         println!("{}  }}", pad(0));
     }
@@ -169,8 +161,24 @@ fn print_stmt(s: &Stmt, d: usize) {
             let i = init.as_deref().map(fmt_stmt_inline).unwrap_or_default();
             let c = condition.as_ref().map(fmt_expr).unwrap_or_default();
             let u = update.as_deref().map(fmt_stmt_inline).unwrap_or_default();
-            println!("{}for ({} ; {} ; {}) {{", pad(d), i, c, u);
+            println!("{}for ({}; {}; {}) {{", pad(d), i, c, u);
             for s in body { print_stmt(s, d + 1); }
+            println!("{}}}", pad(d));
+        }
+        Stmt::Match { expr, arms } => {
+            println!("{}match {} {{", pad(d), fmt_expr(expr));
+            for arm in arms {
+                let pat = match &arm.pattern {
+                    Pattern::Wildcard => "_".to_string(),
+                    Pattern::Variant { name, bindings } => {
+                        if bindings.is_empty() { name.clone() }
+                        else { format!("{}({})", name, bindings.join(", ")) }
+                    }
+                };
+                println!("{}  {} => {{", pad(d), pat);
+                for s in &arm.body { print_stmt(s, d + 2); }
+                println!("{}  }}", pad(d));
+            }
             println!("{}}}", pad(d));
         }
     }
@@ -213,12 +221,14 @@ fn fmt_expr(e: &Expr) -> String {
         }
         Expr::New { class_name, type_args, args } => {
             let ta = if type_args.is_empty() { String::new() }
-                     else {
-                         let ts: Vec<String> = type_args.iter().map(|t| t.to_string()).collect();
-                         format!("<{}>", ts.join(", "))
-                     };
+                     else { format!("<{}>", type_args.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", ")) };
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
             format!("new {}{}({})", class_name, ta, a.join(", "))
+        }
+        Expr::EnumConstructor { enum_name, variant, args } => {
+            let a: Vec<String> = args.iter().map(fmt_expr).collect();
+            if a.is_empty() { format!("{}::{}", enum_name, variant) }
+            else { format!("{}::{}({})", enum_name, variant, a.join(", ")) }
         }
     }
 }

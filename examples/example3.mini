@@ -1,0 +1,204 @@
+package com.example.demo;
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
+
+interface Describable {
+    void describe();
+}
+
+// ── Enum Direction (variantes sans champs) ────────────────────────────────────
+
+enum Direction {
+    North, South, East, West;
+
+    string name() {
+        match this {
+            Direction::North => { return "Nord"; }
+            Direction::South => { return "Sud"; }
+            Direction::East  => { return "Est"; }
+            Direction::West  => { return "Ouest"; }
+            _                => { return "Inconnu"; }
+        }
+    }
+
+    Direction opposite() {
+        match this {
+            Direction::North => { return Direction::South; }
+            Direction::South => { return Direction::North; }
+            Direction::East  => { return Direction::West; }
+            Direction::West  => { return Direction::East; }
+            _                => { return Direction::North; }
+        }
+    }
+}
+
+// ── Enum Shape (variantes avec champs) ────────────────────────────────────────
+
+enum Shape {
+    Circle(float radius),
+    Rectangle(float width, float height),
+    Triangle(float base, float height);
+
+    float area() {
+        match this {
+            Shape::Circle(radius)              => { return 3.14159 * radius * radius; }
+            Shape::Rectangle(width, height)    => { return width * height; }
+            Shape::Triangle(base, height)      => { return 0.5 * base * height; }
+            _                                  => { return 0.0; }
+        }
+    }
+
+    string describe() {
+        match this {
+            Shape::Circle(radius)              => { return "Cercle de rayon " + "r"; }
+            Shape::Rectangle(width, height)    => { return "Rectangle"; }
+            Shape::Triangle(base, height)      => { return "Triangle"; }
+            _                                  => { return "Forme inconnue"; }
+        }
+    }
+}
+
+// ── Enum Result<T> (style monadique) ─────────────────────────────────────────
+
+enum MathResult {
+    Ok(int value),
+    Err(string message);
+
+    bool isOk() {
+        match this {
+            MathResult::Ok(value)    => { return true; }
+            MathResult::Err(message) => { return false; }
+            _                        => { return false; }
+        }
+    }
+
+    int unwrap() {
+        match this {
+            MathResult::Ok(value)    => { return value; }
+            MathResult::Err(message) => { return -1; }
+            _                        => { return -1; }
+        }
+    }
+}
+
+// ── Classe qui utilise des enums ──────────────────────────────────────────────
+
+class Walker implements Describable {
+    string name;
+    int    x;
+    int    y;
+
+    Walker(string n) {
+        name = n;
+        x    = 0;
+        y    = 0;
+    }
+
+    void move(Direction dir, int steps) {
+        match dir {
+            Direction::North => { y = y + steps; }
+            Direction::South => { y = y - steps; }
+            Direction::East  => { x = x + steps; }
+            Direction::West  => { x = x - steps; }
+            _                => {}
+        }
+    }
+
+    void describe() {
+        print(name, "est en (", x, ",", y, ")");
+    }
+
+    int distanceFromOrigin() {
+        int ax = x;
+        int ay = y;
+        if (ax < 0) { ax = -ax; }
+        if (ay < 0) { ay = -ay; }
+        return ax + ay;
+    }
+}
+
+// ── Fonction safe divide retourne un MathResult ───────────────────────────────
+
+class Calculator {
+    Calculator() {}
+
+    MathResult divide(int a, int b) {
+        if (b == 0) {
+            return MathResult::Err("Division par zéro");
+        }
+        return MathResult::Ok(a / b);
+    }
+}
+
+// ── Point d'entrée ────────────────────────────────────────────────────────────
+
+int main() {
+
+    // ── Enum sans champs ──────────────────────────────────────────────────────
+    print("=== Directions ===");
+    Direction d = Direction::North;
+    print("Direction :", d.name());
+
+    Direction opp = d.opposite();
+    print("Opposée   :", opp.name());
+
+    // ── Walker avec match sur direction ───────────────────────────────────────
+    print("\n=== Walker ===");
+    Walker w = new Walker("Alice");
+    w.move(Direction::North, 3);
+    w.move(Direction::East,  4);
+    w.describe();
+    print("Distance de l'origine :", w.distanceFromOrigin());
+
+    // ── Enum avec champs ──────────────────────────────────────────────────────
+    print("\n=== Formes ===");
+    Shape circle = Shape::Circle(5.0);
+    Shape rect   = Shape::Rectangle(4.0, 6.0);
+    Shape tri    = Shape::Triangle(3.0, 8.0);
+
+    print("Aire cercle    :", circle.area());
+    print("Aire rectangle :", rect.area());
+    print("Aire triangle  :", tri.area());
+
+    // ── match direct sur enum avec champs ─────────────────────────────────────
+    print("\n=== Pattern matching ===");
+    Shape s = Shape::Circle(10.0);
+    match s {
+        Shape::Circle(r)          => { print("C'est un cercle, rayon =", r); }
+        Shape::Rectangle(w, h)    => { print("C'est un rectangle", w, "x", h); }
+        _                         => { print("Autre forme"); }
+    }
+
+    // ── Enum résultat ─────────────────────────────────────────────────────────
+    print("\n=== MathResult ===");
+    Calculator calc = new Calculator();
+
+    MathResult r1 = calc.divide(10, 2);
+    MathResult r2 = calc.divide(7, 0);
+
+    match r1 {
+        MathResult::Ok(v)  => { print("10 / 2 =", v); }
+        MathResult::Err(m) => { print("Erreur :", m); }
+        _                  => {}
+    }
+
+    match r2 {
+        MathResult::Ok(v)  => { print("Résultat :", v); }
+        MathResult::Err(m) => { print("Erreur :", m); }
+        _                  => {}
+    }
+
+    print("r1.isOk() =", r1.isOk());
+    print("r2.isOk() =", r2.isOk());
+    print("r1.unwrap() =", r1.unwrap());
+
+    // ── Wildcard ──────────────────────────────────────────────────────────────
+    print("\n=== Wildcard ===");
+    Direction dir2 = Direction::West;
+    match dir2 {
+        Direction::North => { print("Au nord"); }
+        _                => { print("Pas au nord (wildcard)"); }
+    }
+
+    return 0;
+}

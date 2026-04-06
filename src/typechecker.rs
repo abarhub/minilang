@@ -1,16 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Vérificateur de types – passe avant l'interprétation
-//
-//  Ce qu'il vérifie :
-//    • Tous les parents / interfaces référencés existent
-//    • Absence de cycle d'héritage
-//    • Implémentation complète des interfaces
-//    • Existence des méthodes appelées (héritage inclus)
-//    • Existence des champs accédés
-//    • Compatibilité de types dans les affectations et les retours
-//      – Primitifs : type exact requis
-//      – Classes   : sous-type accepté
-//      – Paramètres génériques (T, K…) : compatibles avec tout
+//  Typechecker – vérifie les types avant l'interprétation
 // ─────────────────────────────────────────────────────────────────────────────
 
 use std::collections::{HashMap, HashSet};
@@ -18,9 +7,7 @@ use log::{debug, warn};
 
 use crate::ast::*;
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Erreur de typage
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Erreur de typage ──────────────────────────────────────────────────────────
 
 #[derive(Debug)]
 pub struct TypeError(pub String);
@@ -35,9 +22,7 @@ macro_rules! type_err {
     ($($arg:tt)*) => { Err(TypeError(format!($($arg)*))) };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Environnement de types (pile de scopes)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Environnement de types ────────────────────────────────────────────────────
 
 struct TypeEnv {
     scopes: Vec<HashMap<String, Type>>,
@@ -45,97 +30,70 @@ struct TypeEnv {
 
 impl TypeEnv {
     fn new() -> Self { Self { scopes: vec![HashMap::new()] } }
-
     fn push(&mut self) { self.scopes.push(HashMap::new()); }
-
     fn pop(&mut self) { if self.scopes.len() > 1 { self.scopes.pop(); } }
-
     fn declare(&mut self, name: String, ty: Type) {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
-
     fn get(&self, name: &str) -> Option<&Type> {
         for scope in self.scopes.iter().rev() {
             if let Some(t) = scope.get(name) { return Some(t); }
         }
         None
     }
-
-    fn set(&mut self, name: &str, ty: Type) {
-        for scope in self.scopes.iter_mut().rev() {
-            if scope.contains_key(name) { scope.insert(name.to_string(), ty); return; }
-        }
-        self.scopes.last_mut().unwrap().insert(name.to_string(), ty);
-    }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Utilitaire : substitution des paramètres génériques dans un type
-//  ex. substituer(T→int, Array<T>) → Array<int>
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Substitution de paramètres génériques ─────────────────────────────────────
 
 fn substitute(ty: &Type, subst: &[(String, Type)]) -> Type {
     match ty {
-        Type::UserDefined(name) => {
-            if let Some((_, replacement)) = subst.iter().find(|(n, _)| n == name) {
-                replacement.clone()
-            } else {
-                ty.clone()
-            }
-        }
+        Type::UserDefined(n) => subst.iter()
+            .find(|(k, _)| k == n)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| ty.clone()),
         Type::Array(inner) => Type::Array(Box::new(substitute(inner, subst))),
-        Type::Generic(name, args) => {
-            let new_args = args.iter().map(|a| substitute(a, subst)).collect();
-            Type::Generic(name.clone(), new_args)
+        Type::Generic(n, args) => {
+            Type::Generic(n.clone(), args.iter().map(|a| substitute(a, subst)).collect())
         }
         _ => ty.clone(),
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  TypeChecker
-// ─────────────────────────────────────────────────────────────────────────────
+// ── TypeChecker ───────────────────────────────────────────────────────────────
 
 pub struct TypeChecker {
-    classes:        HashMap<String, ClassDef>,
-    interfaces:     HashMap<String, InterfaceDef>,
-    /// Paramètres de type de la classe en cours d'analyse
-    type_params:    HashSet<String>,
-    /// Classe en cours d'analyse (pour `this`)
-    current_class:  Option<String>,
-    /// Type de retour attendu dans la méthode en cours
+    classes:         HashMap<String, ClassDef>,
+    interfaces:      HashMap<String, InterfaceDef>,
+    enums:           HashMap<String, EnumDef>,
+    type_params:     HashSet<String>,
+    current_class:   Option<String>,
+    current_enum:    Option<String>,
     expected_return: Type,
-    /// Erreurs accumulées (non fatales)
-    errors:         Vec<TypeError>,
+    errors:          Vec<TypeError>,
 }
 
 impl TypeChecker {
     pub fn new(program: &Program) -> Self {
         Self {
-            classes:        program.classes   .iter().map(|c| (c.name.clone(), c.clone())).collect(),
-            interfaces:     program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),
-            type_params:    HashSet::new(),
-            current_class:  None,
+            classes:         program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
+            interfaces:      program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),
+            enums:           program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
+            type_params:     HashSet::new(),
+            current_class:   None,
+            current_enum:    None,
             expected_return: Type::Void,
-            errors:         vec![],
+            errors:          vec![],
         }
     }
-
-    // ── Rapport d'erreurs ──────────────────────────────────────────────────
 
     pub fn check(mut self, program: &Program) -> Vec<TypeError> {
         self.check_program(program);
         self.errors
     }
 
-    fn err(&mut self, msg: String) {
-        self.errors.push(TypeError(msg));
-    }
+    fn err(&mut self, msg: String) { self.errors.push(TypeError(msg)); }
 
-    /// Variante de `infer_expr` qui enregistre l'erreur dans `self.errors`
-    /// au lieu de la retourner, et renvoie `None` en cas d'échec.
-    /// Cela évite que les `if let Ok(t) = self.infer_expr(...)` ignorent
-    /// silencieusement les erreurs de type (ex. `true + false`).
+    /// Infère et enregistre l'erreur si besoin (évite que `if let Ok` l'ignore)
     fn infer(&mut self, expr: &Expr, env: &TypeEnv) -> Option<Type> {
         match self.infer_expr(expr, env) {
             Ok(t)  => Some(t),
@@ -148,40 +106,30 @@ impl TypeChecker {
     fn check_program(&mut self, program: &Program) {
         self.check_class_hierarchy();
         self.check_interface_impls();
+        self.check_enums(program);
 
-        for class in &program.classes.clone() {
-            self.check_class(class);
-        }
+        for class in &program.classes.clone() { self.check_class(class); }
 
         let mut env = TypeEnv::new();
         self.expected_return = Type::Int;
-        for stmt in &program.main.body.clone() {
-            self.check_stmt(stmt, &mut env);
-        }
+        for stmt in &program.main.body.clone() { self.check_stmt(stmt, &mut env); }
     }
 
-    // ── Hiérarchie : parents et interfaces existent, pas de cycle ─────────────
+    // ── Hiérarchie de classes ─────────────────────────────────────────────────
 
     fn check_class_hierarchy(&mut self) {
-        let class_names: Vec<String> = self.classes.keys().cloned().collect();
-        for name in &class_names {
+        for name in &self.classes.keys().cloned().collect::<Vec<_>>() {
             let class = self.classes[name].clone();
-
-            // Parent existe ?
             if let Some(parent) = &class.parent {
                 if !self.classes.contains_key(parent) {
                     self.err(format!("Classe '{}' extends '{}' inconnu", name, parent));
                 }
             }
-
-            // Interfaces existent ?
             for iface in &class.implements {
                 if !self.interfaces.contains_key(iface) {
                     self.err(format!("Classe '{}' implements '{}' inconnu", name, iface));
                 }
             }
-
-            // Cycle d'héritage ?
             if self.has_inheritance_cycle(name) {
                 self.err(format!("Cycle d'héritage détecté pour '{}'", name));
             }
@@ -190,22 +138,21 @@ impl TypeChecker {
 
     fn has_inheritance_cycle(&self, start: &str) -> bool {
         let mut visited = HashSet::new();
-        let mut current = start.to_string();
+        let mut cur = start.to_string();
         loop {
-            if visited.contains(&current) { return true; }
-            visited.insert(current.clone());
-            match self.classes.get(&current).and_then(|c| c.parent.clone()) {
-                Some(p) => current = p,
+            if visited.contains(&cur) { return true; }
+            visited.insert(cur.clone());
+            match self.classes.get(&cur).and_then(|c| c.parent.clone()) {
+                Some(p) => cur = p,
                 None    => return false,
             }
         }
     }
 
-    // ── Interfaces : méthodes présentes dans la classe ────────────────────────
+    // ── Interfaces ────────────────────────────────────────────────────────────
 
     fn check_interface_impls(&mut self) {
-        let class_names: Vec<String> = self.classes.keys().cloned().collect();
-        for class_name in &class_names {
+        for class_name in &self.classes.keys().cloned().collect::<Vec<_>>() {
             let class = self.classes[class_name].clone();
             for iface_name in &class.implements.clone() {
                 if let Some(iface) = self.interfaces.get(iface_name).cloned() {
@@ -222,6 +169,34 @@ impl TypeChecker {
         }
     }
 
+    // ── Enums ─────────────────────────────────────────────────────────────────
+
+    fn check_enums(&mut self, program: &Program) {
+        for enum_def in &program.enums.clone() {
+            self.current_enum = Some(enum_def.name.clone());
+            debug!("  check enum '{}'", enum_def.name);
+
+            // Noms de variantes uniques ?
+            let mut seen = HashSet::new();
+            for v in &enum_def.variants {
+                if !seen.insert(v.name.clone()) {
+                    self.err(format!("Enum '{}' : variante '{}' dupliquée", enum_def.name, v.name));
+                }
+            }
+
+            // Méthodes de l'enum
+            for method in &enum_def.methods.clone() {
+                let mut env = TypeEnv::new();
+                env.push();
+                for p in &method.params { env.declare(p.name.clone(), p.ty.clone()); }
+                self.expected_return = method.return_type.clone();
+                for stmt in &method.body.clone() { self.check_stmt(stmt, &mut env); }
+            }
+
+            self.current_enum = None;
+        }
+    }
+
     // ── Classe ────────────────────────────────────────────────────────────────
 
     fn check_class(&mut self, class: &ClassDef) {
@@ -229,7 +204,6 @@ impl TypeChecker {
         self.type_params   = class.type_params.iter().cloned().collect();
         debug!("  check class '{}'", class.name);
 
-        // Constructeurs
         for ctor in &class.constructors.clone() {
             let mut env = TypeEnv::new();
             env.push();
@@ -237,8 +211,6 @@ impl TypeChecker {
             self.expected_return = Type::Void;
             for stmt in &ctor.body.clone() { self.check_stmt(stmt, &mut env); }
         }
-
-        // Méthodes
         for method in &class.methods.clone() {
             let mut env = TypeEnv::new();
             env.push();
@@ -251,7 +223,7 @@ impl TypeChecker {
         self.type_params   = HashSet::new();
     }
 
-    // ── Instruction ───────────────────────────────────────────────────────────
+    // ── Instructions ──────────────────────────────────────────────────────────
 
     fn check_stmt(&mut self, stmt: &Stmt, env: &mut TypeEnv) {
         match stmt {
@@ -271,10 +243,9 @@ impl TypeChecker {
 
             Stmt::Assign { target, value } => {
                 let val_ty = self.infer(value, env);
-                let target_ty = env.get(target)
-                    .cloned()
-                    .or_else(|| self.field_type_of_current_class(target));
-
+                let target_ty = env.get(target).cloned()
+                    .or_else(|| self.field_type_of_current_class(target))
+                    .or_else(|| self.field_type_of_current_enum_variant(target));
                 if let (Some(vt), Some(tt)) = (val_ty, target_ty) {
                     if !self.is_compatible(&vt, &tt) {
                         self.err(format!("Affectation '{}' : {} incompatible avec {}", target, vt, tt));
@@ -286,11 +257,10 @@ impl TypeChecker {
                 let val_ty = self.infer(value, env);
                 let obj_ty = if object == "this" {
                     self.current_class.as_ref().map(|c| Type::UserDefined(c.clone()))
+                        .or_else(|| self.current_enum.as_ref().map(|e| Type::UserDefined(e.clone())))
                 } else {
-                    env.get(object).cloned()
-                        .or_else(|| self.field_type_of_current_class(object))
+                    env.get(object).cloned().or_else(|| self.field_type_of_current_class(object))
                 };
-
                 if let Some(ot) = obj_ty {
                     match self.find_field_type_of(&ot, field) {
                         Some(ft) => {
@@ -303,16 +273,12 @@ impl TypeChecker {
                                 }
                             }
                         }
-                        None => {
-                            warn!("Champ inconnu '{}.{}' (peut être un champ hérité)", object, field);
-                        }
+                        None => warn!("Champ inconnu '{}.{}'", object, field),
                     }
                 }
             }
 
-            Stmt::Print(args) => {
-                for a in args { self.infer(a, env); }
-            }
+            Stmt::Print(args) => { for a in args { self.infer(a, env); } }
 
             Stmt::Return(expr) => {
                 let ret = self.expected_return.clone();
@@ -332,7 +298,7 @@ impl TypeChecker {
             Stmt::If { condition, then_body, else_body } => {
                 match self.infer(condition, env) {
                     Some(ct) if ct != Type::Bool =>
-                        self.err(format!("Condition du if doit être bool, trouvé {}", ct)),
+                        self.err(format!("Condition if doit être bool, trouvé {}", ct)),
                     _ => {}
                 }
                 env.push();
@@ -348,7 +314,7 @@ impl TypeChecker {
             Stmt::While { condition, body } | Stmt::DoWhile { body, condition } => {
                 match self.infer(condition, env) {
                     Some(ct) if ct != Type::Bool =>
-                        self.err(format!("Condition du while doit être bool, trouvé {}", ct)),
+                        self.err(format!("Condition while doit être bool, trouvé {}", ct)),
                     _ => {}
                 }
                 env.push();
@@ -362,7 +328,7 @@ impl TypeChecker {
                 if let Some(e) = condition {
                     match self.infer(e, env) {
                         Some(ct) if ct != Type::Bool =>
-                            self.err(format!("Condition du for doit être bool, trouvé {}", ct)),
+                            self.err(format!("Condition for doit être bool, trouvé {}", ct)),
                         _ => {}
                     }
                 }
@@ -373,11 +339,61 @@ impl TypeChecker {
                 env.pop();
             }
 
-            Stmt::Break | Stmt::Continue => { /* toujours valide */ }
+            Stmt::Break | Stmt::Continue => {}
+
+            // ── match ─────────────────────────────────────────────────────────
+            Stmt::Match { expr, arms } => {
+                let scrutinee_ty = self.infer(expr, env);
+
+                // Trouve l'enum scrutiné
+                let enum_name = scrutinee_ty.as_ref().and_then(|t| match t {
+                    Type::UserDefined(n) => Some(n.clone()),
+                    _ => None,
+                });
+
+                for arm in arms {
+                    env.push();
+
+                    match &arm.pattern {
+                        Pattern::Wildcard => {}
+                        Pattern::Variant { name: variant_name, bindings } => {
+                            // Vérifie que la variante existe dans l'enum
+                            if let Some(ref en) = enum_name {
+                                if let Some(enum_def) = self.enums.get(en).cloned() {
+                                    match enum_def.variants.iter().find(|v| &v.name == variant_name) {
+                                        None => self.err(format!(
+                                            "Variante '{}' inconnue dans l'enum '{}'",
+                                            variant_name, en
+                                        )),
+                                        Some(variant) => {
+                                            // Vérifie le nombre de bindings
+                                            if bindings.len() != variant.fields.len()
+                                                && !bindings.is_empty()
+                                            {
+                                                self.err(format!(
+                                                    "Variante '{}' : {} champ(s) attendu(s), {} binding(s) fourni(s)",
+                                                    variant_name, variant.fields.len(), bindings.len()
+                                                ));
+                                            }
+                                            // Déclare les bindings avec le type du champ correspondant
+                                            for (binding, field) in bindings.iter().zip(variant.fields.iter()) {
+                                                env.declare(binding.clone(), field.ty.clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for s in &arm.body { self.check_stmt(s, env); }
+                    env.pop();
+                }
+            }
         }
     }
 
-    // ── Inférence de type d'une expression ────────────────────────────────────
+    // ── Inférence de type ─────────────────────────────────────────────────────
 
     fn infer_expr(&mut self, expr: &Expr, env: &TypeEnv) -> Result<Type, TypeError> {
         match expr {
@@ -390,15 +406,16 @@ impl TypeChecker {
                 if name == "this" {
                     return Ok(self.current_class.as_ref()
                         .map(|c| Type::UserDefined(c.clone()))
+                        .or_else(|| self.current_enum.as_ref()
+                            .map(|e| Type::UserDefined(e.clone())))
                         .unwrap_or(Type::Void));
                 }
-                // Type param → compatible avec tout
                 if self.type_params.contains(name.as_str()) {
                     return Ok(Type::UserDefined(name.clone()));
                 }
-                env.get(name)
-                    .cloned()
+                env.get(name).cloned()
                     .or_else(|| self.field_type_of_current_class(name))
+                    .or_else(|| self.field_type_of_current_enum_variant(name))
                     .ok_or_else(|| TypeError(format!("Variable inconnue '{}'", name)))
             }
 
@@ -431,41 +448,27 @@ impl TypeChecker {
             Expr::MethodCall { object, method, args } => {
                 let obj_ty = self.infer_expr(object, env)?;
                 let (param_types, return_type, subst) = self.resolve_method(&obj_ty, method)?;
-
-                // Nombre d'arguments
                 if args.len() != param_types.len() {
-                    return type_err!(
-                        "{}() : {} arg(s) attendus, {} fournis",
-                        method, param_types.len(), args.len()
-                    );
+                    return type_err!("{}() : {} arg(s) attendus, {} fournis",
+                        method, param_types.len(), args.len());
                 }
-
-                // Types des arguments
-                for (arg, param_ty) in args.iter().zip(param_types.iter()) {
-                    let arg_ty = self.infer_expr(arg, env)?;
-                    let expected = substitute(param_ty, &subst);
-                    if !self.is_compatible(&arg_ty, &expected) {
-                        self.err(format!(
-                            "Argument de {}() : {} incompatible avec {}",
-                            method, arg_ty, expected
-                        ));
+                for (arg, pt) in args.iter().zip(param_types.iter()) {
+                    let at = self.infer_expr(arg, env)?;
+                    let expected = substitute(pt, &subst);
+                    if !self.is_compatible(&at, &expected) {
+                        self.err(format!("Argument de {}() : {} incompatible avec {}", method, at, expected));
                     }
                 }
-
                 Ok(substitute(&return_type, &subst))
             }
 
             Expr::FunctionCall { name, args } => {
-                // print est une pseudo-fonction builtin
                 if name == "print" {
                     for a in args { self.infer(a, env); }
                     return Ok(Type::Void);
                 }
-
-                // Cherche dans les méthodes de la classe courante
                 if let Some(class_name) = self.current_class.clone() {
-                    if let Some(m) = self.find_method_def(&class_name, name) {
-                        let m = m.clone();
+                    if let Some(m) = self.find_method_def(&class_name, name).cloned() {
                         if args.len() != m.params.len() {
                             return type_err!("{}() : {} arg(s) attendus", name, m.params.len());
                         }
@@ -478,103 +481,96 @@ impl TypeChecker {
                         return Ok(m.return_type.clone());
                     }
                 }
-
+                if let Some(enum_name) = self.current_enum.clone() {
+                    if let Some(ed) = self.enums.get(&enum_name).cloned() {
+                        if let Some(m) = ed.methods.iter().find(|m| m.name == *name).cloned() {
+                            return Ok(m.return_type.clone());
+                        }
+                    }
+                }
                 type_err!("Fonction inconnue '{}'", name)
             }
 
             Expr::New { class_name, type_args, args } => {
                 let class = self.classes.get(class_name)
-                    .ok_or_else(|| TypeError(format!("Classe inconnue '{}'", class_name)))?
-                    .clone();
-
-                // Substitution des paramètres génériques
+                    .ok_or_else(|| TypeError(format!("Classe inconnue '{}'", class_name)))?.clone();
                 let subst: Vec<(String, Type)> = class.type_params.iter()
-                    .zip(type_args.iter())
-                    .map(|(p, t)| (p.clone(), t.clone()))
-                    .collect();
-
+                    .zip(type_args.iter()).map(|(p, t)| (p.clone(), t.clone())).collect();
                 if !class.constructors.is_empty() {
-                    // Trouve un constructeur compatible par arité
                     let ctor = class.constructors.iter()
                         .find(|c| c.params.len() == args.len())
                         .ok_or_else(|| TypeError(format!(
-                            "Pas de constructeur à {} arg(s) pour '{}'",
-                            args.len(), class_name
-                        )))?
-                        .clone();
-
+                            "Pas de constructeur à {} arg(s) pour '{}'", args.len(), class_name
+                        )))?.clone();
                     for (arg, p) in args.iter().zip(ctor.params.iter()) {
-                        let arg_ty = self.infer_expr(arg, env)?;
+                        let at = self.infer_expr(arg, env)?;
                         let expected = substitute(&p.ty, &subst);
-                        if !self.is_compatible(&arg_ty, &expected) {
-                            self.err(format!(
-                                "new {}() : arg {} incompatible avec {}",
-                                class_name, arg_ty, expected
-                            ));
+                        if !self.is_compatible(&at, &expected) {
+                            self.err(format!("new {}() : arg {} incompatible avec {}", class_name, at, expected));
                         }
                     }
                 } else if !args.is_empty() {
-                    self.err(format!(
-                        "'{}' n'a pas de constructeur mais reçoit {} arg(s)",
-                        class_name, args.len()
-                    ));
+                    self.err(format!("'{}' n'a pas de constructeur mais reçoit {} arg(s)", class_name, args.len()));
                 }
+                if type_args.is_empty() { Ok(Type::UserDefined(class_name.clone())) }
+                else { Ok(Type::Generic(class_name.clone(), type_args.clone())) }
+            }
 
-                if type_args.is_empty() {
-                    Ok(Type::UserDefined(class_name.clone()))
-                } else {
-                    Ok(Type::Generic(class_name.clone(), type_args.clone()))
+            // ── Constructeur d'enum : EnumName::Variant(args) ────────────────
+            Expr::EnumConstructor { enum_name, variant, args } => {
+                let enum_def = self.enums.get(enum_name)
+                    .ok_or_else(|| TypeError(format!("Enum inconnu '{}'", enum_name)))?.clone();
+                let var_def = enum_def.variants.iter()
+                    .find(|v| &v.name == variant)
+                    .ok_or_else(|| TypeError(format!(
+                        "Variante '{}' inconnue dans l'enum '{}'", variant, enum_name
+                    )))?.clone();
+                if args.len() != var_def.fields.len() {
+                    return type_err!(
+                        "Variante '{}::{}' : {} champ(s) attendu(s), {} fourni(s)",
+                        enum_name, variant, var_def.fields.len(), args.len()
+                    );
                 }
+                for (arg, field) in args.iter().zip(var_def.fields.iter()) {
+                    let at = self.infer_expr(arg, env)?;
+                    if !self.is_compatible(&at, &field.ty) {
+                        self.err(format!(
+                            "Champ '{}' de '{}::{}' : {} incompatible avec {}",
+                            field.name, enum_name, variant, at, field.ty
+                        ));
+                    }
+                }
+                Ok(Type::UserDefined(enum_name.clone()))
             }
         }
     }
 
     // ── Compatibilité de types ────────────────────────────────────────────────
 
-    /// Vérifie que `actual` est compatible avec `expected`.
-    /// Primitifs : exact.  Classes : sous-type.  Type param : toujours ok.
     pub fn is_compatible(&self, actual: &Type, expected: &Type) -> bool {
-        // Paramètre générique → compatible avec tout
         if let Type::UserDefined(n) = actual   { if self.type_params.contains(n) { return true; } }
         if let Type::UserDefined(n) = expected { if self.type_params.contains(n) { return true; } }
-
-        // Même type exact
         if actual == expected { return true; }
-
-        // Null / Void
         if matches!(actual, Type::Void) { return true; }
-
-        // Promotions numériques
         if matches!(expected, Type::Double) && self.is_numeric(actual) { return true; }
-        if matches!(expected, Type::Float)  && matches!(actual, Type::Int) { return true; }
-
-        // Sous-typage de classes
-        if let (Type::UserDefined(a), Type::UserDefined(e)) = (actual, expected) {
-            return self.is_subclass(a, e);
+        if matches!(expected, Type::Float) && matches!(actual, Type::Int) { return true; }
+        match (actual, expected) {
+            (Type::UserDefined(a), Type::UserDefined(e)) => self.is_subclass(a, e),
+            (Type::Generic(an, _), Type::UserDefined(en)) => self.is_subclass(an, en),
+            (Type::UserDefined(an), Type::Generic(en, _)) => self.is_subclass(an, en),
+            (Type::Generic(an, aa), Type::Generic(en, ea)) =>
+                an == en && aa.len() == ea.len()
+                    && aa.iter().zip(ea.iter()).all(|(a, e)| self.is_compatible(a, e)),
+            _ => false,
         }
-
-        // Generic<T> compatible avec même générique ou parent
-        if let (Type::Generic(an, _), Type::UserDefined(en)) = (actual, expected) {
-            return self.is_subclass(an, en);
-        }
-        if let (Type::UserDefined(an), Type::Generic(en, _)) = (actual, expected) {
-            return self.is_subclass(an, en);
-        }
-        if let (Type::Generic(an, aa), Type::Generic(en, ea)) = (actual, expected) {
-            return an == en && aa.len() == ea.len()
-                && aa.iter().zip(ea.iter()).all(|(a, e)| self.is_compatible(a, e));
-        }
-
-        false
     }
 
     fn is_subclass(&self, sub: &str, sup: &str) -> bool {
         if sub == sup { return true; }
         if let Some(class) = self.classes.get(sub) {
-            if let Some(parent) = &class.parent {
-                return self.is_subclass(parent, sup);
-            }
+            if let Some(parent) = &class.parent { return self.is_subclass(parent, sup); }
         }
+        // Un enum est compatible avec lui-même (déjà géré par sub == sup)
         false
     }
 
@@ -583,42 +579,27 @@ impl TypeChecker {
     fn check_binop(&mut self, lt: &Type, op: &BinOp, rt: &Type) -> Result<Type, TypeError> {
         match op {
             BinOp::Add => {
-                if self.is_numeric(lt) && self.is_numeric(rt) {
-                    Ok(self.numeric_result(lt, rt))
-                } else if matches!((lt, rt), (Type::Str, Type::Str)) {
-                    Ok(Type::Str)
-                } else {
-                    type_err!("Opérateur + non applicable à {} et {}", lt, rt)
-                }
+                if self.is_numeric(lt) && self.is_numeric(rt) { Ok(self.numeric_result(lt, rt)) }
+                else if matches!((lt, rt), (Type::Str, Type::Str)) { Ok(Type::Str) }
+                else { type_err!("Opérateur + non applicable à {} et {}", lt, rt) }
             }
             BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
-                if self.is_numeric(lt) && self.is_numeric(rt) {
-                    Ok(self.numeric_result(lt, rt))
-                } else {
-                    type_err!("Opérateur arithmétique non applicable à {} et {}", lt, rt)
-                }
+                if self.is_numeric(lt) && self.is_numeric(rt) { Ok(self.numeric_result(lt, rt)) }
+                else { type_err!("Opérateur arithmétique non applicable à {} et {}", lt, rt) }
             }
             BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                if self.is_numeric(lt) && self.is_numeric(rt) {
-                    Ok(Type::Bool)
-                } else {
-                    type_err!("Comparaison non applicable à {} et {}", lt, rt)
-                }
+                if self.is_numeric(lt) && self.is_numeric(rt) { Ok(Type::Bool) }
+                else { type_err!("Comparaison non applicable à {} et {}", lt, rt) }
             }
             BinOp::Eq | BinOp::Ne => Ok(Type::Bool),
             BinOp::And | BinOp::Or => {
-                if matches!((lt, rt), (Type::Bool, Type::Bool)) {
-                    Ok(Type::Bool)
-                } else {
-                    type_err!("Opérateurs logiques requièrent bool, trouvé {} et {}", lt, rt)
-                }
+                if matches!((lt, rt), (Type::Bool, Type::Bool)) { Ok(Type::Bool) }
+                else { type_err!("Opérateurs logiques requièrent bool, trouvé {} et {}", lt, rt) }
             }
         }
     }
 
-    fn is_numeric(&self, t: &Type) -> bool {
-        matches!(t, Type::Int | Type::Float | Type::Double)
-    }
+    fn is_numeric(&self, t: &Type) -> bool { matches!(t, Type::Int | Type::Float | Type::Double) }
 
     fn numeric_result(&self, lt: &Type, rt: &Type) -> Type {
         match (lt, rt) {
@@ -630,91 +611,91 @@ impl TypeChecker {
 
     // ── Résolution de méthode ─────────────────────────────────────────────────
 
-    /// Retourne (params, return_type, substitution) pour une méthode sur un type.
-    fn resolve_method(
-        &self,
-        obj_ty: &Type,
-        method: &str,
-    ) -> Result<(Vec<Type>, Type, Vec<(String, Type)>), TypeError> {
+    fn resolve_method(&self, obj_ty: &Type, method: &str)
+        -> Result<(Vec<Type>, Type, Vec<(String, Type)>), TypeError>
+    {
         let (class_name, type_args) = match obj_ty {
             Type::UserDefined(n)   => (n.clone(), vec![]),
             Type::Generic(n, args) => (n.clone(), args.clone()),
             _ => return type_err!("Appel de méthode '{}' sur type non-objet {}", method, obj_ty),
         };
 
-        let m = self.find_method_def(&class_name, method)
-            .ok_or_else(|| TypeError(format!(
-                "Méthode '{}' inconnue dans '{}'", method, class_name
-            )))?
-            .clone();
+        // Cherche dans les classes
+        if let Some(m) = self.find_method_def(&class_name, method) {
+            let m = m.clone();
+            let class = self.classes.get(&class_name);
+            let subst: Vec<(String, Type)> = class.map(|c| {
+                c.type_params.iter().zip(type_args.iter())
+                    .map(|(p, t)| (p.clone(), t.clone())).collect()
+            }).unwrap_or_default();
+            return Ok((m.params.iter().map(|p| p.ty.clone()).collect(), m.return_type.clone(), subst));
+        }
 
-        let class = self.classes.get(&class_name)
-            .ok_or_else(|| TypeError(format!("Classe '{}' inconnue", class_name)))?;
+        // Cherche dans les enums
+        if let Some(ed) = self.enums.get(&class_name) {
+            if let Some(m) = ed.methods.iter().find(|m| m.name == method) {
+                return Ok((
+                    m.params.iter().map(|p| p.ty.clone()).collect(),
+                    m.return_type.clone(),
+                    vec![],
+                ));
+            }
+        }
 
-        let subst: Vec<(String, Type)> = class.type_params.iter()
-            .zip(type_args.iter())
-            .map(|(p, t)| (p.clone(), t.clone()))
-            .collect();
-
-        let param_types: Vec<Type> = m.params.iter().map(|p| p.ty.clone()).collect();
-        Ok((param_types, m.return_type.clone(), subst))
+        type_err!("Méthode '{}' inconnue dans '{}'", method, class_name)
     }
 
-    // ── Lookup dans la hiérarchie de classes ──────────────────────────────────
+    // ── Lookup hiérarchique ───────────────────────────────────────────────────
 
     fn find_method_def<'a>(&'a self, class_name: &str, method_name: &str) -> Option<&'a Method> {
         let class = self.classes.get(class_name)?;
-        if let Some(m) = class.methods.iter().find(|m| m.name == method_name) {
-            return Some(m);
-        }
-        if let Some(parent) = &class.parent {
-            return self.find_method_def(parent, method_name);
-        }
+        if let Some(m) = class.methods.iter().find(|m| m.name == method_name) { return Some(m); }
+        if let Some(parent) = &class.parent { return self.find_method_def(parent, method_name); }
         None
     }
 
     fn find_field_type_of(&self, obj_ty: &Type, field: &str) -> Option<Type> {
-        let class_name = match obj_ty {
+        let name = match obj_ty {
             Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
             _ => return None,
         };
-        self.find_field_in_class(&class_name, field)
+        self.find_field_in_class(&name, field)
     }
 
     fn find_field_in_class(&self, class_name: &str, field: &str) -> Option<Type> {
         let class = self.classes.get(class_name)?;
-        if let Some(f) = class.fields.iter().find(|f| f.name == field) {
-            return Some(f.ty.clone());
-        }
-        if let Some(parent) = &class.parent {
-            return self.find_field_in_class(parent, field);
-        }
+        if let Some(f) = class.fields.iter().find(|f| f.name == field) { return Some(f.ty.clone()); }
+        if let Some(parent) = &class.parent { return self.find_field_in_class(parent, field); }
         None
     }
 
     fn field_type_of_current_class(&self, field: &str) -> Option<Type> {
-        let class_name = self.current_class.as_ref()?;
-        self.find_field_in_class(class_name, field)
+        self.current_class.as_ref()
+            .and_then(|n| self.find_field_in_class(n, field))
+    }
+
+    /// Dans une méthode d'enum, `this` peut avoir les champs de n'importe quelle
+    /// variante — on retourne le premier champ trouvé avec ce nom.
+    fn field_type_of_current_enum_variant(&self, field: &str) -> Option<Type> {
+        let enum_name = self.current_enum.as_ref()?;
+        let ed = self.enums.get(enum_name)?;
+        for v in &ed.variants {
+            if let Some(p) = v.fields.iter().find(|p| p.name == field) {
+                return Some(p.ty.clone());
+            }
+        }
+        None
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  API de test : parse + typecheck une source, retourne les erreurs
-// ─────────────────────────────────────────────────────────────────────────────
+// ── API de test ───────────────────────────────────────────────────────────────
 
-/// Parse + typecheck une source mini.
-/// Retourne Ok(()) si aucune erreur, Err(messages) sinon.
 pub fn check_source(src: &str) -> Result<(), Vec<String>> {
     use chumsky::Parser;
     let program = crate::parser::program_parser()
         .parse(src)
-        .map_err(|errs| {
-            errs.iter().map(|e| e.to_string()).collect::<Vec<_>>()
-        })?;
+        .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
     let errors = TypeChecker::new(&program).check(&program);
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors.iter().map(|e| e.0.clone()).collect())
-    }
+    if errors.is_empty() { Ok(()) }
+    else { Err(errors.iter().map(|e| e.0.clone()).collect()) }
 }

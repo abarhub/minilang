@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Interpréteur – évalue l'AST et exécute le programme
+//  Interpréteur
 // ─────────────────────────────────────────────────────────────────────────────
 
 use std::cell::RefCell;
@@ -10,9 +10,7 @@ use log::{debug, info, warn};
 
 use crate::ast::*;
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Valeurs runtime
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Valeurs runtime ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub struct ObjectData {
@@ -20,16 +18,25 @@ pub struct ObjectData {
     pub fields:     HashMap<String, Value>,
 }
 
+/// Valeur runtime d'une variante d'enum
+#[derive(Debug, Clone)]
+pub struct EnumData {
+    pub enum_name:    String,
+    pub variant_name: String,
+    /// Champs nommés de la variante
+    pub fields:       HashMap<String, Value>,
+    /// Ordre d'insertion (pour les patterns positionnels)
+    pub field_order:  Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub enum Value {
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    Str(String),
+    Int(i64), Float(f64), Bool(bool), Str(String),
     Array(Vec<Value>),
     Object(Rc<RefCell<ObjectData>>),
-    Null,
-    Void,
+    /// Valeur d'un enum : EnumName::Variant { champs }
+    Enum(Rc<EnumData>),
+    Null, Void,
 }
 
 impl std::fmt::Display for Value {
@@ -46,13 +53,20 @@ impl std::fmt::Display for Value {
                 write!(f, "[{}]", items.join(", "))
             }
             Value::Object(o) => write!(f, "<{}>", o.borrow().class_name),
+            Value::Enum(e)   => {
+                if e.field_order.is_empty() {
+                    write!(f, "{}::{}", e.enum_name, e.variant_name)
+                } else {
+                    let vals: Vec<String> = e.field_order.iter()
+                        .map(|k| e.fields[k].to_string()).collect();
+                    write!(f, "{}::{}({})", e.enum_name, e.variant_name, vals.join(", "))
+                }
+            }
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Erreur runtime
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Erreur runtime ────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
 pub struct RuntimeError(pub String);
@@ -67,9 +81,7 @@ macro_rules! err {
     ($($arg:tt)*) => { Err(RuntimeError(format!($($arg)*))) };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Environnement (pile de scopes)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Environnement ─────────────────────────────────────────────────────────────
 
 pub struct Environment {
     scopes: Vec<HashMap<String, Value>>,
@@ -77,12 +89,8 @@ pub struct Environment {
 
 impl Environment {
     pub fn new() -> Self { Self { scopes: vec![HashMap::new()] } }
-
     pub fn push_scope(&mut self) { self.scopes.push(HashMap::new()); }
-
-    pub fn pop_scope(&mut self) {
-        if self.scopes.len() > 1 { self.scopes.pop(); }
-    }
+    pub fn pop_scope(&mut self) { if self.scopes.len() > 1 { self.scopes.pop(); } }
 
     pub fn get(&self, name: &str) -> Option<Value> {
         for scope in self.scopes.iter().rev() {
@@ -90,57 +98,50 @@ impl Environment {
         }
         None
     }
-
     pub fn set(&mut self, name: String, value: Value) {
         for scope in self.scopes.iter_mut().rev() {
             if scope.contains_key(&name) { scope.insert(name, value); return; }
         }
         self.scopes.last_mut().unwrap().insert(name, value);
     }
-
     pub fn declare(&mut self, name: String, value: Value) {
         self.scopes.last_mut().unwrap().insert(name, value);
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Flux de contrôle
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Flux de contrôle ─────────────────────────────────────────────────────────
 
 #[derive(Debug)]
 enum Flow {
-    Next,
-    BreakLoop,
-    ContinueLoop,
-    Return(Value),
+    Next, BreakLoop, ContinueLoop, Return(Value),
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Interpréteur
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Interpréteur ─────────────────────────────────────────────────────────────
 
 pub struct Interpreter {
     classes: HashMap<String, ClassDef>,
+    enums:   HashMap<String, EnumDef>,
 }
 
 impl Interpreter {
     pub fn new(program: &Program) -> Self {
-        let classes = program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
-        Self { classes }
+        Self {
+            classes: program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
+            enums:   program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
+        }
     }
 
     pub fn run(&mut self, program: &Program) -> Result<i64, RuntimeError> {
         info!("▶ Exécution");
         let mut env = Environment::new();
-
         match self.exec_body(&program.main.body, &mut env, None)? {
             Flow::Return(Value::Int(n)) => { info!("✓ main() → {}", n); Ok(n) }
             Flow::Return(v) => { warn!("main() valeur non-int : {}", v); Ok(0) }
-            Flow::Next | Flow::BreakLoop | Flow::ContinueLoop => { warn!("main() sans return"); Ok(0) }
+            _ => { warn!("main() sans return"); Ok(0) }
         }
     }
 
-    // ── Valeur par défaut ─────────────────────────────────────────────────────
+    // ── Valeurs par défaut ────────────────────────────────────────────────────
 
     fn default_value(ty: &Type) -> Value {
         match ty {
@@ -153,25 +154,24 @@ impl Interpreter {
         }
     }
 
-    // ── Instanciation ─────────────────────────────────────────────────────────
+    // ── Instanciation de classe ───────────────────────────────────────────────
 
     fn instantiate(&self, class_name: &str) -> Result<Value, RuntimeError> {
         if !self.classes.contains_key(class_name) {
             return err!("Classe inconnue : '{}'", class_name);
         }
-        let fields = self.all_fields(class_name)
-            .iter()
-            .map(|f| (f.name.clone(), Self::default_value(&f.ty)))
-            .collect();
+        let fields = self.all_fields(class_name).iter()
+            .map(|f| (f.name.clone(), Self::default_value(&f.ty))).collect();
         debug!("new {}()", class_name);
-        Ok(Value::Object(Rc::new(RefCell::new(ObjectData { class_name: class_name.to_string(), fields }))))
+        Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
+            class_name: class_name.to_string(), fields
+        }))))
     }
 
     fn all_fields(&self, class_name: &str) -> Vec<Field> {
         let Some(class) = self.classes.get(class_name) else { return vec![]; };
         let mut fields = class.parent.as_deref()
-            .map(|p| self.all_fields(p))
-            .unwrap_or_default();
+            .map(|p| self.all_fields(p)).unwrap_or_default();
         for f in &class.fields {
             fields.retain(|pf: &Field| pf.name != f.name);
             fields.push(f.clone());
@@ -179,15 +179,23 @@ impl Interpreter {
         fields
     }
 
-    // ── Résolution de méthode (héritage) ──────────────────────────────────────
+    // ── Résolution de méthode (héritage + enum) ───────────────────────────────
 
     fn find_method(&self, class_name: &str, method_name: &str) -> Option<Method> {
-        let class = self.classes.get(class_name)?;
-        if let Some(m) = class.methods.iter().find(|m| m.name == method_name) {
-            return Some(m.clone());
+        // Classes
+        if let Some(class) = self.classes.get(class_name) {
+            if let Some(m) = class.methods.iter().find(|m| m.name == method_name) {
+                return Some(m.clone());
+            }
+            if let Some(parent) = &class.parent {
+                return self.find_method(parent, method_name);
+            }
         }
-        if let Some(parent) = &class.parent {
-            return self.find_method(parent, method_name);
+        // Enums
+        if let Some(ed) = self.enums.get(class_name) {
+            if let Some(m) = ed.methods.iter().find(|m| m.name == method_name) {
+                return Some(m.clone());
+            }
         }
         None
     }
@@ -195,10 +203,8 @@ impl Interpreter {
     // ── Corps ─────────────────────────────────────────────────────────────────
 
     fn exec_body(
-        &mut self,
-        stmts: &[Stmt],
-        env:   &mut Environment,
-        this:  Option<Rc<RefCell<ObjectData>>>,
+        &mut self, stmts: &[Stmt], env: &mut Environment,
+        this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Flow, RuntimeError> {
         for stmt in stmts {
             match self.exec_stmt(stmt, env, this.clone())? {
@@ -212,20 +218,18 @@ impl Interpreter {
     // ── Instructions ──────────────────────────────────────────────────────────
 
     fn exec_stmt(
-        &mut self,
-        stmt: &Stmt,
-        env:  &mut Environment,
+        &mut self, stmt: &Stmt, env: &mut Environment,
         this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Flow, RuntimeError> {
         match stmt {
-            // ── Déclaration ───────────────────────────────────────────────────
             Stmt::VarDecl { ty, name, init } => {
                 let value = if let Some(expr) = init {
                     self.eval_expr(expr, env, this)?
-                } else if let Type::UserDefined(class_name) = ty {
-                    self.instantiate(class_name)?
-                } else if let Type::Generic(class_name, _) = ty {
-                    self.instantiate(class_name)?
+                } else if let Type::UserDefined(cn) = ty {
+                    if self.enums.contains_key(cn) { Value::Null }
+                    else { self.instantiate(cn)? }
+                } else if let Type::Generic(cn, _) = ty {
+                    self.instantiate(cn)?
                 } else {
                     Self::default_value(ty)
                 };
@@ -233,11 +237,8 @@ impl Interpreter {
                 env.declare(name.clone(), value);
             }
 
-            // ── Affectation ───────────────────────────────────────────────────
             Stmt::Assign { target, value } => {
                 let val = self.eval_expr(value, env, this.clone())?;
-                debug!("  {} = {}", target, val);
-                // Si target est un champ de this, on l'y affecte
                 let is_field = this.as_ref()
                     .map(|t| t.borrow().fields.contains_key(target))
                     .unwrap_or(false);
@@ -248,37 +249,29 @@ impl Interpreter {
                 }
             }
 
-            // ── Affectation de champ ──────────────────────────────────────────
             Stmt::FieldAssign { object, field, value } => {
                 let val = self.eval_expr(value, env, this.clone())?;
-
                 let obj_rc = if object == "this" {
                     this.clone().ok_or_else(|| RuntimeError("'this' hors méthode".into()))?
                 } else {
                     let obj_val = env.get(object)
-                        .or_else(|| this.as_ref()
-                            .and_then(|t| t.borrow().fields.get(object).cloned()))
+                        .or_else(|| this.as_ref().and_then(|t| t.borrow().fields.get(object).cloned()))
                         .ok_or_else(|| RuntimeError(format!("Variable inconnue '{}'", object)))?;
                     match obj_val {
                         Value::Object(rc) => rc,
                         _ => return err!("'{}' n'est pas un objet", object),
                     }
                 };
-
-                debug!("  {}.{} = {}", object, field, val);
                 obj_rc.borrow_mut().fields.insert(field.clone(), val);
             }
 
-            // ── print ─────────────────────────────────────────────────────────
             Stmt::Print(args) => {
-                let parts: Vec<String> = args
-                    .iter()
+                let parts: Vec<String> = args.iter()
                     .map(|e| self.eval_expr(e, env, this.clone()).map(|v| v.to_string()))
                     .collect::<Result<_, _>>()?;
                 println!("{}", parts.join(" "));
             }
 
-            // ── return ────────────────────────────────────────────────────────
             Stmt::Return(expr) => {
                 let val = match expr {
                     Some(e) => self.eval_expr(e, env, this)?,
@@ -287,10 +280,8 @@ impl Interpreter {
                 return Ok(Flow::Return(val));
             }
 
-            // ── ExprStmt ──────────────────────────────────────────────────────
             Stmt::ExprStmt(expr) => { self.eval_expr(expr, env, this)?; }
 
-            // ── if ────────────────────────────────────────────────────────────
             Stmt::If { condition, then_body, else_body } => {
                 let cond = self.eval_expr(condition, env, this.clone())?;
                 match cond {
@@ -312,7 +303,6 @@ impl Interpreter {
                 }
             }
 
-            // ── while ─────────────────────────────────────────────────────────
             Stmt::While { condition, body } => {
                 loop {
                     match self.eval_expr(condition, env, this.clone())? {
@@ -332,7 +322,6 @@ impl Interpreter {
                 }
             }
 
-            // ── do-while ──────────────────────────────────────────────────────
             Stmt::DoWhile { body, condition } => {
                 loop {
                     env.push_scope();
@@ -340,9 +329,8 @@ impl Interpreter {
                     env.pop_scope();
                     match f {
                         Flow::BreakLoop    => break,
-                        Flow::ContinueLoop => {}
                         Flow::Return(v)    => return Ok(Flow::Return(v)),
-                        Flow::Next         => {}
+                        Flow::ContinueLoop | Flow::Next => {}
                     }
                     match self.eval_expr(condition, env, this.clone())? {
                         Value::Bool(false) => break,
@@ -352,14 +340,9 @@ impl Interpreter {
                 }
             }
 
-            // ── for ───────────────────────────────────────────────────────────
             Stmt::For { init, condition, update, body } => {
                 env.push_scope();
-
-                if let Some(s) = init {
-                    self.exec_stmt(s, env, this.clone())?;
-                }
-
+                if let Some(s) = init { self.exec_stmt(s, env, this.clone())?; }
                 'for_loop: loop {
                     if let Some(cond_expr) = condition {
                         match self.eval_expr(cond_expr, env, this.clone())? {
@@ -368,40 +351,79 @@ impl Interpreter {
                             _ => return err!("Condition for doit être bool"),
                         }
                     }
-
                     env.push_scope();
                     let f = self.exec_body(body, env, this.clone())?;
                     env.pop_scope();
-
                     match f {
                         Flow::BreakLoop  => break 'for_loop,
                         Flow::Return(v)  => { env.pop_scope(); return Ok(Flow::Return(v)); }
                         Flow::Next | Flow::ContinueLoop => {}
                     }
-
-                    if let Some(upd) = update {
-                        self.exec_stmt(upd, env, this.clone())?;
-                    }
+                    if let Some(upd) = update { self.exec_stmt(upd, env, this.clone())?; }
                 }
-
                 env.pop_scope();
             }
 
             Stmt::Break    => return Ok(Flow::BreakLoop),
             Stmt::Continue => return Ok(Flow::ContinueLoop),
+
+            // ── match ─────────────────────────────────────────────────────────
+            Stmt::Match { expr, arms } => {
+                let val = self.eval_expr(expr, env, this.clone())?;
+
+                for arm in arms {
+                    let matched = match &arm.pattern {
+                        Pattern::Wildcard => true,
+
+                        Pattern::Variant { name: variant_name, bindings } => {
+                            match &val {
+                                Value::Enum(ed) => {
+                                    if ed.variant_name == *variant_name {
+                                        // Lie les bindings dans un scope frais
+                                        env.push_scope();
+                                        for (binding, field_name) in
+                                            bindings.iter().zip(ed.field_order.iter())
+                                        {
+                                            let field_val = ed.fields.get(field_name)
+                                                .cloned().unwrap_or(Value::Null);
+                                            env.declare(binding.clone(), field_val);
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                _ => false,
+                            }
+                        }
+                    };
+
+                    if matched {
+                        // Si le pattern a créé un scope (Variant), le corps s'exécute dedans
+                        let need_pop = matches!(&arm.pattern, Pattern::Variant { .. })
+                            && matches!(&val, Value::Enum(_));
+
+                        if !need_pop { env.push_scope(); }
+                        let f = self.exec_body(&arm.body, env, this.clone())?;
+                        env.pop_scope();
+
+                        match f {
+                            Flow::Next => {}
+                            other      => return Ok(other),
+                        }
+                        break; // un seul bras exécuté
+                    }
+                }
+            }
         }
 
         Ok(Flow::Next)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Évaluation d'expression
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Évaluation d'expression ───────────────────────────────────────────────
 
     fn eval_expr(
-        &mut self,
-        expr: &Expr,
-        env:  &mut Environment,
+        &mut self, expr: &Expr, env: &mut Environment,
         this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Value, RuntimeError> {
         match expr {
@@ -410,7 +432,6 @@ impl Interpreter {
             Expr::BoolLit(b)   => Ok(Value::Bool(*b)),
             Expr::StringLit(s) => Ok(Value::Str(s.clone())),
 
-            // ── Identifiant ───────────────────────────────────────────────────
             Expr::Ident(name) => {
                 if name == "this" {
                     return this.as_ref()
@@ -424,7 +445,6 @@ impl Interpreter {
                 err!("Variable inconnue '{}'", name)
             }
 
-            // ── Opération unaire ──────────────────────────────────────────────
             Expr::UnaryOp { op, expr } => {
                 let v = self.eval_expr(expr, env, this)?;
                 match op {
@@ -440,23 +460,23 @@ impl Interpreter {
                 }
             }
 
-            // ── Opération binaire ─────────────────────────────────────────────
             Expr::BinOp { left, op, right } => {
                 let lv = self.eval_expr(left, env, this.clone())?;
                 let rv = self.eval_expr(right, env, this)?;
                 eval_binop(lv, op, rv)
             }
 
-            // ── Accès champ ───────────────────────────────────────────────────
             Expr::FieldAccess { object, field } => {
                 match self.eval_expr(object, env, this)? {
                     Value::Object(rc) => rc.borrow().fields.get(field).cloned()
                         .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field))),
+                    Value::Enum(ed)   => ed.fields.get(field).cloned()
+                        .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}' dans variante '{}'",
+                            field, ed.variant_name))),
                     _ => err!("Accès champ sur non-objet"),
                 }
             }
 
-            // ── Appel de méthode ──────────────────────────────────────────────
             Expr::MethodCall { object, method, args } => {
                 let obj_val = self.eval_expr(object, env, this.clone())?;
                 let eval_args = args.iter()
@@ -468,20 +488,35 @@ impl Interpreter {
                         let class_name = obj_rc.borrow().class_name.clone();
                         let m = self.find_method(&class_name, method)
                             .ok_or_else(|| RuntimeError(format!(
-                                "Méthode inconnue '{}.{}()'", class_name, method
-                            )))?;
+                                "Méthode inconnue '{}.{}()'", class_name, method)))?;
+                        self.call_method(&m, eval_args, obj_rc)
+                    }
+                    Value::Enum(ed) => {
+                        let enum_name = ed.enum_name.clone();
+                        let m = self.find_method(&enum_name, method)
+                            .ok_or_else(|| RuntimeError(format!(
+                                "Méthode inconnue '{}::{}()'", enum_name, method)))?;
+                        // Pour les méthodes d'enum, on passe les champs de la variante
+                        // comme un objet virtuel
+                        let obj_rc = Rc::new(RefCell::new(ObjectData {
+                            class_name: enum_name.clone(),
+                            fields:     ed.fields.clone(),
+                        }));
+                        // Ajoute aussi variant_name comme champ spécial "$variant"
+                        obj_rc.borrow_mut().fields.insert(
+                            "$variant".to_string(),
+                            Value::Str(ed.variant_name.clone()),
+                        );
                         self.call_method(&m, eval_args, obj_rc)
                     }
                     _ => err!("Appel de méthode sur non-objet"),
                 }
             }
 
-            // ── Appel de fonction libre ────────────────────────────────────────
             Expr::FunctionCall { name, args } => {
                 let eval_args = args.iter()
                     .map(|a| self.eval_expr(a, env, this.clone()))
                     .collect::<Result<Vec<_>, _>>()?;
-
                 if let Some(obj_rc) = this {
                     let class_name = obj_rc.borrow().class_name.clone();
                     if let Some(m) = self.find_method(&class_name, name) {
@@ -491,34 +526,22 @@ impl Interpreter {
                 err!("Fonction inconnue '{}'", name)
             }
 
-            // ── new ClassName<T>(args) ─────────────────────────────────────────
             Expr::New { class_name, args, .. } => {
-                // Instanciation avec valeurs par défaut
                 let obj = self.instantiate(class_name)?;
                 let obj_rc = match &obj {
                     Value::Object(rc) => rc.clone(),
                     _ => unreachable!(),
                 };
-
-                // Cherche un constructeur avec le bon nombre de paramètres
                 let constructors = self.classes.get(class_name)
-                    .map(|c| c.constructors.clone())
-                    .unwrap_or_default();
-
+                    .map(|c| c.constructors.clone()).unwrap_or_default();
                 if !constructors.is_empty() {
                     let ctor = constructors.iter()
-                        .find(|c| c.params.len() == args.len())
-                        .cloned()
+                        .find(|c| c.params.len() == args.len()).cloned()
                         .ok_or_else(|| RuntimeError(format!(
-                            "Pas de constructeur à {} arg(s) pour '{}'",
-                            args.len(), class_name
-                        )))?;
-
+                            "Pas de constructeur à {} arg(s) pour '{}'", args.len(), class_name)))?;
                     let eval_args = args.iter()
                         .map(|a| self.eval_expr(a, env, None))
                         .collect::<Result<Vec<_>, _>>()?;
-
-                    // Exécute le corps du constructeur avec this = nouvel objet
                     let mut ctor_env = Environment::new();
                     ctor_env.push_scope();
                     for (p, v) in ctor.params.iter().zip(eval_args) {
@@ -526,32 +549,55 @@ impl Interpreter {
                     }
                     self.exec_body(&ctor.body, &mut ctor_env, Some(obj_rc))?;
                 }
-
                 Ok(obj)
+            }
+
+            // ── Constructeur d'enum : EnumName::Variant(args) ─────────────────
+            Expr::EnumConstructor { enum_name, variant, args } => {
+                let enum_def = self.enums.get(enum_name)
+                    .ok_or_else(|| RuntimeError(format!("Enum inconnu '{}'", enum_name)))?
+                    .clone();
+                let var_def = enum_def.variants.iter()
+                    .find(|v| &v.name == variant)
+                    .ok_or_else(|| RuntimeError(format!(
+                        "Variante '{}' inconnue dans '{}'", variant, enum_name)))?
+                    .clone();
+
+                let eval_args = args.iter()
+                    .map(|a| self.eval_expr(a, env, None))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let mut fields      = HashMap::new();
+                let mut field_order = Vec::new();
+                for (param, val) in var_def.fields.iter().zip(eval_args) {
+                    fields.insert(param.name.clone(), val);
+                    field_order.push(param.name.clone());
+                }
+
+                debug!("{}::{}", enum_name, variant);
+                Ok(Value::Enum(Rc::new(EnumData {
+                    enum_name:    enum_name.clone(),
+                    variant_name: variant.clone(),
+                    fields,
+                    field_order,
+                })))
             }
         }
     }
 
-    // ── Appel de méthode ──────────────────────────────────────────────────────
+    // ── Appel de méthode ─────────────────────────────────────────────────────
 
     fn call_method(
-        &mut self,
-        method: &Method,
-        args:   Vec<Value>,
-        this:   Rc<RefCell<ObjectData>>,
+        &mut self, method: &Method, args: Vec<Value>, this: Rc<RefCell<ObjectData>>,
     ) -> Result<Value, RuntimeError> {
         if args.len() != method.params.len() {
             return err!("'{}()' : {} arg(s) attendus, {} fournis",
                 method.name, method.params.len(), args.len());
         }
         debug!("→ {}", method.name);
-
         let mut env = Environment::new();
         env.push_scope();
-        for (p, v) in method.params.iter().zip(args) {
-            env.declare(p.name.clone(), v);
-        }
-
+        for (p, v) in method.params.iter().zip(args) { env.declare(p.name.clone(), v); }
         match self.exec_body(&method.body.clone(), &mut env, Some(this))? {
             Flow::Return(v) => Ok(v),
             _               => Ok(Value::Void),
@@ -559,14 +605,10 @@ impl Interpreter {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Évaluation des opérateurs binaires
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Opérateurs binaires ───────────────────────────────────────────────────────
 
 fn eval_binop(lv: Value, op: &BinOp, rv: Value) -> Result<Value, RuntimeError> {
-    // Promotions numériques
     let (lv, rv) = promote(lv, rv);
-
     match op {
         BinOp::Add => match (lv, rv) {
             (Value::Int(a),   Value::Int(b))   => Ok(Value::Int(a + b)),
@@ -622,7 +664,6 @@ fn eval_binop(lv: Value, op: &BinOp, rv: Value) -> Result<Value, RuntimeError> {
     }
 }
 
-/// Promotion int → float si l'un des deux est float
 fn promote(lv: Value, rv: Value) -> (Value, Value) {
     match (&lv, &rv) {
         (Value::Int(a), Value::Float(_)) => (Value::Float(*a as f64), rv),
@@ -650,23 +691,19 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::Bool(x),  Value::Bool(y))  => x == y,
         (Value::Str(x),   Value::Str(y))   => x == y,
         (Value::Null,     Value::Null)     => true,
+        (Value::Enum(a),  Value::Enum(b))  =>
+            a.enum_name == b.enum_name && a.variant_name == b.variant_name,
         _ => false,
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  API de test : exécute une source directement, retourne le code de sortie
-// ─────────────────────────────────────────────────────────────────────────────
+// ── API de test ───────────────────────────────────────────────────────────────
 
-/// Parse + exécute une source mini, retourne le code de sortie de main().
-/// Utilisé par les tests d'intégration.
 pub fn run_source(src: &str) -> Result<i64, String> {
     use chumsky::Parser;
     let program = crate::parser::program_parser()
         .parse(src)
-        .map_err(|errs| {
-            errs.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n")
-        })?;
+        .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n"))?;
     let mut interp = Interpreter::new(&program);
     interp.run(&program).map_err(|e| e.to_string())
 }

@@ -2,33 +2,21 @@
 //  AST – nœuds de l'arbre syntaxique abstrait
 // ─────────────────────────────────────────────
 
-// ── Déclaration de package & imports ─────────────────────────────────────────
+// ── Package & imports ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct PackageDecl {
-    pub path: String, // "com.example.myapp"
-}
+pub struct PackageDecl { pub path: String }
 
 #[derive(Debug, Clone)]
-pub struct Import {
-    pub path:     String, // "com.example.Foo"  ou  "com.example.*"
-    pub wildcard: bool,
-}
+pub struct Import { pub path: String, pub wildcard: bool }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    Int,
-    Bool,
-    Str,
-    Float,
-    Double,
-    Void,
+    Int, Bool, Str, Float, Double, Void,
     Array(Box<Type>),
-    /// Type générique instancié : Stack<int>, Pair<string, int>
     Generic(String, Vec<Type>),
-    /// Identifiant simple : classe utilisateur ou paramètre de type
     UserDefined(String),
 }
 
@@ -43,9 +31,9 @@ impl std::fmt::Display for Type {
             Type::Void           => write!(f, "void"),
             Type::Array(inner)   => write!(f, "{}[]", inner),
             Type::UserDefined(n) => write!(f, "{}", n),
-            Type::Generic(n, args) => {
-                let a: Vec<String> = args.iter().map(|t| t.to_string()).collect();
-                write!(f, "{}<{}>", n, a.join(", "))
+            Type::Generic(n, a)  => {
+                let s: Vec<String> = a.iter().map(|t| t.to_string()).collect();
+                write!(f, "{}<{}>", n, s.join(", "))
             }
         }
     }
@@ -55,11 +43,8 @@ impl std::fmt::Display for Type {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinOp {
-    // arithmétique
     Add, Sub, Mul, Div, Mod, Pow,
-    // comparaison
     Eq, Ne, Lt, Le, Gt, Ge,
-    // logique
     And, Or,
 }
 
@@ -83,106 +68,63 @@ pub enum UnaryOp { Neg, Not }
 // ── Paramètre ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct Param {
-    pub ty:   Type,
-    pub name: String,
-}
+pub struct Param { pub ty: Type, pub name: String }
 
 // ── Expressions ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    IntLit(i64),
-    FloatLit(f64),
-    BoolLit(bool),
-    StringLit(String),
-    Ident(String),
+    IntLit(i64), FloatLit(f64), BoolLit(bool), StringLit(String), Ident(String),
+    BinOp    { left: Box<Expr>, op: BinOp, right: Box<Expr> },
+    UnaryOp  { op: UnaryOp, expr: Box<Expr> },
+    FieldAccess { object: Box<Expr>, field: String },
+    MethodCall  { object: Box<Expr>, method: String, args: Vec<Expr> },
+    FunctionCall { name: String, args: Vec<Expr> },
+    New { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
+    /// EnumName::Variant  ou  EnumName::Variant(args)
+    EnumConstructor { enum_name: String, variant: String, args: Vec<Expr> },
+}
 
-    BinOp {
-        left:  Box<Expr>,
-        op:    BinOp,
-        right: Box<Expr>,
-    },
-    UnaryOp {
-        op:   UnaryOp,
-        expr: Box<Expr>,
-    },
+// ── Pattern pour le match ─────────────────────────────────────────────────────
 
-    FieldAccess {
-        object: Box<Expr>,
-        field:  String,
-    },
-    MethodCall {
-        object: Box<Expr>,
-        method: String,
-        args:   Vec<Expr>,
-    },
-    FunctionCall {
-        name: String,
-        args: Vec<Expr>,
-    },
+#[derive(Debug, Clone)]
+pub enum Pattern {
+    /// Variant(binding1, binding2, ...)  — chaque binding est un nom de variable
+    Variant { name: String, bindings: Vec<String> },
+    /// _
+    Wildcard,
+}
 
-    /// new ClassName<TypeArgs>(args)
-    New {
-        class_name: String,
-        type_args:  Vec<Type>,
-        args:       Vec<Expr>,
-    },
+/// Un bras du match
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body:    Vec<Stmt>,
 }
 
 // ── Instructions ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    VarDecl {
-        ty:   Type,
-        name: String,
-        init: Option<Expr>,
-    },
-    Assign {
-        target: String,
-        value:  Expr,
-    },
-    FieldAssign {
-        object: String,
-        field:  String,
-        value:  Expr,
-    },
+    VarDecl     { ty: Type, name: String, init: Option<Expr> },
+    Assign      { target: String, value: Expr },
+    FieldAssign { object: String, field: String, value: Expr },
     Print(Vec<Expr>),
     Return(Option<Expr>),
     ExprStmt(Expr),
-
-    // ── Contrôle de flux ─────────────────────────────────────────────────────
-    If {
-        condition: Expr,
-        then_body: Vec<Stmt>,
-        else_body: Option<Vec<Stmt>>,
-    },
-    While {
-        condition: Expr,
-        body:      Vec<Stmt>,
-    },
-    DoWhile {
-        body:      Vec<Stmt>,
-        condition: Expr,
-    },
-    For {
-        init:      Option<Box<Stmt>>,
-        condition: Option<Expr>,
-        update:    Option<Box<Stmt>>,
-        body:      Vec<Stmt>,
-    },
-    Break,
-    Continue,
+    If       { condition: Expr, then_body: Vec<Stmt>, else_body: Option<Vec<Stmt>> },
+    While    { condition: Expr, body: Vec<Stmt> },
+    DoWhile  { body: Vec<Stmt>, condition: Expr },
+    For      { init: Option<Box<Stmt>>, condition: Option<Expr>, update: Option<Box<Stmt>>, body: Vec<Stmt> },
+    Break, Continue,
+    /// match expr { Pattern => { stmts } ... }
+    Match { expr: Expr, arms: Vec<MatchArm> },
 }
 
-// ── Membres de classe ─────────────────────────────────────────────────────────
+// ── Membres de classe/enum ────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct Field {
-    pub ty:   Type,
-    pub name: String,
-}
+pub struct Field { pub ty: Type, pub name: String }
 
 #[derive(Debug, Clone)]
 pub struct Method {
@@ -192,28 +134,17 @@ pub struct Method {
     pub body:        Vec<Stmt>,
 }
 
-/// Constructeur : même nom que la classe, pas de type de retour
 #[derive(Debug, Clone)]
-pub struct Constructor {
-    pub params: Vec<Param>,
-    pub body:   Vec<Stmt>,
-}
-
-// ── Signature de méthode (pour les interfaces) ────────────────────────────────
+pub struct Constructor { pub params: Vec<Param>, pub body: Vec<Stmt> }
 
 #[derive(Debug, Clone)]
-pub struct MethodSig {
-    pub return_type: Type,
-    pub name:        String,
-    pub params:      Vec<Param>,
-}
+pub struct MethodSig { pub return_type: Type, pub name: String, pub params: Vec<Param> }
 
 // ── Définition de classe ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub struct ClassDef {
     pub name:         String,
-    /// Paramètres de type : ["T", "K"] pour class Foo<T, K>
     pub type_params:  Vec<String>,
     pub parent:       Option<String>,
     pub implements:   Vec<String>,
@@ -225,17 +156,29 @@ pub struct ClassDef {
 // ── Définition d'interface ────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct InterfaceDef {
-    pub name:    String,
-    pub methods: Vec<MethodSig>,
+pub struct InterfaceDef { pub name: String, pub methods: Vec<MethodSig> }
+
+// ── Variante d'enum ───────────────────────────────────────────────────────────
+
+/// Une variante d'enum avec ses champs optionnels (nommés et typés)
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    pub name:   String,
+    pub fields: Vec<Param>,   // vide = variante sans données
+}
+
+/// Définition d'un enum
+#[derive(Debug, Clone)]
+pub struct EnumDef {
+    pub name:     String,
+    pub variants: Vec<EnumVariant>,
+    pub methods:  Vec<Method>,   // méthodes communes à toutes les variantes
 }
 
 // ── Fonction main ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct MainFunc {
-    pub body: Vec<Stmt>,
-}
+pub struct MainFunc { pub body: Vec<Stmt> }
 
 // ── Programme complet ─────────────────────────────────────────────────────────
 
@@ -244,6 +187,7 @@ pub struct Program {
     pub package:    Option<PackageDecl>,
     pub imports:    Vec<Import>,
     pub interfaces: Vec<InterfaceDef>,
+    pub enums:      Vec<EnumDef>,
     pub classes:    Vec<ClassDef>,
     pub main:       MainFunc,
 }
