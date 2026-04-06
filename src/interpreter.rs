@@ -433,12 +433,15 @@ impl Interpreter {
             Expr::StringLit(s) => Ok(Value::Str(s.clone())),
 
             Expr::Ident(name) => {
+                // L'env est consulté EN PREMIER : cela permet aux méthodes d'enum
+                // de stocker `this = Value::Enum(...)` dans l'environnement et d'avoir
+                // la priorité sur le `this: Option<Rc<RefCell<ObjectData>>>` des classes.
+                if let Some(v) = env.get(name) { return Ok(v); }
                 if name == "this" {
                     return this.as_ref()
                         .map(|rc| Value::Object(rc.clone()))
                         .ok_or_else(|| RuntimeError("'this' hors méthode".into()));
                 }
-                if let Some(v) = env.get(name) { return Ok(v); }
                 if let Some(obj) = &this {
                     if let Some(v) = obj.borrow().fields.get(name) { return Ok(v.clone()); }
                 }
@@ -496,18 +499,7 @@ impl Interpreter {
                         let m = self.find_method(&enum_name, method)
                             .ok_or_else(|| RuntimeError(format!(
                                 "Méthode inconnue '{}::{}()'", enum_name, method)))?;
-                        // Pour les méthodes d'enum, on passe les champs de la variante
-                        // comme un objet virtuel
-                        let obj_rc = Rc::new(RefCell::new(ObjectData {
-                            class_name: enum_name.clone(),
-                            fields:     ed.fields.clone(),
-                        }));
-                        // Ajoute aussi variant_name comme champ spécial "$variant"
-                        obj_rc.borrow_mut().fields.insert(
-                            "$variant".to_string(),
-                            Value::Str(ed.variant_name.clone()),
-                        );
-                        self.call_method(&m, eval_args, obj_rc)
+                        self.call_enum_method(&m, eval_args, ed)
                     }
                     _ => err!("Appel de méthode sur non-objet"),
                 }
@@ -599,6 +591,34 @@ impl Interpreter {
         env.push_scope();
         for (p, v) in method.params.iter().zip(args) { env.declare(p.name.clone(), v); }
         match self.exec_body(&method.body.clone(), &mut env, Some(this))? {
+            Flow::Return(v) => Ok(v),
+            _               => Ok(Value::Void),
+        }
+    }
+
+    // ── Appel d'une méthode d'enum ────────────────────────────────────────────
+    //
+    // Contrairement à `call_method`, on ne passe pas d'`ObjectData` comme `this`.
+    // On stocke à la place `Value::Enum(ed)` directement dans l'environnement sous
+    // la clé `"this"`.  Grâce à la modification de `Expr::Ident` qui consulte l'env
+    // en premier, `this` s'évalue alors en `Value::Enum` — ce qui permet au `match`
+    // du corps de la méthode de fonctionner correctement.
+
+    fn call_enum_method(
+        &mut self, method: &Method, args: Vec<Value>, ed: Rc<EnumData>,
+    ) -> Result<Value, RuntimeError> {
+        if args.len() != method.params.len() {
+            return err!("'{}()' : {} arg(s) attendus, {} fournis",
+                method.name, method.params.len(), args.len());
+        }
+        debug!("→ enum::{}", method.name);
+        let mut env = Environment::new();
+        env.push_scope();
+        // `this` = la valeur enum elle-même, accessible via env
+        env.declare("this".to_string(), Value::Enum(ed));
+        for (p, v) in method.params.iter().zip(args) { env.declare(p.name.clone(), v); }
+        // On passe `this = None` : l'ObjectData n'est pas utilisé ici
+        match self.exec_body(&method.body.clone(), &mut env, None)? {
             Flow::Return(v) => Ok(v),
             _               => Ok(Value::Void),
         }
