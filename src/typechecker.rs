@@ -284,11 +284,12 @@ impl TypeChecker {
                 let ret = self.expected_return.clone();
                 if let Some(e) = expr {
                     if let Some(ty) = self.infer(e, env) {
-                        if !self.is_compatible(&ty, &ret) {
+                        // Type::Fn = sentinelle "tout type accepté" (corps de lambda)
+                        if !matches!(ret, Type::Fn) && !self.is_compatible(&ty, &ret) {
                             self.err(format!("return {} mais attendu {}", ty, ret));
                         }
                     }
-                } else if ret != Type::Void {
+                } else if !matches!(ret, Type::Fn) && ret != Type::Void {
                     self.err(format!("return vide mais type attendu {}", ret));
                 }
             }
@@ -467,6 +468,15 @@ impl TypeChecker {
                     for a in args { self.infer(a, env); }
                     return Ok(Type::Void);
                 }
+
+                // Appel d'une lambda stockée dans une variable locale
+                if let Some(ty) = env.get(name) {
+                    if self.is_lambda_type(ty) {
+                        for a in args { self.infer(a, env); }
+                        return Ok(Type::Void); // type de retour non inféré
+                    }
+                }
+
                 if let Some(class_name) = self.current_class.clone() {
                     if let Some(m) = self.find_method_def(&class_name, name).cloned() {
                         if args.len() != m.params.len() {
@@ -489,6 +499,37 @@ impl TypeChecker {
                     }
                 }
                 type_err!("Fonction inconnue '{}'", name)
+            }
+
+            // ── Lambda ────────────────────────────────────────────────────────
+            Expr::Lambda { params, body } => {
+                let mut lenv = TypeEnv::new();
+                lenv.push();
+                for p in params { lenv.declare(p.clone(), Type::Fn); }
+                let saved = self.expected_return.clone();
+                // Type::Fn comme sentinelle = "tout type de retour accepté"
+                // (évite les faux positifs "return X mais attendu void")
+                self.expected_return = Type::Fn;
+                match body {
+                    LambdaBody::Expr(e)      => { self.infer(e, &lenv); }
+                    LambdaBody::Block(stmts) => {
+                        let mut le = lenv;
+                        for s in stmts { self.check_stmt(s, &mut le); }
+                    }
+                }
+                self.expected_return = saved;
+                Ok(Type::Fn)
+            }
+
+            // ── Appel d'une lambda ────────────────────────────────────────────
+            Expr::LambdaCall { callee, args } => {
+                let callee_ty = self.infer_expr(callee, env)?;
+                if !matches!(callee_ty, Type::Fn) {
+                    self.err(format!("Appel sur non-lambda (type : {})", callee_ty));
+                }
+                for a in args { self.infer(a, env); }
+                // Type de retour non connu statiquement : on retourne Void
+                Ok(Type::Void)
             }
 
             Expr::New { class_name, type_args, args } => {
@@ -552,6 +593,8 @@ impl TypeChecker {
         if let Type::UserDefined(n) = expected { if self.type_params.contains(n) { return true; } }
         if actual == expected { return true; }
         if matches!(actual, Type::Void) { return true; }
+        // Type::Fn = paramètre de lambda de type inconnu → compatible avec tout
+        if matches!(actual, Type::Fn) || matches!(expected, Type::Fn) { return true; }
         if matches!(expected, Type::Double) && self.is_numeric(actual) { return true; }
         if matches!(expected, Type::Float) && matches!(actual, Type::Int) { return true; }
         match (actual, expected) {
@@ -600,6 +643,8 @@ impl TypeChecker {
     }
 
     fn is_numeric(&self, t: &Type) -> bool { matches!(t, Type::Int | Type::Float | Type::Double) }
+
+    fn is_lambda_type(&self, t: &Type) -> bool { matches!(t, Type::Fn) }
 
     fn numeric_result(&self, lt: &Type, rt: &Type) -> Type {
         match (lt, rt) {

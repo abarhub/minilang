@@ -230,5 +230,21 @@ fn fmt_expr(e: &Expr) -> String {
             if a.is_empty() { format!("{}::{}", enum_name, variant) }
             else { format!("{}::{}({})", enum_name, variant, a.join(", ")) }
         }
+        Expr::Lambda { params, body } => {
+            let ps = if params.len() == 1 {
+                params[0].clone()
+            } else {
+                format!("({})", params.join(", "))
+            };
+            let b = match body {
+                LambdaBody::Expr(e)     => fmt_expr(e),
+                LambdaBody::Block(_)    => "{ ... }".to_string(),
+            };
+            format!("{} => {}", ps, b)
+        }
+        Expr::LambdaCall { callee, args } => {
+            let a: Vec<String> = args.iter().map(fmt_expr).collect();
+            format!("{}({})", fmt_expr(callee), a.join(", "))
+        }
     }
 }

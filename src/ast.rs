@@ -1,7 +1,3 @@
-// ─────────────────────────────────────────────
-//  AST – nœuds de l'arbre syntaxique abstrait
-// ─────────────────────────────────────────────
-
 // ── Package & imports ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -18,6 +14,8 @@ pub enum Type {
     Array(Box<Type>),
     Generic(String, Vec<Type>),
     UserDefined(String),
+    /// Type d'une valeur lambda (fermeture)
+    Fn,
 }
 
 impl std::fmt::Display for Type {
@@ -29,10 +27,11 @@ impl std::fmt::Display for Type {
             Type::Float          => write!(f, "float"),
             Type::Double         => write!(f, "double"),
             Type::Void           => write!(f, "void"),
-            Type::Array(inner)   => write!(f, "{}[]", inner),
+            Type::Fn             => write!(f, "fn"),
+            Type::Array(i)       => write!(f, "{}[]", i),
             Type::UserDefined(n) => write!(f, "{}", n),
             Type::Generic(n, a)  => {
-                let s: Vec<String> = a.iter().map(|t| t.to_string()).collect();
+                let s: Vec<_> = a.iter().map(|t| t.to_string()).collect();
                 write!(f, "{}<{}>", n, s.join(", "))
             }
         }
@@ -51,12 +50,12 @@ pub enum BinOp {
 impl std::fmt::Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            BinOp::Add => "+", BinOp::Sub => "-", BinOp::Mul => "*",
-            BinOp::Div => "/", BinOp::Mod => "%", BinOp::Pow => "**",
-            BinOp::Eq  => "==", BinOp::Ne => "!=",
-            BinOp::Lt  => "<",  BinOp::Le => "<=",
-            BinOp::Gt  => ">",  BinOp::Ge => ">=",
-            BinOp::And => "&&", BinOp::Or => "||",
+            BinOp::Add => "+",  BinOp::Sub => "-",  BinOp::Mul => "*",
+            BinOp::Div => "/",  BinOp::Mod => "%",  BinOp::Pow => "**",
+            BinOp::Eq  => "==", BinOp::Ne  => "!=",
+            BinOp::Lt  => "<",  BinOp::Le  => "<=",
+            BinOp::Gt  => ">",  BinOp::Ge  => ">=",
+            BinOp::And => "&&", BinOp::Or  => "||",
         };
         write!(f, "{}", s)
     }
@@ -70,6 +69,16 @@ pub enum UnaryOp { Neg, Not }
 #[derive(Debug, Clone)]
 pub struct Param { pub ty: Type, pub name: String }
 
+// ── Corps d'une lambda ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum LambdaBody {
+    /// `x => x * 2`  — expression, valeur implicitement retournée
+    Expr(Box<Expr>),
+    /// `(x, y) => { int z = x + y; return z; }`  — bloc complet
+    Block(Vec<Stmt>),
+}
+
 // ── Expressions ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -77,30 +86,27 @@ pub enum Expr {
     IntLit(i64), FloatLit(f64), BoolLit(bool), StringLit(String), Ident(String),
     BinOp    { left: Box<Expr>, op: BinOp, right: Box<Expr> },
     UnaryOp  { op: UnaryOp, expr: Box<Expr> },
-    FieldAccess { object: Box<Expr>, field: String },
-    MethodCall  { object: Box<Expr>, method: String, args: Vec<Expr> },
+    FieldAccess  { object: Box<Expr>, field:  String },
+    MethodCall   { object: Box<Expr>, method: String, args: Vec<Expr> },
     FunctionCall { name: String, args: Vec<Expr> },
-    New { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
-    /// EnumName::Variant  ou  EnumName::Variant(args)
-    EnumConstructor { enum_name: String, variant: String, args: Vec<Expr> },
+    New              { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
+    EnumConstructor  { enum_name: String, variant: String, args: Vec<Expr> },
+    /// `x => x + 1`  ou  `(x, y) => { return x + y; }`
+    Lambda { params: Vec<String>, body: LambdaBody },
+    /// Appel d'une lambda stockée dans une variable : `f(1, 2)`
+    LambdaCall { callee: Box<Expr>, args: Vec<Expr> },
 }
 
-// ── Pattern pour le match ─────────────────────────────────────────────────────
+// ── Pattern pour match ────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum Pattern {
-    /// Variant(binding1, binding2, ...)  — chaque binding est un nom de variable
     Variant { name: String, bindings: Vec<String> },
-    /// _
     Wildcard,
 }
 
-/// Un bras du match
 #[derive(Debug, Clone)]
-pub struct MatchArm {
-    pub pattern: Pattern,
-    pub body:    Vec<Stmt>,
-}
+pub struct MatchArm { pub pattern: Pattern, pub body: Vec<Stmt> }
 
 // ── Instructions ──────────────────────────────────────────────────────────────
 
@@ -112,19 +118,19 @@ pub enum Stmt {
     Print(Vec<Expr>),
     Return(Option<Expr>),
     ExprStmt(Expr),
-    If       { condition: Expr, then_body: Vec<Stmt>, else_body: Option<Vec<Stmt>> },
-    While    { condition: Expr, body: Vec<Stmt> },
-    DoWhile  { body: Vec<Stmt>, condition: Expr },
-    For      { init: Option<Box<Stmt>>, condition: Option<Expr>, update: Option<Box<Stmt>>, body: Vec<Stmt> },
+    If      { condition: Expr, then_body: Vec<Stmt>, else_body: Option<Vec<Stmt>> },
+    While   { condition: Expr, body: Vec<Stmt> },
+    DoWhile { body: Vec<Stmt>, condition: Expr },
+    For     { init: Option<Box<Stmt>>, condition: Option<Expr>,
+              update: Option<Box<Stmt>>, body: Vec<Stmt> },
     Break, Continue,
-    /// match expr { Pattern => { stmts } ... }
     Match { expr: Expr, arms: Vec<MatchArm> },
 }
 
-// ── Membres de classe/enum ────────────────────────────────────────────────────
+// ── Membres de classe ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct Field { pub ty: Type, pub name: String }
+pub struct Field  { pub ty: Type, pub name: String }
 
 #[derive(Debug, Clone)]
 pub struct Method {
@@ -158,21 +164,16 @@ pub struct ClassDef {
 #[derive(Debug, Clone)]
 pub struct InterfaceDef { pub name: String, pub methods: Vec<MethodSig> }
 
-// ── Variante d'enum ───────────────────────────────────────────────────────────
+// ── Enum ──────────────────────────────────────────────────────────────────────
 
-/// Une variante d'enum avec ses champs optionnels (nommés et typés)
 #[derive(Debug, Clone)]
-pub struct EnumVariant {
-    pub name:   String,
-    pub fields: Vec<Param>,   // vide = variante sans données
-}
+pub struct EnumVariant { pub name: String, pub fields: Vec<Param> }
 
-/// Définition d'un enum
 #[derive(Debug, Clone)]
 pub struct EnumDef {
     pub name:     String,
     pub variants: Vec<EnumVariant>,
-    pub methods:  Vec<Method>,   // méthodes communes à toutes les variantes
+    pub methods:  Vec<Method>,
 }
 
 // ── Fonction main ─────────────────────────────────────────────────────────────

@@ -1,0 +1,145 @@
+package com.example.demo;
+
+// ── Enum Direction ────────────────────────────────────────────────────────────
+
+enum Direction {
+    North, South, East, West;
+
+    int code() {
+        match this {
+            Direction::North => { return 1; }
+            Direction::South => { return 2; }
+            Direction::East  => { return 3; }
+            Direction::West  => { return 4; }
+            _                => { return 0; }
+        }
+    }
+}
+
+// ── Classe utilitaire ─────────────────────────────────────────────────────────
+
+class Calc {
+    int base;
+
+    Calc(int b) { base = b; }
+
+    // Prend une lambda et l'applique à base
+    int apply(fn f) {
+        return f(base);
+    }
+
+    // Retourne une lambda qui ajoute offset à son argument
+    fn makeAdder(int offset) {
+        return x => x + base + offset;
+    }
+}
+
+// ── Point d'entrée ────────────────────────────────────────────────────────────
+
+int main() {
+
+    // ── Lambdas de base ───────────────────────────────────────────────────────
+    print("=== Lambdas de base ===");
+
+    fn double   = x => x * 2;
+    fn add      = (a, b) => a + b;
+    fn square   = x => x * x;
+    fn get42    = () => 42;
+
+    print("double(7)    =", double(7));
+    print("add(3, 4)    =", add(3, 4));
+    print("square(9)    =", square(9));
+    print("get42()      =", get42());
+
+    // ── Syntaxe sans parenthèses (paramètre unique) ───────────────────────────
+    print("\n=== Paramètre unique sans parenthèses ===");
+    fn negate = x => -x;
+    fn inc    = x => x + 1;
+    print("negate(5)  =", negate(5));
+    print("inc(41)    =", inc(41));
+
+    // ── Corps en bloc ─────────────────────────────────────────────────────────
+    print("\n=== Corps en bloc ===");
+    fn abs_val = x => {
+        if (x < 0) { return -x; }
+        return x;
+    };
+
+    fn clamp = (x, lo, hi) => {
+        if (x < lo) { return lo; }
+        if (x > hi) { return hi; }
+        return x;
+    };
+
+    print("abs(-7)        =", abs_val(-7));
+    print("clamp(15,0,10) =", clamp(15, 0, 10));
+    print("clamp(-3,0,10) =", clamp(-3, 0, 10));
+
+    // ── Capture lexicale ──────────────────────────────────────────────────────
+    print("\n=== Capture de variables ===");
+    int factor = 3;
+    fn triple = x => x * factor;      // capture factor = 3
+    print("triple(7) =", triple(7));
+
+    int base = 100;
+    fn add_base = x => x + base;
+    print("add_base(42) =", add_base(42));
+
+    // ── Appel inline sans variable ────────────────────────────────────────────
+    print("\n=== Appel inline ===");
+    int r1 = (x => x * x)(8);
+    int r2 = ((a, b) => a + b)(10, 32);
+    print("(x=>x*x)(8)     =", r1);
+    print("((a,b)=>a+b)(10,32) =", r2);
+
+    // ── Lambda passée à une méthode ───────────────────────────────────────────
+    print("\n=== Lambda passée à une méthode ===");
+    Calc c = new Calc(10);
+    int v1 = c.apply(x => x * 5);
+    int v2 = c.apply(x => x + 7);
+    print("c.apply(x=>x*5) =", v1);
+    print("c.apply(x=>x+7) =", v2);
+
+    // ── Lambda retournée par une méthode ──────────────────────────────────────
+    print("\n=== Lambda retournée ===");
+    fn adder = c.makeAdder(5);        // capture base=10, offset=5
+    print("adder(1)  =", adder(1));   // 1 + 10 + 5 = 16
+    print("adder(20) =", adder(20));  // 20 + 10 + 5 = 35
+
+    // ── Composition et higher-order ───────────────────────────────────────────
+    print("\n=== Higher-order ===");
+    fn add1   = x => x + 1;
+    fn times2 = x => x * 2;
+    int composed = times2(add1(20));   // (20+1)*2 = 42
+    print("times2(add1(20)) =", composed);
+
+    // Somme des carrés via lambda dans un for
+    int sum = 0;
+    for (int i = 1; i <= 5; i = i + 1) {
+        sum = sum + square(i);
+    }
+    print("sum of squares 1..5 =", sum);   // 1+4+9+16+25 = 55
+
+    // ── Enum + lambda ─────────────────────────────────────────────────────────
+    print("\n=== Enum + lambda ===");
+    Direction d = Direction::East;
+    fn describeDir = dir => {
+        match dir {
+            Direction::North => { return 1; }
+            Direction::South => { return 2; }
+            Direction::East  => { return 3; }
+            Direction::West  => { return 4; }
+            _                => { return 0; }
+        }
+    };
+    print("d.code() =", d.code());
+
+    // ── Réassignation ─────────────────────────────────────────────────────────
+    print("\n=== Réassignation de lambda ===");
+    fn transform = x => x + 1;
+    print("transform(5) =", transform(5));
+    transform = x => x * 10;
+    print("après réassignation transform(5) =", transform(5));
+
+    return 0;
+}
