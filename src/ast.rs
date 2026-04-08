@@ -14,8 +14,10 @@ pub enum Type {
     Array(Box<Type>),
     Generic(String, Vec<Type>),
     UserDefined(String),
-    /// Type d'une valeur lambda (fermeture)
+    /// Lambda non annotée : `fn`  (sentinelle — compatible avec tout)
     Fn,
+    /// Lambda typée : `fn(int, string) -> bool`
+    FnType(Vec<Type>, Box<Type>),
 }
 
 impl std::fmt::Display for Type {
@@ -34,9 +36,19 @@ impl std::fmt::Display for Type {
                 let s: Vec<_> = a.iter().map(|t| t.to_string()).collect();
                 write!(f, "{}<{}>", n, s.join(", "))
             }
+            Type::FnType(params, ret) => {
+                let ps: Vec<_> = params.iter().map(|t| t.to_string()).collect();
+                write!(f, "fn({}) -> {}", ps.join(", "), ret)
+            }
         }
     }
 }
+
+// ── Alias de type ─────────────────────────────────────────────────────────────
+
+/// `type Adder = fn(int, int) -> int;`
+#[derive(Debug, Clone)]
+pub struct TypeAlias { pub name: String, pub ty: Type }
 
 // ── Opérateurs ────────────────────────────────────────────────────────────────
 
@@ -73,9 +85,7 @@ pub struct Param { pub ty: Type, pub name: String }
 
 #[derive(Debug, Clone)]
 pub enum LambdaBody {
-    /// `x => x * 2`  — expression, valeur implicitement retournée
     Expr(Box<Expr>),
-    /// `(x, y) => { int z = x + y; return z; }`  — bloc complet
     Block(Vec<Stmt>),
 }
 
@@ -89,12 +99,10 @@ pub enum Expr {
     FieldAccess  { object: Box<Expr>, field:  String },
     MethodCall   { object: Box<Expr>, method: String, args: Vec<Expr> },
     FunctionCall { name: String, args: Vec<Expr> },
-    New              { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
-    EnumConstructor  { enum_name: String, variant: String, args: Vec<Expr> },
-    /// `x => x + 1`  ou  `(x, y) => { return x + y; }`
-    Lambda { params: Vec<String>, body: LambdaBody },
-    /// Appel d'une lambda stockée dans une variable : `f(1, 2)`
-    LambdaCall { callee: Box<Expr>, args: Vec<Expr> },
+    New             { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
+    EnumConstructor { enum_name: String, variant: String, args: Vec<Expr> },
+    Lambda          { params: Vec<String>, body: LambdaBody },
+    LambdaCall      { callee: Box<Expr>, args: Vec<Expr> },
 }
 
 // ── Pattern pour match ────────────────────────────────────────────────────────
@@ -134,10 +142,8 @@ pub struct Field  { pub ty: Type, pub name: String }
 
 #[derive(Debug, Clone)]
 pub struct Method {
-    pub return_type: Type,
-    pub name:        String,
-    pub params:      Vec<Param>,
-    pub body:        Vec<Stmt>,
+    pub return_type: Type, pub name: String,
+    pub params: Vec<Param>, pub body: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone)]
@@ -146,20 +152,16 @@ pub struct Constructor { pub params: Vec<Param>, pub body: Vec<Stmt> }
 #[derive(Debug, Clone)]
 pub struct MethodSig { pub return_type: Type, pub name: String, pub params: Vec<Param> }
 
-// ── Définition de classe ──────────────────────────────────────────────────────
+// ── Classe ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub struct ClassDef {
-    pub name:         String,
-    pub type_params:  Vec<String>,
-    pub parent:       Option<String>,
-    pub implements:   Vec<String>,
-    pub fields:       Vec<Field>,
-    pub constructors: Vec<Constructor>,
-    pub methods:      Vec<Method>,
+    pub name: String, pub type_params: Vec<String>,
+    pub parent: Option<String>, pub implements: Vec<String>,
+    pub fields: Vec<Field>, pub constructors: Vec<Constructor>, pub methods: Vec<Method>,
 }
 
-// ── Définition d'interface ────────────────────────────────────────────────────
+// ── Interface ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub struct InterfaceDef { pub name: String, pub methods: Vec<MethodSig> }
@@ -170,11 +172,7 @@ pub struct InterfaceDef { pub name: String, pub methods: Vec<MethodSig> }
 pub struct EnumVariant { pub name: String, pub fields: Vec<Param> }
 
 #[derive(Debug, Clone)]
-pub struct EnumDef {
-    pub name:     String,
-    pub variants: Vec<EnumVariant>,
-    pub methods:  Vec<Method>,
-}
+pub struct EnumDef { pub name: String, pub variants: Vec<EnumVariant>, pub methods: Vec<Method> }
 
 // ── Fonction main ─────────────────────────────────────────────────────────────
 
@@ -185,10 +183,11 @@ pub struct MainFunc { pub body: Vec<Stmt> }
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub package:    Option<PackageDecl>,
-    pub imports:    Vec<Import>,
-    pub interfaces: Vec<InterfaceDef>,
-    pub enums:      Vec<EnumDef>,
-    pub classes:    Vec<ClassDef>,
-    pub main:       MainFunc,
+    pub package:      Option<PackageDecl>,
+    pub imports:      Vec<Import>,
+    pub type_aliases: Vec<TypeAlias>,    // ← nouveau
+    pub interfaces:   Vec<InterfaceDef>,
+    pub enums:        Vec<EnumDef>,
+    pub classes:      Vec<ClassDef>,
+    pub main:         MainFunc,
 }

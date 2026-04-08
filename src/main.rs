@@ -63,6 +63,8 @@ fn print_program(p: &Program) {
     if let Some(pkg) = &p.package { println!("package {};", pkg.path); }
     for imp in &p.imports { println!("import {};", imp.path); }
     if p.package.is_some() || !p.imports.is_empty() { println!(); }
+    for alias in &p.type_aliases { println!("type {} = {};", alias.name, alias.ty); }
+    if !p.type_aliases.is_empty() { println!(); }
     for iface in &p.interfaces { print_interface(iface); println!(); }
     for e in &p.enums          { print_enum(e);          println!(); }
     for c in &p.classes        { print_class(c);         println!(); }

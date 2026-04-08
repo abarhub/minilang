@@ -1,15 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  Parser – chumsky 0.9
-//
-//  Lambdas (priorité la plus basse dans les expressions) :
-//    x => expr
-//    (x, y) => expr
-//    x => { stmts }
-//    (x, y) => { stmts }
-//    () => expr
-//
-//  La récursion mutuelle expr ↔ stmt (corps de lambda en bloc) est résolue
-//  avec Recursive::declare().
 // ─────────────────────────────────────────────────────────────────────────────
 
 use chumsky::prelude::*;
@@ -17,18 +7,12 @@ use chumsky::recursive::Recursive;
 use log::debug;
 use crate::ast::*;
 
-// ── Whitespace + commentaires ligne ──────────────────────────────────────────
-
 fn ws() -> impl Parser<char, (), Error = Simple<char>> + Clone {
     just("//")
-        .then(none_of('\n').repeated())
-        .ignored()
+        .then(none_of('\n').repeated()).ignored()
         .or(filter(|c: &char| c.is_whitespace()).ignored())
-        .repeated()
-        .ignored()
+        .repeated().ignored()
 }
-
-// ── Keyword helper ────────────────────────────────────────────────────────────
 
 fn kw(word: &'static str) -> impl Parser<char, (), Error = Simple<char>> + Clone {
     text::ident::<char, Simple<char>>()
@@ -39,13 +23,29 @@ fn kw(word: &'static str) -> impl Parser<char, (), Error = Simple<char>> + Clone
         .padded_by(ws())
 }
 
-// ── Type ─────────────────────────────────────────────────────────────────────
+// ── Type  ─────────────────────────────────────────────────────────────────────
+//  Nouveauté : `fn(T, T) -> T`  et  `fn` (non annoté)
 
 fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
     recursive(|ty| {
         let generic_args = ty.clone()
             .separated_by(just(',').padded_by(ws())).at_least(1)
             .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()));
+
+        // `fn(T, T) -> T`  ou  `fn` seul
+        let fn_type = kw("fn")
+            .ignore_then(
+                ty.clone()
+                    .separated_by(just(',').padded_by(ws())).allow_trailing()
+                    .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()))
+                    .then_ignore(just("->").padded_by(ws()))
+                    .then(ty.clone())
+                    .or_not()
+            )
+            .map(|maybe| match maybe {
+                Some((params, ret)) => Type::FnType(params, Box::new(ret)),
+                None                => Type::Fn,
+            });
 
         let base = choice((
             kw("int")   .to(Type::Int),
@@ -54,7 +54,7 @@ fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
             kw("float") .to(Type::Float),
             kw("double").to(Type::Double),
             kw("void")  .to(Type::Void),
-            kw("fn")    .to(Type::Fn),
+            fn_type,   // fn / fn(...)->T  — avant ident
             text::ident().padded_by(ws())
                 .then(generic_args.or_not())
                 .map(|(n, a)| match a {
@@ -82,20 +82,15 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     let params = param.clone()
         .separated_by(just(',').padded_by(ws())).allow_trailing();
 
-    // ── Forward-declaration stmt  (récursion mutuelle avec expr) ──────────────
-    // `mut` requis par chumsky 0.9 : `.define()` prend `&mut self`.
+    // Forward-declaration (récursion mutuelle expr ↔ stmt)
     let mut stmt_fwd: Recursive<char, Stmt, Simple<char>> = Recursive::declare();
 
     // ── Expressions ───────────────────────────────────────────────────────────
 
     let expr: BoxedParser<char, Expr, Simple<char>> = recursive(|expr| {
-
-        // args entre parenthèses pour appels
         let call_args = expr.clone()
             .separated_by(just(',').padded_by(ws())).allow_trailing()
             .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()));
-
-        // ── Atomes ────────────────────────────────────────────────────────────
 
         let str_lit = just('"')
             .ignore_then(none_of('"').repeated().collect::<String>())
@@ -126,7 +121,6 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(call_args.clone())
             .map(|((cn, ta), args)| Expr::New { class_name: cn, type_args: ta, args });
 
-        // EnumName::Variant(args) — avant ident pour éviter ambiguïté
         let enum_ctor = text::ident().padded_by(ws())
             .then_ignore(just("::").padded_by(ws()))
             .then(text::ident().padded_by(ws()))
@@ -142,18 +136,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 None    => Expr::Ident(name),
             });
 
-        // ── paren_or_call : (expr)  ou  (expr)(args) ─────────────────────────
-        //
-        //  Remplace l'ancien Postfix::Call qui appliquait call_args après
-        //  TOUTE expression — ce qui causait une récursion exponentielle
-        //  (stack overflow) dans les fichiers complexes.
-        //
-        //  On limite maintenant l'appel direct `(args)` aux seuls cas où
-        //  l'expression est déjà entre parenthèses : `(x => x)(5)`.
-        //  Pour les variables lambda (`f(1)`), FunctionCall + dispatch dans
-        //  l'interpréteur suffit.  Pour les chaînes `.method()(args)`,
-        //  l'utilisateur peut stocker le résultat dans une variable.
-
+        // `(expr)` ou `(expr)(args)` pour l'appel inline de lambda
         let paren_or_call = expr.clone()
             .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()))
             .then(call_args.clone().or_not())
@@ -165,16 +148,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         let atom = choice((
             str_lit, float_lit, int_lit, bool_lit,
             this_kw, new_expr, enum_ctor, ident_or_call,
-            paren_or_call,   // (expr) ou (expr)(args)
+            paren_or_call,
         ));
 
-        // ── Postfix : .field  .method(args) uniquement ───────────────────────
-
+        // Postfix : .field  .method(args)
         #[derive(Clone)]
-        enum Postfix {
-            Field(String),
-            Method(String, Vec<Expr>),
-        }
+        enum Postfix { Field(String), Method(String, Vec<Expr>) }
 
         let postfix_op = just('.').padded_by(ws())
             .ignore_then(text::ident().padded_by(ws()))
@@ -191,8 +170,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 Postfix::Method(m, a) => Expr::MethodCall  { object: Box::new(obj), method: m, args: a },
             });
 
-        // ── Hiérarchie de priorités ───────────────────────────────────────────
-
+        // Hiérarchie arithmétique / logique
         let pow = postfix.clone()
             .then(just("**").padded_by(ws()).to(BinOp::Pow).then(postfix.clone()).repeated())
             .foldl(|l, (op, r)| Expr::BinOp { left: Box::new(l), op, right: Box::new(r) });
@@ -244,38 +222,30 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(just("||").padded_by(ws()).to(BinOp::Or).then(and.clone()).repeated())
             .foldl(|l, (op, r)| Expr::BinOp { left: Box::new(l), op, right: Box::new(r) });
 
-        // ── Lambda — priorité la plus basse ───────────────────────────────────
-        //
-        //  Corps bloc : utilise stmt_fwd (forward-declared ci-dessus)
-        //  Corps expr : utilise expr (permet les lambdas imbriquées x => y => x)
-        //
-        //  L'utilisation de `expr` dans le corps est sûre car chumsky PEG
-        //  backtrack immédiatement si IDENT n'est pas suivi de `=>`.
-
-        let lambda_block = stmt_fwd.clone()
-            .repeated()
+        // ── Lambda (priorité la plus basse) ───────────────────────────────────
+        let lambda_block = stmt_fwd.clone().repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()));
 
-        // Fix : utilise expr.clone() (pas arith) → supporte x => y => z
-        let lambda_body_parser = lambda_block.map(LambdaBody::Block)
+        // Corps = bloc  ou  expr récursif (supporte x => y => z)
+        let lambda_body_p = lambda_block.map(LambdaBody::Block)
             .or(expr.clone().map(|e| LambdaBody::Expr(Box::new(e))));
 
         let lambda_multi = text::ident().padded_by(ws())
             .separated_by(just(',').padded_by(ws())).allow_trailing()
             .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()))
             .then_ignore(just("=>").padded_by(ws()))
-            .then(lambda_body_parser.clone())
-            .map(|(ps, body)| { debug!("lambda({})", ps.len()); Expr::Lambda { params: ps, body } });
+            .then(lambda_body_p.clone())
+            .map(|(ps, body)| { debug!("λ({})", ps.len()); Expr::Lambda { params: ps, body } });
 
         let lambda_single = text::ident().padded_by(ws())
             .then_ignore(just("=>").padded_by(ws()))
-            .then(lambda_body_parser)
-            .map(|(p, body)| { debug!("lambda(1)"); Expr::Lambda { params: vec![p], body } });
+            .then(lambda_body_p)
+            .map(|(p, body)| { debug!("λ(1)"); Expr::Lambda { params: vec![p], body } });
 
         choice((lambda_multi, lambda_single, arith)).boxed()
     }).boxed();
 
-    // ── Type primitif (pour déclarations) ─────────────────────────────────────
+    // ── Type primitif pour les déclarations de variable ───────────────────────
 
     let kw_type = choice((
         kw("int")   .to(Type::Int),
@@ -283,7 +253,6 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         kw("string").to(Type::Str),
         kw("float") .to(Type::Float),
         kw("double").to(Type::Double),
-        kw("fn")    .to(Type::Fn),
     ))
     .then(just('[').padded_by(ws()).then(just(']').padded_by(ws())).repeated())
     .map(|(t, v)| v.into_iter().fold(t, |acc, _| Type::Array(Box::new(acc))));
@@ -317,9 +286,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(kw("else").ignore_then(
                 stmt.clone().map(|s| vec![s]).or(body.clone())
             ).or_not())
-            .map(|((cond, then_b), else_b)| Stmt::If {
-                condition: cond, then_body: then_b, else_body: else_b
-            });
+            .map(|((cond, tb), eb)| Stmt::If { condition: cond, then_body: tb, else_body: eb });
 
         let while_stmt = kw("while")
             .ignore_then(expr.clone()
@@ -409,6 +376,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then_ignore(just(';').padded_by(ws()))
             .map(|((ty, name), init)| Stmt::VarDecl { ty, name, init });
 
+        // type_parser() capte fn(T)->T, les types génériques, etc.
         let generic_var_decl = type_parser()
             .then(text::ident().padded_by(ws()))
             .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
@@ -442,7 +410,6 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .boxed()
     }).boxed();
 
-    // Branche la forward-declaration sur l'implémentation réelle
     stmt_fwd.define(stmt_impl);
     let stmt = stmt_fwd;
 
@@ -541,6 +508,15 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                        fields, constructors: ctors, methods }
         });
 
+    // ── Alias de type : `type Name = T;` ─────────────────────────────────────
+
+    let type_alias = kw("type")
+        .ignore_then(text::ident().padded_by(ws()))
+        .then_ignore(just('=').padded_by(ws()))
+        .then(ty.clone())
+        .then_ignore(just(';').padded_by(ws()))
+        .map(|(name, ty)| { debug!("alias {} = {}", name, ty); TypeAlias { name, ty } });
+
     // ── main ──────────────────────────────────────────────────────────────────
 
     let main_func = kw("int").ignore_then(kw("main"))
@@ -577,14 +553,15 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     ws()
         .ignore_then(package_decl.or_not())
         .then(import_decl.repeated())
+        .then(type_alias.repeated())       // ← alias avant interfaces
         .then(interface_def.repeated())
         .then(enum_def.repeated())
         .then(class_def.repeated())
         .then(main_func)
         .then_ignore(ws())
         .then_ignore(end())
-        .map(|(((((pkg, imp), ifaces), enums), classes), main)| Program {
-            package: pkg, imports: imp, interfaces: ifaces,
-            enums, classes, main,
+        .map(|((((((pkg, imp), aliases), ifaces), enums), classes), main)| Program {
+            package: pkg, imports: imp, type_aliases: aliases,
+            interfaces: ifaces, enums, classes, main,
         })
 }

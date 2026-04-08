@@ -1,0 +1,156 @@
+package com.example.demo;
+
+// ── Alias de types ────────────────────────────────────────────────────────────
+type IntFn    = fn(int) -> int;
+type IntBinOp = fn(int, int) -> int;
+type Predicate = fn(int) -> bool;
+
+// ── Classe utilisant des lambdas typées ───────────────────────────────────────
+
+class Calc {
+    int base;
+
+    Calc(int b) { base = b; }
+
+    // Prend une lambda typée et l'applique à base
+    int apply(fn(int) -> int f) {
+        return f(base);
+    }
+
+    // Retourne une lambda qui additionne base + offset + x
+    fn(int) -> int makeAdder(int offset) {
+        return x => x + base + offset;
+    }
+}
+
+// ── Enum avec méthodes utilisant des lambdas ──────────────────────────────────
+
+enum Op { Add, Sub, Mul, Div;
+    IntBinOp toFn() {
+        match this {
+            Op::Add => { return (a, b) => a + b; }
+            Op::Sub => { return (a, b) => a - b; }
+            Op::Mul => { return (a, b) => a * b; }
+            Op::Div => { return (a, b) => a / b; }
+            _       => { return (a, b) => 0; }
+        }
+    }
+}
+
+// ── Point d'entrée ────────────────────────────────────────────────────────────
+
+int main() {
+
+    // ── Lambdas typées de base ────────────────────────────────────────────────
+    print("=== Lambdas typées ===");
+
+    fn(int) -> int double = x => x * 2;
+    fn(int) -> int square = x => x * x;
+    fn(int) -> int inc    = x => x + 1;
+    IntBinOp add           = (a, b) => a + b;
+    IntBinOp mul           = (a, b) => a * b;
+    Predicate isPositive   = x => x > 0;
+
+    print("double(7)      =", double(7));
+    print("square(9)      =", square(9));
+    print("inc(41)        =", inc(41));
+    print("add(10, 32)    =", add(10, 32));
+    print("mul(6, 7)      =", mul(6, 7));
+    print("isPositive(5)  =", isPositive(5));
+    print("isPositive(-3) =", isPositive(-3));
+
+    // ── Corps en bloc ─────────────────────────────────────────────────────────
+    print("\n=== Corps en bloc ===");
+
+    fn(int) -> int abs_val = x => {
+        if (x < 0) { return -x; }
+        return x;
+    };
+
+    fn(int, int, int) -> int clamp = (x, lo, hi) => {
+        if (x < lo) { return lo; }
+        if (x > hi) { return hi; }
+        return x;
+    };
+
+    print("abs(-7)        =", abs_val(-7));
+    print("abs(3)         =", abs_val(3));
+    print("clamp(15,0,10) =", clamp(15, 0, 10));
+    print("clamp(-3,0,10) =", clamp(-3, 0, 10));
+
+    // ── Alias comme types de variables ────────────────────────────────────────
+    print("\n=== Alias de types ===");
+
+    IntFn triple = x => x * 3;
+    print("triple(14) =", triple(14));
+
+    // ── Capture lexicale ──────────────────────────────────────────────────────
+    print("\n=== Capture de variables ===");
+
+    int factor = 5;
+    fn(int) -> int times_factor = x => x * factor;
+    print("times_factor(8) =", times_factor(8));
+
+    // ── Passage en argument ───────────────────────────────────────────────────
+    print("\n=== Lambda passée en argument ===");
+
+    Calc c = new Calc(10);
+    int v1 = c.apply(x => x * 4);
+    int v2 = c.apply(x => x + 32);
+    print("c.apply(x=>x*4)  =", v1);
+    print("c.apply(x=>x+32) =", v2);
+
+    // ── Lambda retournée par méthode ──────────────────────────────────────────
+    print("\n=== Lambda retournée ===");
+
+    fn(int) -> int adder = c.makeAdder(5);
+    print("adder(1)  =", adder(1));    // 1 + 10 + 5 = 16
+    print("adder(20) =", adder(20));   // 20 + 10 + 5 = 35
+
+    // ── Appel inline ──────────────────────────────────────────────────────────
+    print("\n=== Appel inline (x => x)(args) ===");
+    int r1 = (x => x * x)(8);
+    int r2 = ((a, b) => a + b)(10, 32);
+    print("(x=>x*x)(8)         =", r1);
+    print("((a,b)=>a+b)(10,32) =", r2);
+
+    // ── Composition ───────────────────────────────────────────────────────────
+    print("\n=== Composition ===");
+
+    fn(int) -> int add1   = x => x + 1;
+    fn(int) -> int times2 = x => x * 2;
+    int composed = times2(add1(20));   // (20+1)*2 = 42
+    print("times2(add1(20)) =", composed);
+
+    // ── Enum + lambda typée ───────────────────────────────────────────────────
+    print("\n=== Enum → lambda typée ===");
+
+    Op opAdd = Op::Add;
+    Op opMul = Op::Mul;
+    IntBinOp fadd = opAdd.toFn();
+    IntBinOp fmul = opMul.toFn();
+    print("fadd(3, 4) =", fadd(3, 4));
+    print("fmul(6, 7) =", fmul(6, 7));
+
+    // ── Higher-order ──────────────────────────────────────────────────────────
+    print("\n=== Higher-order ===");
+
+    int sum = 0;
+    for (int i = 1; i <= 10; i = i + 1) {
+        sum = sum + double(i);
+    }
+    print("somme des doubles 1..10 =", sum);  // 2+4+...+20 = 110
+
+    // ── Lambda récursive (itérative) ──────────────────────────────────────────
+    print("\n=== Lambda récursive ===");
+
+    fn(int) -> int factorial = n => {
+        int r = 1;
+        int i = n;
+        while (i > 1) { r = r * i; i = i - 1; }
+        return r;
+    };
+    print("factorial(7) =", factorial(7));
+
+    return 0;
+}

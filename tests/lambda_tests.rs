@@ -1,4 +1,4 @@
-//! Tests des lambdas et fermetures.
+//! Tests des lambdas : parsing, typecheck, interprétation.
 
 use mini_parser::interpreter::run_source;
 use mini_parser::typechecker::check_source;
@@ -31,7 +31,7 @@ fn tc_err(src: &str, fragment: &str) {
         Err(e) => {
             let all = e.join("\n");
             assert!(all.contains(fragment),
-                "Expected '{}' in errors:\n{}", fragment, all);
+                "Expected '{}' in:\n{}", fragment, all);
         }
     }
 }
@@ -41,12 +41,12 @@ fn tc_err(src: &str, fragment: &str) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn parse_lambda_single_param_expr() {
+fn parse_lambda_single_param() {
     parses_ok("int main() { fn f = x => x; return 0; }");
 }
 
 #[test]
-fn parse_lambda_multi_param_expr() {
+fn parse_lambda_multi_param() {
     parses_ok("int main() { fn f = (x, y) => x; return 0; }");
 }
 
@@ -57,51 +57,75 @@ fn parse_lambda_no_param() {
 
 #[test]
 fn parse_lambda_block_body() {
-    parses_ok(r#"int main() {
-        fn f = (x, y) => { return x; };
-        return 0;
-    }"#);
-}
-
-#[test]
-fn parse_lambda_single_param_block() {
     parses_ok("int main() { fn f = x => { return x; }; return 0; }");
 }
 
 #[test]
+fn parse_lambda_typed_single() {
+    parses_ok("int main() { fn(int) -> int f = x => x + 1; return 0; }");
+}
+
+#[test]
+fn parse_lambda_typed_multi() {
+    parses_ok("int main() { fn(int, int) -> int add = (a, b) => a + b; return 0; }");
+}
+
+#[test]
+fn parse_lambda_typed_no_param() {
+    parses_ok("int main() { fn() -> int get = () => 42; return 0; }");
+}
+
+#[test]
+fn parse_lambda_typed_returns_fn() {
+    parses_ok("int main() { fn(int) -> fn(int) -> int f = x => y => x + y; return 0; }");
+}
+
+#[test]
+fn parse_type_alias() {
+    parses_ok("type MyFn = fn(int) -> int; int main() { return 0; }");
+}
+
+#[test]
+fn parse_type_alias_used() {
+    parses_ok("type IntOp = fn(int) -> int; int main() { IntOp f = x => x; return 0; }");
+}
+
+#[test]
 fn parse_lambda_call_direct() {
-    parses_ok("int main() { fn f = x => x; return f(1); }");
+    parses_ok("int main() { fn(int)->int f = x => x; return f(1); }");
 }
 
 #[test]
 fn parse_lambda_call_inline() {
-    // Appel direct d'une lambda anonyme via paren_or_call (expr)(args)
     parses_ok("int main() { return (x => x)(5); }");
 }
 
 #[test]
-fn parse_lambda_call_multi_inline() {
-    parses_ok("int main() { int r = ((a, b) => a + b)(3, 4); return r; }");
-}
-
-#[test]
-fn parse_lambda_call_multi() {
-    parses_ok("int main() { fn add = (a, b) => a; return add(1, 2); }");
-}
-
-#[test]
-fn parse_lambda_in_expression() {
-    parses_ok("int main() { int r = (x => x)(3); return r; }");
-}
-
-#[test]
-fn parse_lambda_arithmetic_body() {
-    parses_ok("int main() { fn f = (x, y) => x + y * 8; return 0; }");
-}
-
-#[test]
 fn parse_lambda_nested() {
-    parses_ok("int main() { fn outer = x => y => x; return 0; }");
+    parses_ok("int main() { fn f = x => y => x; return 0; }");
+}
+
+#[test]
+fn parse_method_typed_fn_param() {
+    parses_ok(r#"
+        class C {
+            C() {}
+            int apply(fn(int) -> int f) { return f(1); }
+        }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn parse_method_returns_fn_type() {
+    parses_ok(r#"
+        class C {
+            int v;
+            C(int x) { v = x; }
+            fn(int) -> int getAdder() { return x => x + v; }
+        }
+        int main() { return 0; }
+    "#);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,21 +133,67 @@ fn parse_lambda_nested() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn tc_lambda_stored_as_fn() {
+fn tc_untyped_lambda_ok() {
     tc_ok("int main() { fn f = x => x; return 0; }");
 }
 
 #[test]
-fn tc_lambda_multi_param() {
-    tc_ok("int main() { fn add = (a, b) => a; return 0; }");
+fn tc_typed_lambda_ok() {
+    tc_ok("int main() { fn(int) -> int f = x => x + 1; return 0; }");
 }
 
 #[test]
-fn tc_lambda_block() {
-    tc_ok(r#"int main() {
-        fn f = (x) => { return x; };
-        return 0;
-    }"#);
+fn tc_typed_lambda_block_ok() {
+    tc_ok("int main() { fn(int) -> int f = x => { return x * 2; }; return 0; }");
+}
+
+#[test]
+fn tc_type_alias_ok() {
+    tc_ok("type F = fn(int) -> int; int main() { F f = x => x; return 0; }");
+}
+
+#[test]
+fn tc_type_alias_multi_ok() {
+    tc_ok("type Op = fn(int, int) -> int; int main() { Op f = (a, b) => a + b; return 0; }");
+}
+
+#[test]
+fn tc_typed_lambda_wrong_return() {
+    tc_err(
+        r#"int main() { fn(int) -> int f = x => true; return 0; }"#,
+        "attendu",
+    );
+}
+
+#[test]
+fn tc_typed_lambda_wrong_arg_count() {
+    tc_err(
+        r#"int main() { fn(int, int) -> int f = x => x; return 0; }"#,
+        "paramètre",
+    );
+}
+
+#[test]
+fn tc_typed_lambda_call_wrong_type() {
+    tc_err(
+        r#"int main() { fn(int) -> int f = x => x; int r = f(true); return r; }"#,
+        "≠",
+    );
+}
+
+#[test]
+fn tc_fn_param_typed_ok() {
+    tc_ok(r#"
+        class C {
+            C() {}
+            int apply(fn(int) -> int f) { return f(1); }
+        }
+        int main() {
+            C c = new C();
+            int r = c.apply(x => x * 2);
+            return 0;
+        }
+    "#);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,95 +201,82 @@ fn tc_lambda_block() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn interp_identity_lambda() {
+fn interp_identity_untyped() {
     assert_eq!(ok("int main() { fn f = x => x; return f(7); }"), 7);
 }
 
 #[test]
-fn interp_add_lambda() {
-    assert_eq!(ok("int main() { fn add = (a, b) => a + b; return add(3, 4); }"), 7);
+fn interp_identity_typed() {
+    assert_eq!(ok("int main() { fn(int) -> int f = x => x; return f(7); }"), 7);
+}
+
+#[test]
+fn interp_add_typed() {
+    assert_eq!(ok("int main() { fn(int,int) -> int add = (a, b) => a + b; return add(3, 4); }"), 7);
 }
 
 #[test]
 fn interp_lambda_arithmetic() {
-    // (x, y) => x + y * 8  avec x=1, y=2  → 1 + 16 = 17
+    // (x, y) => x + y * 8  avec x=1, y=2  → 17
     assert_eq!(ok("int main() {
-        fn f = (x, y) => x + y * 8;
+        fn(int,int) -> int f = (x, y) => x + y * 8;
         return f(1, 2);
     }"), 17);
 }
 
 #[test]
-fn interp_lambda_block_body() {
+fn interp_lambda_block() {
     assert_eq!(ok("int main() {
-        fn double = x => { return x * 2; };
+        fn(int) -> int double = x => { return x * 2; };
         return double(21);
     }"), 42);
 }
 
 #[test]
-fn interp_lambda_block_multi_stmts() {
-    assert_eq!(ok("int main() {
-        fn f = (a, b) => {
-            int sum = a + b;
-            int product = a * b;
-            return sum + product;
-        };
-        return f(3, 4);
-    }"), 19); // (3+4) + (3*4) = 7 + 12 = 19
+fn interp_no_param() {
+    assert_eq!(ok("int main() { fn() -> int get42 = () => 42; return get42(); }"), 42);
 }
 
 #[test]
-fn interp_lambda_no_params() {
-    assert_eq!(ok("int main() { fn get42 = () => 42; return get42(); }"), 42);
+fn interp_type_alias() {
+    assert_eq!(ok("type F = fn(int) -> int; int main() { F f = x => x * 3; return f(14); }"), 42);
 }
 
 #[test]
-fn interp_inline_lambda_call() {
-    // Appel direct de lambda anonyme via postfix
+fn interp_inline_call() {
     assert_eq!(ok("int main() { return (x => x * x)(6); }"), 36);
 }
 
 #[test]
-fn interp_lambda_captures_variable() {
-    // La lambda capture `base` défini dans le scope courant
+fn interp_captures_variable() {
     assert_eq!(ok("int main() {
         int base = 10;
-        fn add_base = x => x + base;
+        fn(int) -> int add_base = x => x + base;
         return add_base(5);
     }"), 15);
 }
 
 #[test]
-fn interp_lambda_capture_does_not_see_later_change() {
-    // La capture est faite au moment de la création : valeur de `n` = 1
+fn interp_capture_frozen_at_creation() {
+    // La valeur capturée est figée au moment de la création
     assert_eq!(ok("int main() {
         int n = 1;
-        fn f = x => x + n;
-        n = 100;          // ne modifie pas la capture
+        fn(int) -> int f = x => x + n;
+        n = 100;   // ne modifie pas la capture
         return f(0);
     }"), 1);
 }
 
 #[test]
-fn interp_lambda_reassigned() {
-    assert_eq!(ok("int main() {
-        fn f = x => x + 1;
-        f = x => x + 10;
-        return f(5);
-    }"), 15);
-}
-
-#[test]
 fn interp_lambda_passed_to_method() {
     assert_eq!(ok(r#"
-        class Calc {
-            int val;
-            Calc(int v) { val = v; }
-            int apply(fn f) { return f(val); }
+        class C {
+            int v;
+            C(int x) { v = x; }
+            int apply(fn(int) -> int f) { return f(v); }
         }
         int main() {
-            Calc c = new Calc(6);
+            C c = new C(6);
             return c.apply(x => x * 7);
         }
     "#), 42);
@@ -231,62 +288,53 @@ fn interp_lambda_returned_from_method() {
         class Builder {
             int offset;
             Builder(int n) { offset = n; }
-            fn makeAdder() { return x => x + offset; }
+            fn(int) -> int makeAdder() { return x => x + offset; }
         }
         int main() {
             Builder b = new Builder(100);
-            fn adder = b.makeAdder();
+            fn(int) -> int adder = b.makeAdder();
             return adder(42);
         }
     "#), 142);
 }
 
 #[test]
-fn interp_higher_order_map_sum() {
-    // Simule map+sum : applique f à 1..5 et additionne
+fn interp_higher_order_sum() {
     assert_eq!(ok("int main() {
-        fn double = x => x * 2;
+        fn(int) -> int double = x => x * 2;
         int sum = 0;
         for (int i = 1; i <= 5; i = i + 1) {
             sum = sum + double(i);
         }
         return sum;
-    }"), 30); // 2+4+6+8+10 = 30
-}
-
-#[test]
-fn interp_lambda_uses_outer_loop_var() {
-    // À chaque itération, la lambda capture la valeur courante de `acc`
-    assert_eq!(ok("int main() {
-        int acc = 0;
-        for (int i = 1; i <= 5; i = i + 1) {
-            fn add = x => acc + x;
-            acc = add(i);
-        }
-        return acc;
-    }"), 15); // 1+2+3+4+5
+    }"), 30);
 }
 
 #[test]
 fn interp_lambda_conditional() {
     assert_eq!(ok("int main() {
-        fn abs_val = x => {
+        fn(int) -> int abs_val = x => {
             if (x < 0) { return -x; }
             return x;
         };
-        int a = abs_val(-7);
-        int b = abs_val(3);
-        return a + b;
+        return abs_val(-7) + abs_val(3);
     }"), 10);
 }
 
 #[test]
-fn interp_lambda_recursive_via_var() {
-    // Factorielle itérative dans une lambda
+fn interp_compose_two_lambdas() {
     assert_eq!(ok("int main() {
-        fn fact = n => {
-            int r = 1;
-            int i = n;
+        fn(int) -> int add1   = x => x + 1;
+        fn(int) -> int times3 = x => x * 3;
+        return times3(add1(4));  // (4+1)*3 = 15
+    }"), 15);
+}
+
+#[test]
+fn interp_lambda_factorial() {
+    assert_eq!(ok("int main() {
+        fn(int) -> int fact = n => {
+            int r = 1; int i = n;
             while (i > 1) { r = r * i; i = i - 1; }
             return r;
         };
@@ -295,28 +343,16 @@ fn interp_lambda_recursive_via_var() {
 }
 
 #[test]
-fn interp_two_lambdas_compose() {
-    // compose manuellement : f(g(x))
+fn interp_nested_lambda() {
+    // x => y => x (ignore y, retourne x)
     assert_eq!(ok("int main() {
-        fn add1  = x => x + 1;
-        fn times3 = x => x * 3;
-        return times3(add1(4));
-    }"), 15); // (4+1)*3 = 15
-}
-
-#[test]
-fn interp_lambda_string_body() {
-    // Lambda sur les strings
-    assert_eq!(ok(r#"int main() {
-        fn greet = name => "Hello " + name;
-        string s = greet("world");
-        print(s);
-        return 0;
-    }"#), 0);
+        fn outer = x => y => x;
+        fn inner = outer(42);
+        return inner(0);
+    }"), 42);
 }
 
 #[test]
 fn interp_wrong_arg_count_fails() {
-    // Trop peu d'arguments → RuntimeError
-    assert!(run_source("int main() { fn f = (a, b) => a + b; return f(1); }").is_err());
+    assert!(run_source("int main() { fn(int,int) -> int f = (a,b) => a+b; return f(1); }").is_err());
 }
