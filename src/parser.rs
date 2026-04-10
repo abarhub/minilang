@@ -101,10 +101,21 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             just('0').to('\0'),
         ))).or(none_of('"'));
 
-        let str_lit = just('"')
-            .ignore_then(str_char.repeated().collect::<String>())
-            .then_ignore(just('"'))
-            .map(Expr::StringLit).padded_by(ws());
+        // Chaîne multiligne : """..."""  (peut contenir des sauts de ligne)
+        let ml_str_lit = just("\"\"\"")
+            .ignore_then(
+                take_until(just("\"\"\""))
+                    .map(|(chars, _): (Vec<char>, _)| chars.into_iter().collect::<String>())
+            )
+            .map(Expr::StringLit)
+            .padded_by(ws());
+
+        let str_lit = ml_str_lit.or(
+            just('"')
+                .ignore_then(str_char.repeated().collect::<String>())
+                .then_ignore(just('"'))
+                .map(Expr::StringLit).padded_by(ws())
+        );
 
         let float_lit = text::int(10).then_ignore(just('.')).then(text::int(10))
             .map(|(i, f): (String, String)|
