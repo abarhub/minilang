@@ -283,7 +283,7 @@ impl TypeChecker {
                     .map(|t| self.resolve(&t));
                 if let (Some(vt), Some(tt)) = (vt, tt) {
                     if !self.is_compatible(&vt, &tt) {
-                        self.err(format!("Affectation '{}' : {} ≠ {}", target, vt, tt));
+                        self.err(format!("Affectation '{}' : type incompatible {} ≠ {}", target, vt, tt));
                     }
                 }
             }
@@ -301,7 +301,7 @@ impl TypeChecker {
                         Some(ft) => {
                             if let Some(vt) = vt {
                                 if !self.is_compatible(&vt, &ft) {
-                                    self.err(format!("{}.{} : {} ≠ {}", object, field, vt, ft));
+                                    self.err(format!("{}.{} : type incompatible {} ≠ {}", object, field, vt, ft));
                                 }
                             }
                         }
@@ -532,7 +532,7 @@ impl TypeChecker {
                     if let Ok(at) = self.infer_expr(arg, env) {
                         let expected = substitute(pt, &subst);
                         if !self.is_compatible(&at, &expected) {
-                            self.err(format!("Arg de {}() : {} ≠ {}", method, at, expected));
+                            self.err(format!("Arg de {}() : type incompatible {} ≠ {}", method, at, expected));
                         }
                     }
                 }
@@ -556,7 +556,7 @@ impl TypeChecker {
                             for (arg, pt) in args.iter().zip(ptys.iter()) {
                                 if let Some(at) = self.infer(arg, env) {
                                     if !self.is_compatible(&at, pt) {
-                                        self.err(format!("Arg de {}() : {} ≠ {}", name, at, pt));
+                                        self.err(format!("Arg de {}() : type incompatible {} ≠ {}", name, at, pt));
                                     }
                                 }
                             }
@@ -580,7 +580,7 @@ impl TypeChecker {
                         for (arg, p) in args.iter().zip(m.params.iter()) {
                             if let Ok(at) = self.infer_expr(arg, env) {
                                 if !self.is_compatible(&at, &p.ty) {
-                                    self.err(format!("Arg de {}() : {} ≠ {}", name, at, p.ty));
+                                    self.err(format!("Arg de {}() : type incompatible {} ≠ {}", name, at, p.ty));
                                 }
                             }
                         }
@@ -612,7 +612,7 @@ impl TypeChecker {
                         if let Ok(at) = self.infer_expr(arg, env) {
                             let expected = substitute(&p.ty, &subst);
                             if !self.is_compatible(&at, &expected) {
-                                self.err(format!("new {}() : {} ≠ {}", class_name, at, expected));
+                                self.err(format!("new {}() : type incompatible {} ≠ {}", class_name, at, expected));
                             }
                         }
                     }
@@ -636,7 +636,7 @@ impl TypeChecker {
                 for (arg, f) in args.iter().zip(vd.fields.iter()) {
                     if let Ok(at) = self.infer_expr(arg, env) {
                         if !self.is_compatible(&at, &f.ty) {
-                            self.err(format!("Champ '{}' de '{}::{}' : {} ≠ {}",
+                            self.err(format!("Champ '{}' de '{}::{}' : type incompatible {} ≠ {}",
                                 f.name, enum_name, variant, at, f.ty));
                         }
                     }
@@ -676,7 +676,7 @@ impl TypeChecker {
                         for (arg, pt) in args.iter().zip(ptys.iter()) {
                             if let Some(at) = self.infer(arg, env) {
                                 if !self.is_compatible(&at, pt) {
-                                    self.err(format!("Arg lambda : {} ≠ {}", at, pt));
+                                    self.err(format!("Arg lambda : type incompatible {} ≠ {}", at, pt));
                                 }
                             }
                         }

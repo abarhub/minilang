@@ -550,18 +550,38 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     // ── Programme complet ─────────────────────────────────────────────────────
 
+    // Déclarations de haut niveau dans n'importe quel ordre
+    enum TopDecl {
+        Alias(TypeAlias),
+        Iface(InterfaceDef),
+        Enum(EnumDef),
+        Class(ClassDef),
+    }
+
+    let top_decl = choice((
+        type_alias.map(TopDecl::Alias),
+        interface_def.map(TopDecl::Iface),
+        enum_def.map(TopDecl::Enum),
+        class_def.map(TopDecl::Class),
+    ));
+
     ws()
         .ignore_then(package_decl.or_not())
         .then(import_decl.repeated())
-        .then(type_alias.repeated())       // ← alias avant interfaces
-        .then(interface_def.repeated())
-        .then(enum_def.repeated())
-        .then(class_def.repeated())
+        .then(top_decl.repeated())
         .then(main_func)
         .then_ignore(ws())
         .then_ignore(end())
-        .map(|((((((pkg, imp), aliases), ifaces), enums), classes), main)| Program {
-            package: pkg, imports: imp, type_aliases: aliases,
-            interfaces: ifaces, enums, classes, main,
+        .map(|(((pkg, imp), decls), main)| {
+            let mut aliases = vec![]; let mut ifaces = vec![];
+            let mut enums = vec![]; let mut classes = vec![];
+            for d in decls { match d {
+                TopDecl::Alias(a)  => aliases.push(a),
+                TopDecl::Iface(i)  => ifaces.push(i),
+                TopDecl::Enum(e)   => enums.push(e),
+                TopDecl::Class(c)  => classes.push(c),
+            }}
+            Program { package: pkg, imports: imp, type_aliases: aliases,
+                      interfaces: ifaces, enums, classes, main }
         })
 }
