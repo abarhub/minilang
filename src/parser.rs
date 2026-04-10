@@ -92,8 +92,17 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .separated_by(just(',').padded_by(ws())).allow_trailing()
             .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()));
 
+        let str_char = just('\\').ignore_then(choice((
+            just('n').to('\n'),
+            just('t').to('\t'),
+            just('r').to('\r'),
+            just('\\').to('\\'),
+            just('"').to('"'),
+            just('0').to('\0'),
+        ))).or(none_of('"'));
+
         let str_lit = just('"')
-            .ignore_then(none_of('"').repeated().collect::<String>())
+            .ignore_then(str_char.repeated().collect::<String>())
             .then_ignore(just('"'))
             .map(Expr::StringLit).padded_by(ws());
 
