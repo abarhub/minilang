@@ -569,3 +569,200 @@ fn interp_four_variants_dispatch() {
         }
     "#), 50);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GÉNÉRIQUES SUR LES ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Parsing ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn parse_enum_generic_one_param() {
+    parses_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn parse_enum_generic_two_params() {
+    parses_ok(r#"
+        enum Result<T, E> { Ok(T value), Err(E error) }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn parse_enum_generic_constructor_with_type_args() {
+    parses_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::Some(42);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn parse_enum_generic_constructor_no_type_args() {
+    parses_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::None;
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn parse_enum_generic_match() {
+    parses_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::Some(1);
+            match x {
+                Option::Some(v) => { return v; }
+                Option::None    => { return 0; }
+            }
+            return 0;
+        }
+    "#);
+}
+
+// ── Typechecker ───────────────────────────────────────────────────────────────
+
+#[test]
+fn tc_enum_generic_ok() {
+    assert_tc_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::Some(42);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_enum_generic_wrong_type_arg() {
+    assert_tc_err(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::Some(true);
+            return 0;
+        }
+    "#, "incompatible");
+}
+
+#[test]
+fn tc_enum_generic_wrong_param_count() {
+    assert_tc_err(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int, bool>::Some(1);
+            return 0;
+        }
+    "#, "paramètre(s) de type");
+}
+
+#[test]
+fn tc_enum_generic_result_ok() {
+    assert_tc_ok(r#"
+        enum Result<T, E> { Ok(T value), Err(E error) }
+        int main() {
+            Result<int, string> r = Result<int, string>::Ok(0);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_enum_generic_match_binding_type() {
+    assert_tc_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::Some(10);
+            int result = 0;
+            match x {
+                Option::Some(v) => { result = v; }
+                Option::None    => {}
+            }
+            return result;
+        }
+    "#);
+}
+
+// ── Interpréteur ─────────────────────────────────────────────────────────────
+
+#[test]
+fn interp_enum_generic_some_match() {
+    assert_eq!(run_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::Some(42);
+            match x {
+                Option::Some(v) => { return v; }
+                Option::None    => { return 0; }
+            }
+            return -1;
+        }
+    "#), 42);
+}
+
+#[test]
+fn interp_enum_generic_none_match() {
+    assert_eq!(run_ok(r#"
+        enum Option<T> { Some(T value), None }
+        int main() {
+            Option<int> x = Option<int>::None;
+            match x {
+                Option::Some(v) => { return v; }
+                Option::None    => { return 99; }
+            }
+            return -1;
+        }
+    "#), 99);
+}
+
+#[test]
+fn interp_enum_generic_result_ok() {
+    assert_eq!(run_ok(r#"
+        enum Result<T, E> { Ok(T value), Err(E error) }
+        int main() {
+            Result<int, string> r = Result<int, string>::Ok(7);
+            match r {
+                Result::Ok(v)  => { return v; }
+                Result::Err(e) => { return -1; }
+            }
+            return 0;
+        }
+    "#), 7);
+}
+
+#[test]
+fn interp_enum_generic_result_err() {
+    assert_eq!(run_ok(r#"
+        enum Result<T, E> { Ok(T value), Err(E error) }
+        int main() {
+            Result<int, string> r = Result<int, string>::Err("echec");
+            match r {
+                Result::Ok(v)  => { return 1; }
+                Result::Err(e) => { return 0; }
+            }
+            return -1;
+        }
+    "#), 0);
+}
+
+#[test]
+fn interp_enum_generic_pair() {
+    assert_eq!(run_ok(r#"
+        enum Pair<A, B> { Of(A first, B second) }
+        int main() {
+            Pair<int, bool> p = Pair<int, bool>::Of(10, true);
+            match p {
+                Pair::Of(a, b) => { return a; }
+            }
+            return 0;
+        }
+    "#), 10);
+}

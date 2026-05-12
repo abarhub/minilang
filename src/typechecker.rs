@@ -208,6 +208,7 @@ impl TypeChecker {
     fn check_enums(&mut self, program: &Program) {
         for ed in &program.enums.clone() {
             self.current_enum = Some(ed.name.clone());
+            self.type_params  = ed.type_params.iter().cloned().collect();
             let mut seen = HashSet::new();
             for v in &ed.variants {
                 if !seen.insert(v.name.clone()) {
@@ -221,6 +222,7 @@ impl TypeChecker {
                 for s in &m.body.clone() { self.check_stmt(s, &mut env); }
             }
             self.current_enum = None;
+            self.type_params  = HashSet::new();
         }
     }
 
@@ -381,10 +383,18 @@ impl TypeChecker {
 
             Stmt::Match { expr, arms } => {
                 let st = self.infer(expr, env);
-                let enum_name = st.as_ref().and_then(|t| match t {
-                    Type::UserDefined(n) => Some(n.clone()),
-                    _ => None,
-                });
+                let (enum_name, subst): (Option<String>, Vec<(String, Type)>) =
+                    match st.as_ref() {
+                        Some(Type::UserDefined(n)) => (Some(n.clone()), vec![]),
+                        Some(Type::Generic(n, ta)) => {
+                            let s = self.enums.get(n).map(|ed| {
+                                ed.type_params.iter().zip(ta.iter())
+                                    .map(|(p, t)| (p.clone(), t.clone())).collect()
+                            }).unwrap_or_default();
+                            (Some(n.clone()), s)
+                        }
+                        _ => (None, vec![]),
+                    };
                 for arm in arms {
                     env.push();
                     if let (Pattern::Variant { name: vname, bindings }, Some(en))
@@ -401,7 +411,7 @@ impl TypeChecker {
                                         ));
                                     }
                                     for (b, f) in bindings.iter().zip(v.fields.iter()) {
-                                        env.declare(b.clone(), self.resolve(&f.ty));
+                                        env.declare(b.clone(), substitute(&self.resolve(&f.ty), &subst));
                                     }
                                 }
                             }
@@ -624,9 +634,19 @@ impl TypeChecker {
                 else { Ok(Type::Generic(class_name.clone(), type_args.clone())) }
             }
 
-            Expr::EnumConstructor { enum_name, variant, args } => {
+            Expr::EnumConstructor { enum_name, type_args, variant, args } => {
                 let ed = self.enums.get(enum_name)
                     .ok_or_else(|| TypeError(format!("Enum inconnu '{}'", enum_name)))?.clone();
+                if !ed.type_params.is_empty() && !type_args.is_empty()
+                    && type_args.len() != ed.type_params.len()
+                {
+                    return type_err!("'{}' attend {} paramètre(s) de type, {} fourni(s)",
+                        enum_name, ed.type_params.len(), type_args.len());
+                }
+                let subst: Vec<(String, Type)> = ed.type_params.iter()
+                    .zip(type_args.iter())
+                    .map(|(p, t)| (p.clone(), t.clone()))
+                    .collect();
                 let vd = ed.variants.iter().find(|v| &v.name == variant)
                     .ok_or_else(|| TypeError(format!(
                         "Variante '{}' inconnue dans '{}'", variant, enum_name)))?.clone();
@@ -636,13 +656,15 @@ impl TypeChecker {
                 }
                 for (arg, f) in args.iter().zip(vd.fields.iter()) {
                     if let Ok(at) = self.infer_expr(arg, env) {
-                        if !self.is_compatible(&at, &f.ty) {
+                        let expected = substitute(&f.ty, &subst);
+                        if !self.is_compatible(&at, &expected) {
                             self.err(format!("Champ '{}' de '{}::{}' : type incompatible {} ≠ {}",
-                                f.name, enum_name, variant, at, f.ty));
+                                f.name, enum_name, variant, at, expected));
                         }
                     }
                 }
-                Ok(Type::UserDefined(enum_name.clone()))
+                if type_args.is_empty() { Ok(Type::UserDefined(enum_name.clone())) }
+                else { Ok(Type::Generic(enum_name.clone(), type_args.clone())) }
             }
 
             // ── Lambda non annotée : sentinelle Type::Fn ──────────────────────
@@ -801,7 +823,15 @@ impl TypeChecker {
         }
         if let Some(ed) = self.enums.get(&cn) {
             if let Some(m) = ed.methods.iter().find(|m| m.name == method) {
-                return Ok((m.params.iter().map(|p| p.ty.clone()).collect(), m.return_type.clone(), vec![]));
+                let subst: Vec<(String, Type)> = ed.type_params.iter()
+                    .zip(type_args.iter())
+                    .map(|(p, t)| (p.clone(), t.clone()))
+                    .collect();
+                return Ok((
+                    m.params.iter().map(|p| substitute(&p.ty, &subst)).collect(),
+                    substitute(&m.return_type, &subst),
+                    subst,
+                ));
             }
         }
         type_err!("Méthode '{}' inconnue dans '{}'", method, cn)

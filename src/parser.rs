@@ -156,11 +156,19 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(call_args.clone())
             .map(|((cn, ta), args)| Expr::New { class_name: cn, type_args: ta, args });
 
+        let enum_ctor_type_args = type_parser()
+            .separated_by(just(',').padded_by(ws())).at_least(1)
+            .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
+            .or_not().map(|v| v.unwrap_or_default());
+
         let enum_ctor = text::ident().padded_by(ws())
+            .then(enum_ctor_type_args)
             .then_ignore(just("::").padded_by(ws()))
             .then(text::ident().padded_by(ws()))
             .then(call_args.clone().or_not().map(|v| v.unwrap_or_default()))
-            .map(|((en, v), a)| Expr::EnumConstructor { enum_name: en, variant: v, args: a });
+            .map(|(((en, ta), v), a)| Expr::EnumConstructor {
+                enum_name: en, type_args: ta, variant: v, args: a,
+            });
 
         let this_kw = kw("this").to(Expr::Ident("this".to_string()));
 
@@ -492,15 +500,21 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then(body.clone())
         .map(|(((rt, n), p), b)| Method { return_type: rt, name: n, params: p, body: b });
 
+    let enum_type_params = text::ident().padded_by(ws())
+        .separated_by(just(',').padded_by(ws())).at_least(1)
+        .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
+        .or_not().map(|v| v.unwrap_or_default());
+
     let enum_def = kw("enum")
         .ignore_then(text::ident().padded_by(ws()))
+        .then(enum_type_params)
         .then(
             enum_variant.separated_by(just(',').padded_by(ws())).allow_trailing()
                 .then(just(';').padded_by(ws()).ignore_then(enum_method.repeated())
                     .or_not().map(|v| v.unwrap_or_default()))
                 .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()))
         )
-        .map(|(name, (variants, methods))| EnumDef { name, variants, methods });
+        .map(|((name, type_params), (variants, methods))| EnumDef { name, type_params, variants, methods });
 
     // ── Interface ─────────────────────────────────────────────────────────────
 

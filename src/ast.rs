@@ -101,7 +101,7 @@ pub enum Expr {
     MethodCall   { object: Box<Expr>, method: String, args: Vec<Expr> },
     FunctionCall { name: String, args: Vec<Expr> },
     New             { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
-    EnumConstructor { enum_name: String, variant: String, args: Vec<Expr> },
+    EnumConstructor { enum_name: String, type_args: Vec<Type>, variant: String, args: Vec<Expr> },
     Lambda          { params: Vec<String>, body: LambdaBody },
     LambdaCall      { callee: Box<Expr>, args: Vec<Expr> },
 }
@@ -173,7 +173,10 @@ pub struct InterfaceDef { pub name: String, pub methods: Vec<MethodSig> }
 pub struct EnumVariant { pub name: String, pub fields: Vec<Param> }
 
 #[derive(Debug, Clone)]
-pub struct EnumDef { pub name: String, pub variants: Vec<EnumVariant>, pub methods: Vec<Method> }
+pub struct EnumDef {
+    pub name: String, pub type_params: Vec<String>,
+    pub variants: Vec<EnumVariant>, pub methods: Vec<Method>,
+}
 
 // ── Fonction main ─────────────────────────────────────────────────────────────
 

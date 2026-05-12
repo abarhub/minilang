@@ -228,10 +228,12 @@ fn fmt_expr(e: &Expr) -> String {
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
             format!("new {}{}({})", class_name, ta, a.join(", "))
         }
-        Expr::EnumConstructor { enum_name, variant, args } => {
+        Expr::EnumConstructor { enum_name, type_args, variant, args } => {
+            let ta = if type_args.is_empty() { String::new() }
+                     else { format!("<{}>", type_args.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", ")) };
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
-            if a.is_empty() { format!("{}::{}", enum_name, variant) }
-            else { format!("{}::{}({})", enum_name, variant, a.join(", ")) }
+            if a.is_empty() { format!("{}{}::{}", enum_name, ta, variant) }
+            else { format!("{}{}::{}({})", enum_name, ta, variant, a.join(", ")) }
         }
         Expr::Lambda { params, body } => {
             let ps = if params.len() == 1 {
