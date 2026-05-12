@@ -10,7 +10,7 @@ pub struct Import { pub path: String, pub wildcard: bool }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    Int, Bool, Str, Float, Double, Void,
+    Int, Bool, Str, Char, Float, Double, Void,
     Array(Box<Type>),
     Generic(String, Vec<Type>),
     UserDefined(String),
@@ -26,6 +26,7 @@ impl std::fmt::Display for Type {
             Type::Int            => write!(f, "int"),
             Type::Bool           => write!(f, "bool"),
             Type::Str            => write!(f, "string"),
+            Type::Char           => write!(f, "char"),
             Type::Float          => write!(f, "float"),
             Type::Double         => write!(f, "double"),
             Type::Void           => write!(f, "void"),
@@ -93,7 +94,7 @@ pub enum LambdaBody {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    IntLit(i64), FloatLit(f64), BoolLit(bool), StringLit(String), Ident(String),
+    IntLit(i64), FloatLit(f64), BoolLit(bool), StringLit(String), CharLit(char), Ident(String),
     BinOp    { left: Box<Expr>, op: BinOp, right: Box<Expr> },
     UnaryOp  { op: UnaryOp, expr: Box<Expr> },
     FieldAccess  { object: Box<Expr>, field:  String },

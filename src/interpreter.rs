@@ -25,7 +25,7 @@ pub struct EnumData {
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Int(i64), Float(f64), Bool(bool), Str(String),
+    Int(i64), Float(f64), Bool(bool), Str(String), Char(char),
     Array(Vec<Value>),
     Object(Rc<RefCell<ObjectData>>),
     Enum(Rc<EnumData>),
@@ -41,6 +41,7 @@ impl std::fmt::Display for Value {
             Value::Float(n)  => write!(f, "{}", n),
             Value::Bool(b)   => write!(f, "{}", b),
             Value::Str(s)    => write!(f, "{}", s),
+            Value::Char(c)   => write!(f, "{}", c),
             Value::Null      => write!(f, "null"),
             Value::Void      => write!(f, ""),
             Value::Array(v)  => {
@@ -143,6 +144,7 @@ impl Interpreter {
             Type::Bool           => Value::Bool(false),
             Type::Float | Type::Double => Value::Float(0.0),
             Type::Str            => Value::Str(String::new()),
+            Type::Char           => Value::Char('\0'),
             Type::Array(_)       => Value::Array(vec![]),
             _                    => Value::Null,
         }
@@ -371,6 +373,7 @@ impl Interpreter {
             Expr::FloatLit(f)  => Ok(Value::Float(*f)),
             Expr::BoolLit(b)   => Ok(Value::Bool(*b)),
             Expr::StringLit(s) => Ok(Value::Str(s.clone())),
+            Expr::CharLit(c)   => Ok(Value::Char(*c)),
 
             Expr::Ident(name) => {
                 // env en premier : permet aux méthodes d'enum de stocker `this = Value::Enum`
@@ -680,6 +683,7 @@ fn val_eq(a: &Value, b: &Value) -> bool {
         (Value::Float(x), Value::Float(y)) => (x-y).abs() < 1e-12,
         (Value::Bool(x),  Value::Bool(y))  => x == y,
         (Value::Str(x),   Value::Str(y))   => x == y,
+        (Value::Char(x),  Value::Char(y))  => x == y,
         (Value::Null,     Value::Null)     => true,
         (Value::Enum(a),  Value::Enum(b))  =>
             a.enum_name == b.enum_name && a.variant_name == b.variant_name,

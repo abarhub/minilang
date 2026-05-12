@@ -1,0 +1,94 @@
+// ──────────────────────────────────────────────
+//  Exemple – type char
+// ──────────────────────────────────────────────
+
+// Classe qui stocke un caractère et expose quelques opérations
+class CharBox {
+    char value;
+
+    CharBox(char v) {
+        this.value = v;
+    }
+
+    bool equals(char other) {
+        return this.value == other;
+    }
+
+    void display() {
+        print(this.value);
+    }
+}
+
+// Classifie un caractère parmi quelques catégories connues
+// et retourne un code entier pour le test
+int classify(char c) {
+    if (c == 'a') { return 1; }
+    if (c == 'e') { return 2; }
+    if (c == 'i') { return 3; }
+    if (c == 'o') { return 4; }
+    if (c == 'u') { return 5; }
+    return 0;
+}
+
+int main() {
+    // ── Littéraux char ────────────────────────────────────────────
+    char lettre = 'A';
+    char chiffre = '7';
+    char espace = ' ';
+
+    print(lettre);
+    print(chiffre);
+    print(espace);
+
+    // ── Séquences d'échappement ───────────────────────────────────
+    char saut    = '\n';
+    char tabul   = '\t';
+    char antislash = '\\';
+    char apostrophe = '\'';
+    char nul     = '\0';
+
+    // On vérifie que les séquences sont bien reconnues
+    if (saut == '\n') { print("saut de ligne OK"); }
+    if (tabul == '\t') { print("tabulation OK"); }
+    if (antislash == '\\') { print("antislash OK"); }
+    if (apostrophe == '\'') { print("apostrophe OK"); }
+    if (nul == '\0') { print("nul OK"); }
+
+    // ── Comparaison == et != ──────────────────────────────────────
+    char c1 = 'x';
+    char c2 = 'x';
+    char c3 = 'y';
+
+    if (c1 == c2) { print("c1 == c2 : vrai"); }
+    if (c1 != c3) { print("c1 != c3 : vrai"); }
+
+    // ── Valeur par défaut (char non initialisé = '\0') ────────────
+    char defaut;
+    if (defaut == '\0') { print("valeur par defaut = nul OK"); }
+
+    // ── Réaffectation ─────────────────────────────────────────────
+    char mutable = 'a';
+    mutable = 'z';
+    if (mutable == 'z') { print("reassignation OK"); }
+
+    // ── Utilisation dans une classe ───────────────────────────────
+    CharBox boite = new CharBox('m');
+    boite.display();
+    if (boite.equals('m')) { print("CharBox.equals OK"); }
+
+    // ── Utilisation comme paramètre de fonction ───────────────────
+    int code_a = classify('a');
+    int code_e = classify('e');
+    int code_z = classify('z');
+
+    if (code_a == 1) { print("classify a = 1 OK"); }
+    if (code_e == 2) { print("classify e = 2 OK"); }
+    if (code_z == 0) { print("classify z = 0 (autre) OK"); }
+
+    // ── char dans une boucle ──────────────────────────────────────
+    // Affiche les voyelles une à une
+    char[] voyelles;
+    print("fin de l'exemple char");
+
+    return 0;
+}

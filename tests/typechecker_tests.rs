@@ -402,3 +402,59 @@ fn test_float_to_double_promotion_ok() {
         }
     "#);
 }
+
+// ── char ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_char_declaration_ok() {
+    assert_ok(r#"
+        int main() {
+            char c = 'a';
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_char_comparison_ok() {
+    assert_ok(r#"
+        int main() {
+            char c = 'x';
+            bool b = (c == 'x');
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_char_not_compatible_with_int() {
+    assert_error(r#"
+        int main() {
+            int n = 'a';
+            return 0;
+        }
+    "#, "incompatible");
+}
+
+#[test]
+fn test_char_not_compatible_with_string() {
+    assert_error(r#"
+        int main() {
+            string s = 'a';
+            return 0;
+        }
+    "#, "incompatible");
+}
+
+#[test]
+fn test_char_escape_sequences_ok() {
+    assert_ok(r#"
+        int main() {
+            char nl = '\n';
+            char tb = '\t';
+            char bs = '\\';
+            char qt = '\'';
+            return 0;
+        }
+    "#);
+}

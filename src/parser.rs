@@ -51,6 +51,7 @@ fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
             kw("int")   .to(Type::Int),
             kw("bool")  .to(Type::Bool),
             kw("string").to(Type::Str),
+            kw("char")  .to(Type::Char),
             kw("float") .to(Type::Float),
             kw("double").to(Type::Double),
             kw("void")  .to(Type::Void),
@@ -117,6 +118,20 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 .map(Expr::StringLit).padded_by(ws())
         );
 
+        let char_escape = just('\\').ignore_then(choice((
+            just('n') .to('\n'),
+            just('t') .to('\t'),
+            just('r') .to('\r'),
+            just('\\').to('\\'),
+            just('\'').to('\''),
+            just('0') .to('\0'),
+        )));
+        let char_lit = just('\'')
+            .ignore_then(char_escape.or(none_of('\'')))
+            .then_ignore(just('\''))
+            .map(Expr::CharLit)
+            .padded_by(ws());
+
         let float_lit = text::int(10).then_ignore(just('.')).then(text::int(10))
             .map(|(i, f): (String, String)|
                 Expr::FloatLit(format!("{}.{}", i, f).parse().unwrap()))
@@ -166,7 +181,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             });
 
         let atom = choice((
-            str_lit, float_lit, int_lit, bool_lit,
+            str_lit, char_lit, float_lit, int_lit, bool_lit,
             this_kw, new_expr, enum_ctor, ident_or_call,
             paren_or_call,
         ));
@@ -271,6 +286,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         kw("int")   .to(Type::Int),
         kw("bool")  .to(Type::Bool),
         kw("string").to(Type::Str),
+        kw("char")  .to(Type::Char),
         kw("float") .to(Type::Float),
         kw("double").to(Type::Double),
     ))

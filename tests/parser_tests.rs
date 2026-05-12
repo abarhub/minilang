@@ -333,3 +333,40 @@ fn test_main_with_params() {
     // main ne prend pas de paramètre
     parse_fails("int main(int argc) { return 0; }");
 }
+
+// ── char ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_char_literal() {
+    parses_ok("int main() { char c = 'a'; return 0; }");
+}
+
+#[test]
+fn test_char_type_annotation() {
+    parses_ok("int main() { char c; return 0; }");
+}
+
+#[test]
+fn test_char_escape_newline() {
+    parses_ok(r"int main() { char c = '\n'; return 0; }");
+}
+
+#[test]
+fn test_char_escape_tab() {
+    parses_ok(r"int main() { char c = '\t'; return 0; }");
+}
+
+#[test]
+fn test_char_escape_backslash() {
+    parses_ok(r"int main() { char c = '\\'; return 0; }");
+}
+
+#[test]
+fn test_char_escape_single_quote() {
+    parses_ok(r"int main() { char c = '\''; return 0; }");
+}
+
+#[test]
+fn test_char_comparison() {
+    parses_ok("int main() { char c = 'z'; bool b = (c == 'z'); return 0; }");
+}

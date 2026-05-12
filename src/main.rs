@@ -204,6 +204,7 @@ fn fmt_expr(e: &Expr) -> String {
         Expr::FloatLit(f)  => f.to_string(),
         Expr::BoolLit(b)   => b.to_string(),
         Expr::StringLit(s) => format!("\"{}\"", s),
+        Expr::CharLit(c)   => format!("'{}'", c),
         Expr::Ident(n)     => n.clone(),
         Expr::UnaryOp { op, expr } => {
             let s = match op { UnaryOp::Neg => "-", UnaryOp::Not => "!" };

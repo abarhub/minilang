@@ -472,6 +472,7 @@ impl TypeChecker {
             Expr::FloatLit(_)  => Ok(Type::Float),
             Expr::BoolLit(_)   => Ok(Type::Bool),
             Expr::StringLit(_) => Ok(Type::Str),
+            Expr::CharLit(_)   => Ok(Type::Char),
 
             Expr::Ident(name) => {
                 if name == "this" {

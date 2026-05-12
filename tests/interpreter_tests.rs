@@ -533,3 +533,99 @@ fn test_runtime_unknown_method() {
 fn test_runtime_unknown_class() {
     run_fails("int main() { Ghost g; return 0; }");
 }
+
+// ── char ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_char_literal_declaration() {
+    assert_eq!(run_ok("int main() { char c = 'a'; return 0; }"), 0);
+}
+
+#[test]
+fn test_char_equality_true() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char c = 'x';
+            if (c == 'x') { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_char_equality_false() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char c = 'a';
+            if (c == 'b') { return 1; }
+            return 0;
+        }
+    "#), 0);
+}
+
+#[test]
+fn test_char_inequality() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char c = 'z';
+            if (c != 'a') { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_char_escape_newline() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char nl = '\n';
+            if (nl == '\n') { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_char_escape_tab() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char t = '\t';
+            if (t == '\t') { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_char_default_value() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char c;
+            if (c == '\0') { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_char_print() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char c = 'A';
+            print(c);
+            return 0;
+        }
+    "#), 0);
+}
+
+#[test]
+fn test_char_reassign() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            char c = 'a';
+            c = 'b';
+            if (c == 'b') { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
