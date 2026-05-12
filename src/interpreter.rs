@@ -480,7 +480,7 @@ impl Interpreter {
                 Ok(obj)
             }
 
-            Expr::EnumConstructor { enum_name, variant, args } => {
+            Expr::EnumConstructor { enum_name, variant, args, .. } => {
                 let ed = self.enums.get(enum_name)
                     .ok_or_else(|| RuntimeError(format!("Enum inconnu '{}'", enum_name)))?.clone();
                 let vd = ed.variants.iter().find(|v| &v.name == variant)

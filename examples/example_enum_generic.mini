@@ -1,0 +1,115 @@
+// ──────────────────────────────────────────────────────────────
+//  Exemple – enums génériques
+// ──────────────────────────────────────────────────────────────
+
+// ── Option<T> : valeur optionnelle ────────────────────────────
+enum Option<T> {
+    Some(T value),
+    None
+}
+
+// ── Result<T, E> : succès ou erreur ───────────────────────────
+enum Result<T, E> {
+    Ok(T value),
+    Err(E error)
+}
+
+// ── Either<L, R> : l'un ou l'autre ────────────────────────────
+enum Either<L, R> {
+    Left(L left),
+    Right(R right)
+}
+
+// ── Pair<A, B> : paire de valeurs ─────────────────────────────
+enum Pair<A, B> {
+    Of(A first, B second)
+}
+
+// Fonction simulant une division sécurisée
+Result<int, string> safe_div(int a, int b) {
+    if (b == 0) {
+        return Result<int, string>::Err("division par zero");
+    }
+    return Result<int, string>::Ok(a / b);
+}
+
+// Fonction retournant une valeur optionnelle
+Option<int> find_first(int target) {
+    if (target > 0) {
+        return Option<int>::Some(target * 2);
+    }
+    return Option<int>::None;
+}
+
+int main() {
+
+    // ── Option<int> ───────────────────────────────────────────
+    Option<int> present = Option<int>::Some(42);
+    Option<int> absent  = Option<int>::None;
+
+    match present {
+        Option::Some(v) => { print("Option::Some :", v); }
+        Option::None    => { print("Option::None"); }
+    }
+
+    match absent {
+        Option::Some(v) => { print("Some :", v); }
+        Option::None    => { print("Option::None OK"); }
+    }
+
+    // ── Option<string> ────────────────────────────────────────
+    Option<string> msg = Option<string>::Some("bonjour");
+    match msg {
+        Option::Some(s) => { print("message :", s); }
+        Option::None    => {}
+    }
+
+    // ── Result<int, string> ───────────────────────────────────
+    Result<int, string> r1 = safe_div(10, 2);
+    Result<int, string> r2 = safe_div(5, 0);
+
+    match r1 {
+        Result::Ok(v)  => { print("10 / 2 =", v); }
+        Result::Err(e) => { print("erreur :", e); }
+    }
+
+    match r2 {
+        Result::Ok(v)  => { print("resultat :", v); }
+        Result::Err(e) => { print("erreur capturee :", e); }
+    }
+
+    // ── Either<int, string> ───────────────────────────────────
+    Either<int, string> gauche = Either<int, string>::Left(99);
+    Either<int, string> droite = Either<int, string>::Right("texte");
+
+    match gauche {
+        Either::Left(l)  => { print("Left :", l); }
+        Either::Right(r) => { print("Right :", r); }
+    }
+
+    match droite {
+        Either::Left(l)  => { print("Left :", l); }
+        Either::Right(r) => { print("Right :", r); }
+    }
+
+    // ── Pair<int, bool> ───────────────────────────────────────
+    Pair<int, bool> p = Pair<int, bool>::Of(7, true);
+    match p {
+        Pair::Of(a, b) => { print("Pair :", a, b); }
+    }
+
+    // ── find_first avec Option ────────────────────────────────
+    Option<int> r = find_first(5);
+    match r {
+        Option::Some(v) => { print("trouve :", v); }
+        Option::None    => { print("rien trouve"); }
+    }
+
+    Option<int> rien = find_first(-1);
+    match rien {
+        Option::Some(v) => { print("trouve :", v); }
+        Option::None    => { print("rien : OK"); }
+    }
+
+    return 0;
+}
