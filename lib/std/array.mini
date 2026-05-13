@@ -1,0 +1,38 @@
+// ── Bibliothèque standard – Array<T> ─────────────────────────────────────────
+//  Tableau de taille fixe à éléments homogènes.
+//  Créer  : new T[n]            — n éléments initialisés à la valeur par défaut
+//           new T[]{a, b, ...}  — avec des valeurs initiales
+//  Accès  : arr[i]              — sucre syntaxique pour arr.get(i)
+//  Affect : arr[i] = val        — sucre syntaxique pour arr.set(i, val)
+//  Accessible sans import dans tout fichier minilang.
+
+enum Array<T> {
+    ;
+
+    // Retourne l'élément à l'index donné.
+    // Lève une erreur d'exécution si index hors bornes.
+    T get(int index) {
+        builtin;
+    }
+
+    // Affecte une valeur à l'index donné.
+    // Lève une erreur d'exécution si index hors bornes.
+    void set(int index, T value) {
+        builtin;
+    }
+
+    // Retourne le nombre d'éléments.
+    int length() {
+        builtin;
+    }
+
+    // Retourne true si le tableau contient la valeur donnée.
+    bool contains(T value) {
+        builtin;
+    }
+
+    // Remplit tout le tableau avec la valeur donnée.
+    void fill(T value) {
+        builtin;
+    }
+}

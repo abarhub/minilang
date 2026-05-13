@@ -9,5 +9,6 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/option.mini"), "\n",
     include_str!("../lib/std/result.mini"), "\n",
     include_str!("../lib/std/either.mini"), "\n",
-    include_str!("../lib/std/pair.mini"),
+    include_str!("../lib/std/pair.mini"),   "\n",
+    include_str!("../lib/std/array.mini"),
 );

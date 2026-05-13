@@ -379,6 +379,26 @@ impl TypeChecker {
                 env.pop();
             }
 
+            Stmt::Builtin => { /* implémentation native — no-op */ }
+
+            Stmt::IndexAssign { name, index, value } => {
+                let arr_ty = env.get(name).cloned()
+                    .or_else(|| self.field_of_current_class(name))
+                    .map(|t| self.resolve(&t));
+                if let Some(it) = self.infer(index, env) {
+                    if it != Type::Int {
+                        self.err(format!("Index doit être int, trouvé {}", it));
+                    }
+                }
+                let val_ty = self.infer(value, env);
+                if let (Some(Type::Array(elem)), Some(vt)) = (arr_ty, val_ty) {
+                    if !self.is_compatible(&vt, &elem) {
+                        self.err(format!(
+                            "Affectation index : type incompatible {} ≠ {}", vt, elem));
+                    }
+                }
+            }
+
             Stmt::Break | Stmt::Continue => {}
 
             Stmt::Match { expr, arms } => {
@@ -772,6 +792,43 @@ impl TypeChecker {
                     _ => type_err!("LambdaCall sur non-lambda ({})", ct),
                 }
             }
+
+            // ── Tableau littéral : new T[]{a, b, ...} ────────────────────────
+            Expr::ArrayLit { elem_type, elements } => {
+                for e in elements {
+                    if let Ok(et) = self.infer_expr(e, env) {
+                        if !self.is_compatible(&et, elem_type) {
+                            self.err(format!(
+                                "Élément de tableau : type incompatible {} ≠ {}", et, elem_type));
+                        }
+                    }
+                }
+                Ok(Type::Array(Box::new(elem_type.clone())))
+            }
+
+            // ── Nouveau tableau : new T[n] ────────────────────────────────────
+            Expr::ArrayNew { elem_type, size } => {
+                if let Ok(st) = self.infer_expr(size, env) {
+                    if st != Type::Int {
+                        self.err(format!("Taille de tableau doit être int, trouvé {}", st));
+                    }
+                }
+                Ok(Type::Array(Box::new(elem_type.clone())))
+            }
+
+            // ── Accès indexé : arr[i] ─────────────────────────────────────────
+            Expr::Index { object, index } => {
+                let ot = self.infer_expr(object, env)?;
+                let ot = self.resolve(&ot);
+                let it = self.infer_expr(index, env)?;
+                if it != Type::Int {
+                    self.err(format!("Index doit être int, trouvé {}", it));
+                }
+                match ot {
+                    Type::Array(elem) => Ok(*elem),
+                    _ => type_err!("Accès index sur non-tableau : {}", ot),
+                }
+            }
         }
     }
 
@@ -870,6 +927,7 @@ impl TypeChecker {
         let (cn, type_args) = match obj_ty {
             Type::UserDefined(n)   => (n.clone(), vec![]),
             Type::Generic(n, args) => (n.clone(), args.clone()),
+            Type::Array(inner)     => ("Array".to_string(), vec![*inner.clone()]),
             _ => return type_err!("Appel '{}' sur type non-objet {}", method, obj_ty),
         };
 
