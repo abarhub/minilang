@@ -110,6 +110,12 @@ pub enum Expr {
     SafeMethodCall  { object: Box<Expr>, method: String, args: Vec<Expr> },
     /// `expr ?? default` — déwrappe ou retourne default
     NullCoalesce    { expr: Box<Expr>, default: Box<Expr> },
+    /// `new T[]{a, b, ...}` — tableau littéral
+    ArrayLit { elem_type: Type, elements: Vec<Expr> },
+    /// `new T[n]` — tableau de taille n initialisé à la valeur par défaut
+    ArrayNew { elem_type: Type, size: Box<Expr> },
+    /// `obj[idx]` — accès indexé
+    Index    { object: Box<Expr>, index: Box<Expr> },
 }
 
 // ── Pattern pour match ────────────────────────────────────────────────────────
@@ -140,6 +146,10 @@ pub enum Stmt {
               update: Option<Box<Stmt>>, body: Vec<Stmt> },
     Break, Continue,
     Match { expr: Expr, arms: Vec<MatchArm> },
+    /// Méthode native — corps de tableau (no-op à l'exécution)
+    Builtin,
+    /// `name[idx] = val;`
+    IndexAssign { name: String, index: Box<Expr>, value: Expr },
 }
 
 // ── Membres de classe ─────────────────────────────────────────────────────────

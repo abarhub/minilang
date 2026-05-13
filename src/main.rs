@@ -140,6 +140,9 @@ fn print_stmt(s: &Stmt, d: usize) {
         Stmt::ExprStmt(e)     => println!("{}{};", pad(d), fmt_expr(e)),
         Stmt::Break            => println!("{}break;", pad(d)),
         Stmt::Continue         => println!("{}continue;", pad(d)),
+        Stmt::Builtin          => println!("{}builtin;", pad(d)),
+        Stmt::IndexAssign { name, index, value } =>
+            println!("{}{}[{}] = {};", pad(d), name, fmt_expr(index), fmt_expr(value)),
         Stmt::If { condition, then_body, else_body } => {
             println!("{}if ({}) {{", pad(d), fmt_expr(condition));
             for s in then_body { print_stmt(s, d + 1); }
@@ -259,5 +262,13 @@ fn fmt_expr(e: &Expr) -> String {
         }
         Expr::NullCoalesce { expr, default } =>
             format!("({} ?? {})", fmt_expr(expr), fmt_expr(default)),
+        Expr::ArrayLit { elem_type, elements } => {
+            let es: Vec<String> = elements.iter().map(fmt_expr).collect();
+            format!("new {}[]{{{}}}", elem_type, es.join(", "))
+        }
+        Expr::ArrayNew { elem_type, size } =>
+            format!("new {}[{}]", elem_type, fmt_expr(size)),
+        Expr::Index { object, index } =>
+            format!("{}[{}]", fmt_expr(object), fmt_expr(index)),
     }
 }

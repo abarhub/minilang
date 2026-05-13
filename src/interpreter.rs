@@ -26,7 +26,7 @@ pub struct EnumData {
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64), Float(f64), Bool(bool), Str(String), Char(char),
-    Array(Vec<Value>),
+    Array(Rc<RefCell<Vec<Value>>>),
     Object(Rc<RefCell<ObjectData>>),
     Enum(Rc<EnumData>),
     /// Fermeture : paramètres nommés, corps, variables capturées au moment de la création
@@ -45,7 +45,8 @@ impl std::fmt::Display for Value {
             Value::Null      => write!(f, "null"),
             Value::Void      => write!(f, ""),
             Value::Array(v)  => {
-                write!(f, "[{}]", v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+                write!(f, "[{}]", v.borrow().iter()
+                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
             }
             Value::Object(o) => write!(f, "<{}>", o.borrow().class_name),
             Value::Enum(e)   => {
@@ -145,7 +146,7 @@ impl Interpreter {
             Type::Float | Type::Double => Value::Float(0.0),
             Type::Str            => Value::Str(String::new()),
             Type::Char           => Value::Char('\0'),
-            Type::Array(_)       => Value::Array(vec![]),
+            Type::Array(_)       => Value::Array(Rc::new(RefCell::new(vec![]))),
             _                    => Value::Null,
         }
     }
@@ -329,6 +330,26 @@ impl Interpreter {
                 env.pop();
             }
 
+            Stmt::Builtin => { /* méthode native — ne devrait pas être exécutée directement */ }
+
+            Stmt::IndexAssign { name, index, value } => {
+                let idx = self.eval(index, env, this.clone())?;
+                let val = self.eval(value, env, this.clone())?;
+                let arr = env.get(name)
+                    .ok_or_else(|| RuntimeError(format!("Variable inconnue '{}'", name)))?;
+                match (arr, idx) {
+                    (Value::Array(v), Value::Int(i)) => {
+                        let mut data = v.borrow_mut();
+                        let i = i as usize;
+                        if i >= data.len() {
+                            return err!("Index {} hors bornes (taille {})", i, data.len());
+                        }
+                        data[i] = val;
+                    }
+                    _ => return err!("Affectation index sur non-tableau"),
+                }
+            }
+
             Stmt::Break    => return Ok(Flow::Break),
             Stmt::Continue => return Ok(Flow::Continue),
 
@@ -437,6 +458,54 @@ impl Interpreter {
                         let m = self.find_method(&en, method)
                             .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}::{}()'", en, method)))?;
                         self.call_enum_method(&m, args, ed)
+                    }
+                    Value::Array(v) => {
+                        match method.as_str() {
+                            "get" => {
+                                if args.len() != 1 { return err!("get() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(i) => {
+                                        let data = v.borrow();
+                                        if *i < 0 || *i as usize >= data.len() {
+                                            return err!("get(): index {} hors bornes (taille {})", i, data.len());
+                                        }
+                                        Ok(data[*i as usize].clone())
+                                    }
+                                    _ => err!("get() requiert un int"),
+                                }
+                            }
+                            "set" => {
+                                if args.len() != 2 { return err!("set() attend 2 arguments"); }
+                                match &args[0] {
+                                    Value::Int(i) => {
+                                        let i = *i;
+                                        let val = args[1].clone();
+                                        let mut data = v.borrow_mut();
+                                        if i < 0 || i as usize >= data.len() {
+                                            return err!("set(): index {} hors bornes (taille {})", i, data.len());
+                                        }
+                                        data[i as usize] = val;
+                                        Ok(Value::Void)
+                                    }
+                                    _ => err!("set() requiert (int, T)"),
+                                }
+                            }
+                            "length" => Ok(Value::Int(v.borrow().len() as i64)),
+                            "contains" => {
+                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
+                                let needle = &args[0];
+                                let found = v.borrow().iter().any(|x| val_eq(x, needle));
+                                Ok(Value::Bool(found))
+                            }
+                            "fill" => {
+                                if args.len() != 1 { return err!("fill() attend 1 argument"); }
+                                let val = args[0].clone();
+                                let mut data = v.borrow_mut();
+                                for x in data.iter_mut() { *x = val.clone(); }
+                                Ok(Value::Void)
+                            }
+                            _ => err!("Méthode inconnue '{}' sur Array", method),
+                        }
                     }
                     _ => err!("Appel de méthode sur non-objet"),
                 }
@@ -605,6 +674,42 @@ impl Interpreter {
                     .map(|a| self.eval(a, env, this.clone()))
                     .collect::<Result<_, _>>()?;
                 self.call_lambda(lam, eargs)
+            }
+
+            // ── Tableau littéral : new T[]{a, b, ...} ────────────────────────
+            Expr::ArrayLit { elem_type: _, elements } => {
+                let mut vals = Vec::new();
+                for e in elements {
+                    vals.push(self.eval(e, env, this.clone())?);
+                }
+                Ok(Value::Array(Rc::new(RefCell::new(vals))))
+            }
+
+            // ── Nouveau tableau de taille n : new T[n] ───────────────────────
+            Expr::ArrayNew { elem_type, size } => {
+                let n = match self.eval(size, env, this)? {
+                    Value::Int(n) if n >= 0 => n as usize,
+                    Value::Int(n) => return err!("Taille de tableau négative : {}", n),
+                    _ => return err!("Taille de tableau doit être un entier"),
+                };
+                let default = Self::default_value(elem_type);
+                Ok(Value::Array(Rc::new(RefCell::new(vec![default; n]))))
+            }
+
+            // ── Accès indexé : arr[i] ─────────────────────────────────────────
+            Expr::Index { object, index } => {
+                let arr = self.eval(object, env, this.clone())?;
+                let idx = self.eval(index, env, this)?;
+                match (arr, idx) {
+                    (Value::Array(v), Value::Int(i)) => {
+                        let data = v.borrow();
+                        if i < 0 || i as usize >= data.len() {
+                            return err!("Index {} hors bornes (taille {})", i, data.len());
+                        }
+                        Ok(data[i as usize].clone())
+                    }
+                    _ => err!("Accès index sur non-tableau"),
+                }
             }
         }
     }

@@ -192,17 +192,38 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 Some(a) => Expr::LambdaCall { callee: Box::new(e), args: a },
             });
 
+        // new T[]{1, 2, 3}  — type_parser() consomme "int[]" comme Type::Array(Int)
+        let array_lit = kw("new")
+            .ignore_then(type_parser())
+            .then(
+                expr.clone()
+                    .separated_by(just(',').padded_by(ws())).allow_trailing()
+                    .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()))
+            )
+            .try_map(|(t, elems), span| match t {
+                Type::Array(inner) => Ok(Expr::ArrayLit { elem_type: *inner, elements: elems }),
+                _ => Err(Simple::custom(span, "new T[]{...} requires array type T[]")),
+            });
+
+        // new int[5]  — type_parser() consomme "int", puis [5] est la taille
+        let array_new = kw("new")
+            .ignore_then(type_parser())
+            .then(expr.clone()
+                .delimited_by(just('[').padded_by(ws()), just(']').padded_by(ws())))
+            .map(|(t, size)| Expr::ArrayNew { elem_type: t, size: Box::new(size) });
+
         let atom = choice((
             str_lit, char_lit, float_lit, int_lit, bool_lit,
-            this_kw, new_expr, enum_ctor, ident_or_call,
+            this_kw, array_lit, array_new, new_expr, enum_ctor, ident_or_call,
             paren_or_call,
         ));
 
-        // Postfix : .field  .method(args)  ?.field  ?.method(args)
+        // Postfix : .field  .method(args)  ?.field  ?.method(args)  [idx]
         #[derive(Clone)]
         enum Postfix {
             Field(String), Method(String, Vec<Expr>),
             SafeField(String), SafeMethod(String, Vec<Expr>),
+            Index(Box<Expr>),
         }
 
         let safe_postfix_op = just("?.").padded_by(ws())
@@ -221,13 +242,18 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 None    => Postfix::Field(name),
             });
 
+        let index_postfix = expr.clone()
+            .delimited_by(just('[').padded_by(ws()), just(']').padded_by(ws()))
+            .map(|e| Postfix::Index(Box::new(e)));
+
         let postfix = atom
-            .then(safe_postfix_op.or(postfix_op).repeated())
+            .then(choice((index_postfix, safe_postfix_op.or(postfix_op))).repeated())
             .foldl(|obj, pf| match pf {
                 Postfix::Field(f)        => Expr::FieldAccess      { object: Box::new(obj), field: f },
                 Postfix::Method(m, a)    => Expr::MethodCall       { object: Box::new(obj), method: m, args: a },
                 Postfix::SafeField(f)    => Expr::SafeFieldAccess  { object: Box::new(obj), field: f },
                 Postfix::SafeMethod(m,a) => Expr::SafeMethodCall   { object: Box::new(obj), method: m, args: a },
+                Postfix::Index(i)        => Expr::Index { object: Box::new(obj), index: i },
             });
 
         // Hiérarchie arithmétique / logique
@@ -443,6 +469,20 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
             .map(|(e, arms)| Stmt::Match { expr: e, arms });
 
+        let builtin_stmt = kw("builtin")
+            .then_ignore(just(';').padded_by(ws()))
+            .to(Stmt::Builtin);
+
+        let index_assign = text::ident().padded_by(ws())
+            .then(expr.clone()
+                .delimited_by(just('[').padded_by(ws()), just(']').padded_by(ws())))
+            .then_ignore(just('=').padded_by(ws()))
+            .then(expr.clone())
+            .then_ignore(just(';').padded_by(ws()))
+            .map(|((name, idx), val)| Stmt::IndexAssign {
+                name, index: Box::new(idx), value: val,
+            });
+
         let kw_var_decl = kw_type.clone()
             .then(text::ident().padded_by(ws()))
             .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
@@ -476,8 +516,9 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
         choice((
             print_stmt, return_stmt, break_stmt, continue_stmt,
+            builtin_stmt,
             if_stmt, while_stmt, do_while, for_stmt, match_stmt,
-            kw_var_decl, field_assign, generic_var_decl, assign_stmt, expr_stmt,
+            kw_var_decl, index_assign, field_assign, generic_var_decl, assign_stmt, expr_stmt,
         ))
         .padded_by(ws())
         .boxed()
@@ -488,6 +529,10 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     let body = stmt.clone().repeated()
         .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()));
+
+    // Corps de méthode : bloc normal  OU  `builtin;`  (implémentation native)
+    let method_body = body.clone()
+        .or(kw("builtin").then_ignore(just(';').padded_by(ws())).to(vec![Stmt::Builtin]));
 
     // ── Membres de classe ─────────────────────────────────────────────────────
 
@@ -502,7 +547,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         let method = ty.clone()
             .then(text::ident().padded_by(ws()))
             .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
-            .then(body.clone())
+            .then(method_body.clone())
             .map(|(((rt, n), p), b)| CM::M(Method { return_type: rt, name: n, params: p, body: b }));
 
         let field = ty.clone()
@@ -526,7 +571,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     let enum_method = ty.clone()
         .then(text::ident().padded_by(ws()))
         .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
-        .then(body.clone())
+        .then(method_body.clone())
         .map(|(((rt, n), p), b)| Method { return_type: rt, name: n, params: p, body: b });
 
     let enum_type_params = text::ident().padded_by(ws())
