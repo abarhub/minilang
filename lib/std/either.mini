@@ -1,0 +1,43 @@
+// ── Bibliothèque standard – Either<L, R> ─────────────────────────────────────
+//  Représente une valeur qui est soit Left(gauche), soit Right(droite).
+//  Utile pour représenter deux cas distincts sans notion d'erreur.
+//  Accessible sans import dans tout fichier minilang.
+
+enum Either<L, R> {
+    Left(L left),
+    Right(R right);
+
+    // Retourne la valeur gauche.
+    // Lève une erreur d'exécution si appelé sur Right.
+    L getLeft() {
+        match this {
+            Either::Left(l)  => { return l; }
+            Either::Right(r) => { panic("getLeft() appelé sur Right"); }
+        }
+    }
+
+    // Retourne la valeur droite.
+    // Lève une erreur d'exécution si appelé sur Left.
+    R getRight() {
+        match this {
+            Either::Left(l)  => { panic("getRight() appelé sur Left"); }
+            Either::Right(r) => { return r; }
+        }
+    }
+
+    // Retourne true si this est Left.
+    bool isLeft() {
+        match this {
+            Either::Left(l)  => { return true; }
+            Either::Right(r) => { return false; }
+        }
+    }
+
+    // Retourne true si this est Right.
+    bool isRight() {
+        match this {
+            Either::Left(l)  => { return false; }
+            Either::Right(r) => { return true; }
+        }
+    }
+}

@@ -1,0 +1,42 @@
+// ── Bibliothèque standard – Result<T, E> ─────────────────────────────────────
+//  Représente soit un succès Ok(valeur), soit une erreur Err(erreur).
+//  Accessible sans import dans tout fichier minilang.
+
+enum Result<T, E> {
+    Ok(T value),
+    Err(E error);
+
+    // Retourne la valeur en cas de succès.
+    // Lève une erreur d'exécution si appelé sur Err.
+    T getValue() {
+        match this {
+            Result::Ok(v)  => { return v; }
+            Result::Err(e) => { panic("getValue() appelé sur Err"); }
+        }
+    }
+
+    // Retourne l'erreur en cas d'échec.
+    // Lève une erreur d'exécution si appelé sur Ok.
+    E getError() {
+        match this {
+            Result::Ok(v)  => { panic("getError() appelé sur Ok"); }
+            Result::Err(e) => { return e; }
+        }
+    }
+
+    // Retourne true si this est Ok.
+    bool isOk() {
+        match this {
+            Result::Ok(v)  => { return true; }
+            Result::Err(e) => { return false; }
+        }
+    }
+
+    // Retourne true si this est Err.
+    bool isErr() {
+        match this {
+            Result::Ok(v)  => { return false; }
+            Result::Err(e) => { return true; }
+        }
+    }
+}
