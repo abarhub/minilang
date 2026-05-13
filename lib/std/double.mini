@@ -1,0 +1,46 @@
+// ── Bibliothèque standard – Double ───────────────────────────────────────────
+//  Méthodes sur le type primitif double.
+//  Appel : d.abs(), d.floor(), etc.
+//  Accessible sans import dans tout fichier minilang.
+
+class Double {
+
+    // Retourne la représentation décimale.
+    string toString() builtin;
+
+    // Retourne la valeur absolue.
+    double abs() builtin;
+
+    // Retourne l'entier inférieur ou égal (arrondi vers -∞).
+    double floor() builtin;
+
+    // Retourne l'entier supérieur ou égal (arrondi vers +∞).
+    double ceil() builtin;
+
+    // Retourne l'arrondi au plus proche.
+    double round() builtin;
+
+    // Retourne true si this > 0.
+    bool isPositive() builtin;
+
+    // Retourne true si this < 0.
+    bool isNegative() builtin;
+
+    // Retourne true si this est NaN.
+    bool isNaN() builtin;
+
+    // Retourne le minimum entre this et other.
+    double min(double other) builtin;
+
+    // Retourne le maximum entre this et other.
+    double max(double other) builtin;
+
+    // Tronque vers zéro et retourne un int.
+    int toInt() builtin;
+
+    // Convertit en float (peut perdre en précision).
+    float toFloat() builtin;
+
+    // Retourne true si les deux valeurs sont égales.
+    bool equals(double other) builtin;
+}

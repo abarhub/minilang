@@ -621,6 +621,122 @@ impl Interpreter {
                             _ => err!("Méthode inconnue '{}' sur char", method),
                         }
                     }
+                    Value::Bool(b) => {
+                        match method.as_str() {
+                            "toString" => Ok(Value::Str(b.to_string())),
+                            "equals"   => {
+                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Bool(o) => Ok(Value::Bool(b == *o)),
+                                    _ => err!("equals() requiert un bool"),
+                                }
+                            }
+                            "and" => {
+                                if args.len() != 1 { return err!("and() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Bool(o) => Ok(Value::Bool(b && *o)),
+                                    _ => err!("and() requiert un bool"),
+                                }
+                            }
+                            "or" => {
+                                if args.len() != 1 { return err!("or() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Bool(o) => Ok(Value::Bool(b || *o)),
+                                    _ => err!("or() requiert un bool"),
+                                }
+                            }
+                            "not" => Ok(Value::Bool(!b)),
+                            _ => err!("Méthode inconnue '{}' sur bool", method),
+                        }
+                    }
+                    Value::Int(n) => {
+                        match method.as_str() {
+                            "toString"       => Ok(Value::Str(n.to_string())),
+                            "toBinaryString" => Ok(Value::Str(format!("{:b}", n))),
+                            "abs"            => Ok(Value::Int(n.abs())),
+                            "isPositive"     => Ok(Value::Bool(n > 0)),
+                            "isNegative"     => Ok(Value::Bool(n < 0)),
+                            "isZero"         => Ok(Value::Bool(n == 0)),
+                            "isEven"         => Ok(Value::Bool(n % 2 == 0)),
+                            "isOdd"          => Ok(Value::Bool(n % 2 != 0)),
+                            "toFloat"        => Ok(Value::Float(n as f64)),
+                            "toDouble"       => Ok(Value::Float(n as f64)),
+                            "min" => {
+                                if args.len() != 1 { return err!("min() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(o) => Ok(Value::Int(n.min(*o))),
+                                    _ => err!("min() requiert un int"),
+                                }
+                            }
+                            "max" => {
+                                if args.len() != 1 { return err!("max() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(o) => Ok(Value::Int(n.max(*o))),
+                                    _ => err!("max() requiert un int"),
+                                }
+                            }
+                            "pow" => {
+                                if args.len() != 1 { return err!("pow() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(e) if *e >= 0 => Ok(Value::Int(i64::pow(n, *e as u32))),
+                                    Value::Int(e) => err!("pow() : exposant négatif {}", e),
+                                    _ => err!("pow() requiert un int"),
+                                }
+                            }
+                            "compareTo" => {
+                                if args.len() != 1 { return err!("compareTo() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(o) => Ok(Value::Int(n.cmp(o) as i64)),
+                                    _ => err!("compareTo() requiert un int"),
+                                }
+                            }
+                            "equals" => {
+                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(o) => Ok(Value::Bool(n == *o)),
+                                    _ => err!("equals() requiert un int"),
+                                }
+                            }
+                            _ => err!("Méthode inconnue '{}' sur int", method),
+                        }
+                    }
+                    Value::Float(f) => {
+                        match method.as_str() {
+                            "toString"   => Ok(Value::Str(f.to_string())),
+                            "abs"        => Ok(Value::Float(f.abs())),
+                            "floor"      => Ok(Value::Float(f.floor())),
+                            "ceil"       => Ok(Value::Float(f.ceil())),
+                            "round"      => Ok(Value::Float(f.round())),
+                            "isPositive" => Ok(Value::Bool(f > 0.0)),
+                            "isNegative" => Ok(Value::Bool(f < 0.0)),
+                            "isNaN"      => Ok(Value::Bool(f.is_nan())),
+                            "toInt"      => Ok(Value::Int(f as i64)),
+                            "toFloat"    => Ok(Value::Float(f)),
+                            "toDouble"   => Ok(Value::Float(f)),
+                            "min" => {
+                                if args.len() != 1 { return err!("min() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Float(o) => Ok(Value::Float(f.min(*o))),
+                                    _ => err!("min() requiert un float/double"),
+                                }
+                            }
+                            "max" => {
+                                if args.len() != 1 { return err!("max() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Float(o) => Ok(Value::Float(f.max(*o))),
+                                    _ => err!("max() requiert un float/double"),
+                                }
+                            }
+                            "equals" => {
+                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Float(o) => Ok(Value::Bool((f - o).abs() < 1e-12)),
+                                    _ => err!("equals() requiert un float/double"),
+                                }
+                            }
+                            _ => err!("Méthode inconnue '{}' sur float/double", method),
+                        }
+                    }
                     _ => err!("Appel de méthode sur non-objet"),
                 }
             }

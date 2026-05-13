@@ -1,0 +1,46 @@
+// ── Bibliothèque standard – Float ────────────────────────────────────────────
+//  Méthodes sur le type primitif float.
+//  Appel : f.abs(), f.floor(), etc.
+//  Accessible sans import dans tout fichier minilang.
+
+class Float {
+
+    // Retourne la représentation décimale.
+    string toString() builtin;
+
+    // Retourne la valeur absolue.
+    float abs() builtin;
+
+    // Retourne l'entier inférieur ou égal (arrondi vers -∞).
+    float floor() builtin;
+
+    // Retourne l'entier supérieur ou égal (arrondi vers +∞).
+    float ceil() builtin;
+
+    // Retourne l'arrondi au plus proche.
+    float round() builtin;
+
+    // Retourne true si this > 0.
+    bool isPositive() builtin;
+
+    // Retourne true si this < 0.
+    bool isNegative() builtin;
+
+    // Retourne true si this est NaN.
+    bool isNaN() builtin;
+
+    // Retourne le minimum entre this et other.
+    float min(float other) builtin;
+
+    // Retourne le maximum entre this et other.
+    float max(float other) builtin;
+
+    // Tronque vers zéro et retourne un int.
+    int toInt() builtin;
+
+    // Convertit en double.
+    double toDouble() builtin;
+
+    // Retourne true si les deux valeurs sont égales.
+    bool equals(float other) builtin;
+}

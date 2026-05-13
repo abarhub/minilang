@@ -1,0 +1,52 @@
+// ── Bibliothèque standard – Integer ──────────────────────────────────────────
+//  Méthodes sur le type primitif int.
+//  Appel : n.abs(), n.toString(), etc.
+//  Accessible sans import dans tout fichier minilang.
+
+class Integer {
+
+    // Retourne la représentation décimale.
+    string toString() builtin;
+
+    // Retourne la représentation binaire (ex. "1010").
+    string toBinaryString() builtin;
+
+    // Retourne la valeur absolue.
+    int abs() builtin;
+
+    // Retourne le minimum entre this et other.
+    int min(int other) builtin;
+
+    // Retourne le maximum entre this et other.
+    int max(int other) builtin;
+
+    // Retourne this élevé à la puissance exp (exp >= 0).
+    int pow(int exp) builtin;
+
+    // Retourne true si this > 0.
+    bool isPositive() builtin;
+
+    // Retourne true si this < 0.
+    bool isNegative() builtin;
+
+    // Retourne true si this == 0.
+    bool isZero() builtin;
+
+    // Retourne true si this est pair.
+    bool isEven() builtin;
+
+    // Retourne true si this est impair.
+    bool isOdd() builtin;
+
+    // Convertit en float.
+    float toFloat() builtin;
+
+    // Convertit en double.
+    double toDouble() builtin;
+
+    // Retourne -1, 0 ou 1 selon que this est <, == ou > other.
+    int compareTo(int other) builtin;
+
+    // Retourne true si les deux entiers sont égaux.
+    bool equals(int other) builtin;
+}
