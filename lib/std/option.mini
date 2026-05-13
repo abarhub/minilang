@@ -1,0 +1,33 @@
+// ── Bibliothèque standard – Option<T> ────────────────────────────────────────
+//  Représente une valeur optionnelle : soit Some(valeur), soit None.
+//  Accessible sans import dans tout fichier minilang.
+
+enum Option<T> {
+    Some(T value),
+    None;
+
+    // Retourne la valeur encapsulée.
+    // Lève une erreur d'exécution si appelé sur None.
+    T get() {
+        match this {
+            Option::Some(v) => { return v; }
+            Option::None    => { panic("get() appelé sur None"); }
+        }
+    }
+
+    // Retourne true si this est Some.
+    bool isSome() {
+        match this {
+            Option::Some(v) => { return true; }
+            Option::None    => { return false; }
+        }
+    }
+
+    // Retourne true si this est None.
+    bool isNone() {
+        match this {
+            Option::Some(v) => { return false; }
+            Option::None    => { return true; }
+        }
+    }
+}

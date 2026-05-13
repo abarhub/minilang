@@ -251,5 +251,13 @@ fn fmt_expr(e: &Expr) -> String {
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
             format!("{}({})", fmt_expr(callee), a.join(", "))
         }
+        Expr::SafeFieldAccess { object, field } =>
+            format!("{}?.{}", fmt_expr(object), field),
+        Expr::SafeMethodCall { object, method, args } => {
+            let a: Vec<String> = args.iter().map(fmt_expr).collect();
+            format!("{}?.{}({})", fmt_expr(object), method, a.join(", "))
+        }
+        Expr::NullCoalesce { expr, default } =>
+            format!("({} ?? {})", fmt_expr(expr), fmt_expr(default)),
     }
 }

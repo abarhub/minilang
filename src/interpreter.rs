@@ -459,6 +459,12 @@ impl Interpreter {
                         return self.call_method(&m, args, rc);
                     }
                 }
+                if name == "panic" {
+                    let msg = args.into_iter().next()
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "panic".to_string());
+                    return err!("{}", msg);
+                }
                 err!("Fonction inconnue '{}'", name)
             }
 
@@ -497,6 +503,78 @@ impl Interpreter {
                     enum_name: enum_name.clone(), variant_name: variant.clone(),
                     fields, field_order,
                 })))
+            }
+
+            // ── Navigation sûre : ?.field et ?.method() ──────────────────────
+
+            Expr::SafeFieldAccess { object, field } => {
+                let v = self.eval(object, env, this)?;
+                match v {
+                    Value::Enum(ref ed) if ed.enum_name == "Option" => {
+                        if ed.variant_name == "None" { return Ok(make_none()); }
+                        let inner = ed.fields.get("value")
+                            .ok_or_else(|| RuntimeError("Option::Some sans champ 'value'".into()))?.clone();
+                        match inner {
+                            Value::Object(rc) => {
+                                let fv = rc.borrow().fields.get(field).cloned()
+                                    .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field)))?;
+                                Ok(make_some(fv))
+                            }
+                            _ => err!("?. : la valeur dans Some n'est pas un objet"),
+                        }
+                    }
+                    _ => err!("?. requiert une valeur Option"),
+                }
+            }
+
+            Expr::SafeMethodCall { object, method, args } => {
+                let v = self.eval(object, env, this.clone())?;
+                let eargs: Vec<Value> = args.iter()
+                    .map(|a| self.eval(a, env, this.clone()))
+                    .collect::<Result<_, _>>()?;
+                match v {
+                    Value::Enum(ref ed) if ed.enum_name == "Option" => {
+                        if ed.variant_name == "None" { return Ok(make_none()); }
+                        let inner = ed.fields.get("value")
+                            .ok_or_else(|| RuntimeError("Option::Some sans champ 'value'".into()))?.clone();
+                        let result = match inner {
+                            Value::Object(rc) => {
+                                let cn = rc.borrow().class_name.clone();
+                                let m = self.find_method(&cn, method)
+                                    .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}'", method)))?;
+                                self.call_method(&m, eargs, rc)?
+                            }
+                            Value::Enum(inner_ed) => {
+                                let en = inner_ed.enum_name.clone();
+                                let m = self.find_method(&en, method)
+                                    .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}'", method)))?;
+                                self.call_enum_method(&m, eargs, inner_ed)?
+                            }
+                            _ => return err!("?. : la valeur dans Some n'est pas un objet"),
+                        };
+                        Ok(make_some(result))
+                    }
+                    _ => err!("?. requiert une valeur Option"),
+                }
+            }
+
+            // ── Null coalescing : expr ?? default ─────────────────────────────
+
+            Expr::NullCoalesce { expr, default } => {
+                let v = self.eval(expr, env, this.clone())?;
+                match &v {
+                    Value::Enum(ed) if ed.enum_name == "Option"
+                        && ed.variant_name == "None" =>
+                    {
+                        self.eval(default, env, this)
+                    }
+                    Value::Enum(ed) if ed.enum_name == "Option"
+                        && ed.variant_name == "Some" =>
+                    {
+                        Ok(ed.fields.get("value").cloned().unwrap_or(Value::Null))
+                    }
+                    _ => Ok(v),
+                }
             }
 
             // ── Lambda — crée une fermeture avec capture lexicale ─────────────
@@ -600,6 +678,24 @@ impl Interpreter {
     }
 }
 
+// ── Helpers Option ────────────────────────────────────────────────────────────
+
+fn make_none() -> Value {
+    Value::Enum(Rc::new(EnumData {
+        enum_name: "Option".to_string(), variant_name: "None".to_string(),
+        fields: HashMap::new(), field_order: vec![],
+    }))
+}
+
+fn make_some(v: Value) -> Value {
+    let mut fields = HashMap::new();
+    fields.insert("value".to_string(), v);
+    Value::Enum(Rc::new(EnumData {
+        enum_name: "Option".to_string(), variant_name: "Some".to_string(),
+        fields, field_order: vec!["value".to_string()],
+    }))
+}
+
 // ── Opérateurs binaires ───────────────────────────────────────────────────────
 
 fn promote(l: Value, r: Value) -> (Value, Value) {
@@ -695,8 +791,9 @@ fn val_eq(a: &Value, b: &Value) -> bool {
 
 pub fn run_source(src: &str) -> Result<i64, String> {
     use chumsky::Parser;
+    let full = format!("{}\n{}", crate::STDLIB, src);
     let program = crate::parser::program_parser()
-        .parse(src)
+        .parse(full.as_str())
         .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n"))?;
     Interpreter::new(&program).run(&program).map_err(|e| e.to_string())
 }

@@ -555,6 +555,10 @@ impl TypeChecker {
                     for a in args { self.infer(a, env); }
                     return Ok(Type::Void);
                 }
+                if name == "panic" {
+                    for a in args { self.infer(a, env); }
+                    return Ok(Type::Void);
+                }
 
                 // Lambda dans une variable locale (typée ou non)
                 if let Some(ty) = env.get(name).cloned().map(|t| self.resolve(&t)) {
@@ -665,6 +669,62 @@ impl TypeChecker {
                 }
                 if type_args.is_empty() { Ok(Type::UserDefined(enum_name.clone())) }
                 else { Ok(Type::Generic(enum_name.clone(), type_args.clone())) }
+            }
+
+            // ── Navigation sûre  ?.field  et  ?.method() ─────────────────────
+
+            Expr::SafeFieldAccess { object, field } => {
+                let ot = self.infer_expr(object, env)?;
+                let ot = self.resolve(&ot);
+                let inner = match &ot {
+                    Type::Generic(n, args) if n == "Option" && args.len() == 1 => args[0].clone(),
+                    _ => return type_err!("?. requiert Option<T>, trouvé {}", ot),
+                };
+                let ft = self.find_field_type(&inner, field)
+                    .ok_or_else(|| TypeError(format!("Champ inconnu '{}'", field)))?;
+                Ok(Type::Generic("Option".to_string(), vec![ft]))
+            }
+
+            Expr::SafeMethodCall { object, method, args } => {
+                let ot = self.infer_expr(object, env)?;
+                let ot = self.resolve(&ot);
+                let inner = match &ot {
+                    Type::Generic(n, ta) if n == "Option" && ta.len() == 1 => ta[0].clone(),
+                    _ => return type_err!("?. requiert Option<T>, trouvé {}", ot),
+                };
+                let (ptys, rty, subst) = self.resolve_method(&inner, method)?;
+                if args.len() != ptys.len() {
+                    return type_err!("{}() : {} arg(s) attendus, {} fournis",
+                        method, ptys.len(), args.len());
+                }
+                for (arg, pt) in args.iter().zip(ptys.iter()) {
+                    if let Some(at) = self.infer(arg, env) {
+                        let expected = substitute(pt, &subst);
+                        if !self.is_compatible(&at, &expected) {
+                            self.err(format!("Arg de {}() : type incompatible {} ≠ {}", method, at, expected));
+                        }
+                    }
+                }
+                Ok(Type::Generic("Option".to_string(), vec![substitute(&rty, &subst)]))
+            }
+
+            // ── Null coalescing  expr ?? default ─────────────────────────────
+
+            Expr::NullCoalesce { expr, default } => {
+                let et = self.infer_expr(expr, env)?;
+                let et = self.resolve(&et);
+                let dt = self.infer_expr(default, env)?;
+                match &et {
+                    Type::Generic(n, args) if n == "Option" && args.len() == 1 => {
+                        if !self.is_compatible(&dt, &args[0]) {
+                            self.err(format!(
+                                "?? : valeur par défaut {} incompatible avec Option<{}>",
+                                dt, args[0]));
+                        }
+                        Ok(args[0].clone())
+                    }
+                    _ => type_err!("?? requiert Option<T> à gauche, trouvé {}", et),
+                }
             }
 
             // ── Lambda non annotée : sentinelle Type::Fn ──────────────────────
@@ -880,8 +940,9 @@ impl TypeChecker {
 
 pub fn check_source(src: &str) -> Result<(), Vec<String>> {
     use chumsky::Parser;
+    let full = format!("{}\n{}", crate::STDLIB, src);
     let program = crate::parser::program_parser()
-        .parse(src)
+        .parse(full.as_str())
         .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>())?;
     let errors = TypeChecker::new(&program).check(&program);
     if errors.is_empty() { Ok(()) }

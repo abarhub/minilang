@@ -104,6 +104,12 @@ pub enum Expr {
     EnumConstructor { enum_name: String, type_args: Vec<Type>, variant: String, args: Vec<Expr> },
     Lambda          { params: Vec<String>, body: LambdaBody },
     LambdaCall      { callee: Box<Expr>, args: Vec<Expr> },
+    /// `expr?.field`  — renvoie Option<FieldType>
+    SafeFieldAccess { object: Box<Expr>, field: String },
+    /// `expr?.method(args)` — renvoie Option<ReturnType>
+    SafeMethodCall  { object: Box<Expr>, method: String, args: Vec<Expr> },
+    /// `expr ?? default` — déwrappe ou retourne default
+    NullCoalesce    { expr: Box<Expr>, default: Box<Expr> },
 }
 
 // ── Pattern pour match ────────────────────────────────────────────────────────
