@@ -766,3 +766,222 @@ fn interp_enum_generic_pair() {
         }
     "#), 10);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STDLIB  Option<T>  –  T?  /  ??  /  ?.  /  .get()  /  .isSome()  /  .isNone()
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Syntaxe T? ───────────────────────────────────────────────────────────────
+
+#[test]
+fn parse_optional_type_sugar() {
+    parses_ok("int main() { int? x = Option<int>::Some(1); return 0; }");
+}
+
+#[test]
+fn parse_optional_string() {
+    parses_ok(r#"int main() { string? s = Option<string>::Some("ok"); return 0; }"#);
+}
+
+#[test]
+fn tc_optional_type_ok() {
+    assert_tc_ok(r#"
+        int main() {
+            int? x = Option<int>::Some(42);
+            int? y = Option<int>::None;
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_optional_type_wrong_inner() {
+    assert_tc_err(r#"
+        int main() {
+            int? x = Option<int>::Some(true);
+            return 0;
+        }
+    "#, "incompatible");
+}
+
+// ── .get() ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn interp_get_on_some() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int? x = Option<int>::Some(42);
+            return x.get();
+        }
+    "#), 42);
+}
+
+#[test]
+fn interp_get_on_none_panics() {
+    run_fails(r#"
+        int main() {
+            int? x = Option<int>::None;
+            return x.get();
+        }
+    "#);
+}
+
+// ── .isSome() / .isNone() ─────────────────────────────────────────────────────
+
+#[test]
+fn interp_is_some_true() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int? x = Option<int>::Some(1);
+            if (x.isSome()) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn interp_is_some_false() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int? x = Option<int>::None;
+            if (x.isSome()) { return 1; }
+            return 0;
+        }
+    "#), 0);
+}
+
+#[test]
+fn interp_is_none_true() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int? x = Option<int>::None;
+            if (x.isNone()) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+// ── Opérateur ?? ─────────────────────────────────────────────────────────────
+
+#[test]
+fn parse_null_coalescing() {
+    parses_ok("int main() { int? x = Option<int>::None; int v = x ?? 0; return v; }");
+}
+
+#[test]
+fn tc_null_coalescing_ok() {
+    assert_tc_ok(r#"
+        int main() {
+            int? x = Option<int>::Some(5);
+            int v = x ?? 0;
+            return v;
+        }
+    "#);
+}
+
+#[test]
+fn tc_null_coalescing_wrong_default() {
+    assert_tc_err(r#"
+        int main() {
+            int? x = Option<int>::Some(5);
+            int v = x ?? true;
+            return 0;
+        }
+    "#, "incompatible");
+}
+
+#[test]
+fn interp_null_coalescing_some() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int? x = Option<int>::Some(7);
+            return x ?? 0;
+        }
+    "#), 7);
+}
+
+#[test]
+fn interp_null_coalescing_none() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int? x = Option<int>::None;
+            return x ?? 42;
+        }
+    "#), 42);
+}
+
+// ── Opérateur ?. ─────────────────────────────────────────────────────────────
+
+#[test]
+fn parse_safe_method_call() {
+    parses_ok(r#"
+        class Box { int val; Box(int v) { this.val = v; } int value() { return this.val; } }
+        int main() {
+            Box? b = Option<Box>::Some(new Box(5));
+            int? v = b?.value();
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_safe_method_call_ok() {
+    assert_tc_ok(r#"
+        class Num { int n; Num(int v) { this.n = v; } int get() { return this.n; } }
+        int main() {
+            Num? x = Option<Num>::Some(new Num(3));
+            int? v = x?.get();
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn interp_safe_method_some() {
+    assert_eq!(run_ok(r#"
+        class Num { int n; Num(int v) { this.n = v; } int double() { return this.n * 2; } }
+        int main() {
+            Num? x = Option<Num>::Some(new Num(5));
+            int? v = x?.double();
+            return v ?? 0;
+        }
+    "#), 10);
+}
+
+#[test]
+fn interp_safe_method_none() {
+    assert_eq!(run_ok(r#"
+        class Num { int n; Num(int v) { this.n = v; } int double() { return this.n * 2; } }
+        int main() {
+            Num? x = Option<Num>::None;
+            int? v = x?.double();
+            return v ?? 99;
+        }
+    "#), 99);
+}
+
+// ── Chaîne  ?.  +  ?? ────────────────────────────────────────────────────────
+
+#[test]
+fn interp_chain_safe_call_and_coalesce() {
+    assert_eq!(run_ok(r#"
+        class Counter { int n; Counter(int v) { this.n = v; } int inc() { return this.n + 1; } }
+        int main() {
+            Counter? c = Option<Counter>::Some(new Counter(9));
+            int result = (c?.inc()) ?? 0;
+            return result;
+        }
+    "#), 10);
+}
+
+#[test]
+fn interp_chain_none_coalesce() {
+    assert_eq!(run_ok(r#"
+        class Counter { int n; Counter(int v) { this.n = v; } int inc() { return this.n + 1; } }
+        int main() {
+            Counter? c = Option<Counter>::None;
+            int result = (c?.inc()) ?? 0;
+            return result;
+        }
+    "#), 0);
+}

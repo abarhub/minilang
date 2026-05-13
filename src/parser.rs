@@ -67,7 +67,11 @@ fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
         base.then(
             just('[').padded_by(ws()).then(just(']').padded_by(ws())).repeated()
         )
-        .map(|(t, v)| v.into_iter().fold(t, |acc, _| Type::Array(Box::new(acc))))
+        .then(just('?').padded_by(ws()).or_not())
+        .map(|((t, v), opt)| {
+            let t = v.into_iter().fold(t, |acc, _| Type::Array(Box::new(acc)));
+            if opt.is_some() { Type::Generic("Option".to_string(), vec![t]) } else { t }
+        })
     })
 }
 
@@ -194,9 +198,20 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             paren_or_call,
         ));
 
-        // Postfix : .field  .method(args)
+        // Postfix : .field  .method(args)  ?.field  ?.method(args)
         #[derive(Clone)]
-        enum Postfix { Field(String), Method(String, Vec<Expr>) }
+        enum Postfix {
+            Field(String), Method(String, Vec<Expr>),
+            SafeField(String), SafeMethod(String, Vec<Expr>),
+        }
+
+        let safe_postfix_op = just("?.").padded_by(ws())
+            .ignore_then(text::ident().padded_by(ws()))
+            .then(call_args.clone().or_not())
+            .map(|(name, args)| match args {
+                Some(a) => Postfix::SafeMethod(name, a),
+                None    => Postfix::SafeField(name),
+            });
 
         let postfix_op = just('.').padded_by(ws())
             .ignore_then(text::ident().padded_by(ws()))
@@ -207,10 +222,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             });
 
         let postfix = atom
-            .then(postfix_op.repeated())
+            .then(safe_postfix_op.or(postfix_op).repeated())
             .foldl(|obj, pf| match pf {
-                Postfix::Field(f)     => Expr::FieldAccess { object: Box::new(obj), field: f },
-                Postfix::Method(m, a) => Expr::MethodCall  { object: Box::new(obj), method: m, args: a },
+                Postfix::Field(f)        => Expr::FieldAccess      { object: Box::new(obj), field: f },
+                Postfix::Method(m, a)    => Expr::MethodCall       { object: Box::new(obj), method: m, args: a },
+                Postfix::SafeField(f)    => Expr::SafeFieldAccess  { object: Box::new(obj), field: f },
+                Postfix::SafeMethod(m,a) => Expr::SafeMethodCall   { object: Box::new(obj), method: m, args: a },
             });
 
         // Hiérarchie arithmétique / logique
@@ -285,7 +302,15 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(lambda_body_p)
             .map(|(p, body)| { debug!("λ(1)"); Expr::Lambda { params: vec![p], body } });
 
-        choice((lambda_multi, lambda_single, arith)).boxed()
+        // `??` — null coalescing (priorité inférieure à ||, supérieure aux lambdas)
+        let null_coal = arith.clone()
+            .then(just("??").padded_by(ws()).ignore_then(arith.clone()).or_not())
+            .map(|(e, d)| match d {
+                None      => e,
+                Some(def) => Expr::NullCoalesce { expr: Box::new(e), default: Box::new(def) },
+            });
+
+        choice((lambda_multi, lambda_single, null_coal)).boxed()
     }).boxed();
 
     // ── Type primitif pour les déclarations de variable ───────────────────────
@@ -299,7 +324,11 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         kw("double").to(Type::Double),
     ))
     .then(just('[').padded_by(ws()).then(just(']').padded_by(ws())).repeated())
-    .map(|(t, v)| v.into_iter().fold(t, |acc, _| Type::Array(Box::new(acc))));
+    .then(just('?').padded_by(ws()).or_not())
+    .map(|((t, v), opt)| {
+        let t = v.into_iter().fold(t, |acc, _| Type::Array(Box::new(acc)));
+        if opt.is_some() { Type::Generic("Option".to_string(), vec![t]) } else { t }
+    });
 
     // ── Instructions ──────────────────────────────────────────────────────────
 

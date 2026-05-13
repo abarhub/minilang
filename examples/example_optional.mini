@@ -1,0 +1,83 @@
+// ──────────────────────────────────────────────────────────────
+//  Exemple – type optionnel T? / ?? / ?.
+//  Option<T> est fourni par la stdlib (pas besoin d'import).
+// ──────────────────────────────────────────────────────────────
+
+class User {
+    string name;
+    int    age;
+
+    User(string n, int a) {
+        this.name = n;
+        this.age  = a;
+    }
+
+    string greet() {
+        return "Bonjour " + this.name;
+    }
+
+    int nextAge() {
+        return this.age + 1;
+    }
+}
+
+// Simule une recherche : retourne un User? selon l'id
+User? findUser(int id) {
+    if (id == 1) { return Option<User>::Some(new User("Alice", 30)); }
+    if (id == 2) { return Option<User>::Some(new User("Bob",   25)); }
+    return Option<User>::None;
+}
+
+int main() {
+
+    // ── T? : déclaration d'un type optionnel ─────────────────
+    int?    maybe_int    = Option<int>::Some(42);
+    string? maybe_str    = Option<string>::Some("bonjour");
+    int?    absent_int   = Option<int>::None;
+
+    // ── .isSome() / .isNone() ────────────────────────────────
+    if (maybe_int.isSome())  { print("maybe_int est present"); }
+    if (absent_int.isNone()) { print("absent_int est absent"); }
+
+    // ── .get() : récupère la valeur (erreur si None) ─────────
+    int v = maybe_int.get();
+    print("valeur :", v);
+
+    // ── ?? : valeur par défaut si None ───────────────────────
+    int a = maybe_int  ?? 0;   // Some(42) → 42
+    int b = absent_int ?? 99;  // None     → 99
+    print("a =", a);
+    print("b =", b);
+
+    string s = maybe_str ?? "inconnu";
+    print("s =", s);
+
+    // ── ?. : appel de méthode sûr ────────────────────────────
+    User? u1 = findUser(1);   // Some(Alice)
+    User? u2 = findUser(99);  // None
+
+    // u1?.greet() → Some("Bonjour Alice")
+    // u2?.greet() → None
+    string? msg1 = u1?.greet();
+    string? msg2 = u2?.greet();
+
+    string greeting1 = msg1 ?? "personne";
+    string greeting2 = msg2 ?? "personne";
+    print(greeting1);
+    print(greeting2);
+
+    // ── Chaîne ?. + ?? ───────────────────────────────────────
+    int age1 = (u1?.nextAge()) ?? 0;   // Some(31) → 31
+    int age2 = (u2?.nextAge()) ?? 0;   // None     → 0
+    print("age1 =", age1);
+    print("age2 =", age2);
+
+    // ── match sur Option<T> ───────────────────────────────────
+    User? u3 = findUser(2);
+    match u3 {
+        Option::Some(user) => { print("trouvé :", user.name); }
+        Option::None       => { print("non trouvé"); }
+    }
+
+    return 0;
+}
