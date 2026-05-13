@@ -1,0 +1,22 @@
+// ── Bibliothèque standard – Boolean ──────────────────────────────────────────
+//  Méthodes sur le type primitif bool.
+//  Appel : b.toString(), b.and(other), etc.
+//  Accessible sans import dans tout fichier minilang.
+
+class Boolean {
+
+    // Retourne "true" ou "false".
+    string toString() builtin;
+
+    // Retourne true si les deux booléens sont égaux.
+    bool equals(bool other) builtin;
+
+    // Retourne la conjonction logique (this && other).
+    bool and(bool other) builtin;
+
+    // Retourne la disjonction logique (this || other).
+    bool or(bool other) builtin;
+
+    // Retourne la négation logique (!this).
+    bool not() builtin;
+}
