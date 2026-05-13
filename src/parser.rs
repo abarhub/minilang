@@ -530,6 +530,10 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     let body = stmt.clone().repeated()
         .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()));
 
+    // Corps de méthode : bloc normal  OU  `builtin;`  (implémentation native)
+    let method_body = body.clone()
+        .or(kw("builtin").then_ignore(just(';').padded_by(ws())).to(vec![Stmt::Builtin]));
+
     // ── Membres de classe ─────────────────────────────────────────────────────
 
     enum CM { F(Field), C(Constructor), M(Method) }
@@ -543,7 +547,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         let method = ty.clone()
             .then(text::ident().padded_by(ws()))
             .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
-            .then(body.clone())
+            .then(method_body.clone())
             .map(|(((rt, n), p), b)| CM::M(Method { return_type: rt, name: n, params: p, body: b }));
 
         let field = ty.clone()
@@ -567,7 +571,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     let enum_method = ty.clone()
         .then(text::ident().padded_by(ws()))
         .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
-        .then(body.clone())
+        .then(method_body.clone())
         .map(|(((rt, n), p), b)| Method { return_type: rt, name: n, params: p, body: b });
 
     let enum_type_params = text::ident().padded_by(ws())
