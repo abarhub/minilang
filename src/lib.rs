@@ -10,5 +10,7 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/result.mini"), "\n",
     include_str!("../lib/std/either.mini"), "\n",
     include_str!("../lib/std/pair.mini"),   "\n",
-    include_str!("../lib/std/array.mini"),
+    include_str!("../lib/std/array.mini"),  "\n",
+    include_str!("../lib/std/string.mini"), "\n",
+    include_str!("../lib/std/character.mini"),
 );

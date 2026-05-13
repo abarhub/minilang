@@ -507,6 +507,120 @@ impl Interpreter {
                             _ => err!("Méthode inconnue '{}' sur Array", method),
                         }
                     }
+                    Value::Str(ref s) => {
+                        match method.as_str() {
+                            "length" => Ok(Value::Int(s.chars().count() as i64)),
+                            "isEmpty" => Ok(Value::Bool(s.is_empty())),
+                            "charAt" => {
+                                if args.len() != 1 { return err!("charAt() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(i) => {
+                                        let i = *i as usize;
+                                        s.chars().nth(i)
+                                            .map(Value::Char)
+                                            .ok_or_else(|| RuntimeError(format!("charAt(): index {} hors bornes", i)))
+                                    }
+                                    _ => err!("charAt() requiert un int"),
+                                }
+                            }
+                            "contains" => {
+                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Str(sub) => Ok(Value::Bool(s.contains(sub.as_str()))),
+                                    _ => err!("contains() requiert une string"),
+                                }
+                            }
+                            "substring" => {
+                                if args.len() != 2 { return err!("substring() attend 2 arguments"); }
+                                match (&args[0], &args[1]) {
+                                    (Value::Int(start), Value::Int(end)) => {
+                                        let start = *start as usize;
+                                        let end   = *end   as usize;
+                                        let chars: Vec<char> = s.chars().collect();
+                                        if start > chars.len() || end > chars.len() || start > end {
+                                            return err!("substring({}, {}): indices invalides (len={})", start, end, chars.len());
+                                        }
+                                        Ok(Value::Str(chars[start..end].iter().collect()))
+                                    }
+                                    _ => err!("substring() requiert deux int"),
+                                }
+                            }
+                            "toUpperCase" => Ok(Value::Str(s.to_uppercase())),
+                            "toLowerCase" => Ok(Value::Str(s.to_lowercase())),
+                            "startsWith" => {
+                                if args.len() != 1 { return err!("startsWith() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Str(prefix) => Ok(Value::Bool(s.starts_with(prefix.as_str()))),
+                                    _ => err!("startsWith() requiert une string"),
+                                }
+                            }
+                            "endsWith" => {
+                                if args.len() != 1 { return err!("endsWith() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Str(suffix) => Ok(Value::Bool(s.ends_with(suffix.as_str()))),
+                                    _ => err!("endsWith() requiert une string"),
+                                }
+                            }
+                            "indexOf" => {
+                                if args.len() != 1 { return err!("indexOf() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Str(needle) => {
+                                        let idx = s.find(needle.as_str())
+                                            .map(|b| s[..b].chars().count() as i64)
+                                            .unwrap_or(-1);
+                                        Ok(Value::Int(idx))
+                                    }
+                                    _ => err!("indexOf() requiert une string"),
+                                }
+                            }
+                            "trim" => Ok(Value::Str(s.trim().to_string())),
+                            "replace" => {
+                                if args.len() != 2 { return err!("replace() attend 2 arguments"); }
+                                match (&args[0], &args[1]) {
+                                    (Value::Str(old), Value::Str(new)) => {
+                                        Ok(Value::Str(s.replace(old.as_str(), new.as_str())))
+                                    }
+                                    _ => err!("replace() requiert deux string"),
+                                }
+                            }
+                            "equals" => {
+                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Str(other) => Ok(Value::Bool(s == other)),
+                                    _ => err!("equals() requiert une string"),
+                                }
+                            }
+                            "split" => {
+                                if args.len() != 1 { return err!("split() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Str(sep) => {
+                                        let parts: Vec<Value> = if sep.is_empty() {
+                                            s.chars().map(|c| Value::Str(c.to_string())).collect()
+                                        } else {
+                                            s.split(sep.as_str()).map(|p| Value::Str(p.to_string())).collect()
+                                        };
+                                        Ok(Value::Array(Rc::new(RefCell::new(parts))))
+                                    }
+                                    _ => err!("split() requiert une string"),
+                                }
+                            }
+                            _ => err!("Méthode inconnue '{}' sur string", method),
+                        }
+                    }
+                    Value::Char(c) => {
+                        match method.as_str() {
+                            "isLetter"    => Ok(Value::Bool(c.is_alphabetic())),
+                            "isDigit"     => Ok(Value::Bool(c.is_ascii_digit())),
+                            "isWhitespace"=> Ok(Value::Bool(c.is_whitespace())),
+                            "isUpperCase" => Ok(Value::Bool(c.is_uppercase())),
+                            "isLowerCase" => Ok(Value::Bool(c.is_lowercase())),
+                            "toUpperCase" => Ok(Value::Char(c.to_uppercase().next().unwrap_or(c))),
+                            "toLowerCase" => Ok(Value::Char(c.to_lowercase().next().unwrap_or(c))),
+                            "toInt"       => Ok(Value::Int(c as i64)),
+                            "toString"    => Ok(Value::Str(c.to_string())),
+                            _ => err!("Méthode inconnue '{}' sur char", method),
+                        }
+                    }
                     _ => err!("Appel de méthode sur non-objet"),
                 }
             }

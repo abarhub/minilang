@@ -1,0 +1,34 @@
+// ── Bibliothèque standard – Character ────────────────────────────────────────
+//  Méthodes sur le type primitif char.
+//  Appel : c.isLetter(), c.toUpperCase(), etc.
+//  Accessible sans import dans tout fichier minilang.
+
+class Character {
+
+    // Retourne true si le caractère est une lettre.
+    bool isLetter() builtin;
+
+    // Retourne true si le caractère est un chiffre (0–9).
+    bool isDigit() builtin;
+
+    // Retourne true si le caractère est un espace, tabulation ou saut de ligne.
+    bool isWhitespace() builtin;
+
+    // Retourne true si le caractère est une lettre majuscule.
+    bool isUpperCase() builtin;
+
+    // Retourne true si le caractère est une lettre minuscule.
+    bool isLowerCase() builtin;
+
+    // Retourne la version majuscule du caractère.
+    char toUpperCase() builtin;
+
+    // Retourne la version minuscule du caractère.
+    char toLowerCase() builtin;
+
+    // Retourne la valeur Unicode (code point) du caractère.
+    int toInt() builtin;
+
+    // Retourne le caractère converti en chaîne d'un caractère.
+    string toString() builtin;
+}
