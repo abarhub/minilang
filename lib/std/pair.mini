@@ -1,0 +1,21 @@
+// ── Bibliothèque standard – Pair<A, B> ───────────────────────────────────────
+//  Représente une paire de deux valeurs de types potentiellement différents.
+//  Accessible sans import dans tout fichier minilang.
+
+enum Pair<A, B> {
+    Of(A first, B second);
+
+    // Retourne le premier élément de la paire.
+    A getFirst() {
+        match this {
+            Pair::Of(f, s) => { return f; }
+        }
+    }
+
+    // Retourne le second élément de la paire.
+    B getSecond() {
+        match this {
+            Pair::Of(f, s) => { return s; }
+        }
+    }
+}
