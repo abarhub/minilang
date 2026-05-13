@@ -1,0 +1,50 @@
+// ── Bibliothèque standard – String ───────────────────────────────────────────
+//  Méthodes sur le type primitif string.
+//  Appel : s.length(), s.toUpperCase(), etc.
+//  Accessible sans import dans tout fichier minilang.
+
+class String {
+
+    // Retourne le nombre de caractères.
+    int length() builtin;
+
+    // Retourne true si la chaîne est vide.
+    bool isEmpty() builtin;
+
+    // Retourne le caractère à l'index donné (0-based).
+    // Lève une erreur si index hors bornes.
+    char charAt(int index) builtin;
+
+    // Retourne true si la chaîne contient la sous-chaîne donnée.
+    bool contains(string s) builtin;
+
+    // Retourne la sous-chaîne de [start, end[ (end exclusif).
+    string substring(int start, int end) builtin;
+
+    // Retourne la chaîne en majuscules.
+    string toUpperCase() builtin;
+
+    // Retourne la chaîne en minuscules.
+    string toLowerCase() builtin;
+
+    // Retourne true si la chaîne commence par le préfixe donné.
+    bool startsWith(string prefix) builtin;
+
+    // Retourne true si la chaîne se termine par le suffixe donné.
+    bool endsWith(string suffix) builtin;
+
+    // Retourne l'index de la première occurrence, ou -1 si absent.
+    int indexOf(string s) builtin;
+
+    // Retourne la chaîne sans espaces en début et fin.
+    string trim() builtin;
+
+    // Remplace toutes les occurrences de old par replacement.
+    string replace(string old, string replacement) builtin;
+
+    // Retourne true si les deux chaînes sont égales.
+    bool equals(string other) builtin;
+
+    // Découpe la chaîne selon le séparateur et retourne un tableau.
+    string[] split(string separator) builtin;
+}

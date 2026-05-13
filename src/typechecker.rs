@@ -928,6 +928,8 @@ impl TypeChecker {
             Type::UserDefined(n)   => (n.clone(), vec![]),
             Type::Generic(n, args) => (n.clone(), args.clone()),
             Type::Array(inner)     => ("Array".to_string(), vec![*inner.clone()]),
+            Type::Str              => ("String".to_string(), vec![]),
+            Type::Char             => ("Character".to_string(), vec![]),
             _ => return type_err!("Appel '{}' sur type non-objet {}", method, obj_ty),
         };
 
