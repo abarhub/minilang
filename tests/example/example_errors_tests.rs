@@ -3,7 +3,7 @@
 use mini_parser::typechecker::check_source;
 
 fn errors_for_example() -> Vec<String> {
-    let src = include_str!("../examples/example_errors.mini");
+    let src = include_str!("../../examples/example_errors.mini");
     match check_source(src) {
         Err(errs) => errs,
         Ok(())    => panic!("Le typechecker aurait dû détecter des erreurs dans example_errors.mini"),
@@ -15,7 +15,7 @@ fn errors_for_example() -> Vec<String> {
 /// Le fichier contient des erreurs intentionnelles : le typechecker doit échouer.
 #[test]
 fn example_errors_is_rejected_by_typechecker() {
-    let src = include_str!("../examples/example_errors.mini");
+    let src = include_str!("../../examples/example_errors.mini");
     assert!(check_source(src).is_err(),
         "Le typechecker aurait dû refuser example_errors.mini");
 }
