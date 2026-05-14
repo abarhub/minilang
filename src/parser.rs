@@ -136,13 +136,16 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .map(Expr::CharLit)
             .padded_by(ws());
 
-        let float_lit = text::int(10).then_ignore(just('.')).then(text::int(10))
-            .map(|(i, f): (String, String)|
-                Expr::FloatLit(format!("{}.{}", i, f).parse().unwrap()))
-            .padded_by(ws());
-
-        let int_lit = text::int(10)
-            .map(|s: String| Expr::IntLit(s.parse().unwrap()))
+        // Unified number literal parser: parse integer part first, then optionally
+        // a '.' followed by digits to produce a float.  This avoids the chumsky
+        // backtracking issue where consuming the integer part of "0" and then
+        // failing on the '.' check left the int parser unable to match.
+        let number_lit = text::int(10)
+            .then(just('.').ignore_then(text::int(10)).or_not())
+            .map(|(i, maybe_frac): (String, Option<String>)| match maybe_frac {
+                Some(f) => Expr::FloatLit(format!("{}.{}", i, f).parse().unwrap()),
+                None    => Expr::IntLit(i.parse().unwrap()),
+            })
             .padded_by(ws());
 
         let bool_lit = choice((
@@ -213,7 +216,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .map(|(t, size)| Expr::ArrayNew { elem_type: t, size: Box::new(size) });
 
         let atom = choice((
-            str_lit, char_lit, float_lit, int_lit, bool_lit,
+            str_lit, char_lit, number_lit, bool_lit,
             this_kw, array_lit, array_new, new_expr, enum_ctor, ident_or_call,
             paren_or_call,
         ));
@@ -674,8 +677,13 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     // ── Programme complet ─────────────────────────────────────────────────────
 
-    // Déclarations de haut niveau dans n'importe quel ordre
+    // Déclarations de haut niveau dans n'importe quel ordre.
+    // Package et import peuvent apparaître n'importe où (nécessaire lorsque la
+    // stdlib est préfixée au source et que ce dernier possède ses propres
+    // directives package/import).
     enum TopDecl {
+        Package(PackageDecl),
+        Import(Import),
         Alias(TypeAlias),
         Iface(InterfaceDef),
         Enum(EnumDef),
@@ -683,6 +691,8 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     }
 
     let top_decl = choice((
+        package_decl.map(TopDecl::Package),
+        import_decl.map(TopDecl::Import),
         type_alias.map(TopDecl::Alias),
         interface_def.map(TopDecl::Iface),
         enum_def.map(TopDecl::Enum),
@@ -690,22 +700,24 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
     ));
 
     ws()
-        .ignore_then(package_decl.or_not())
-        .then(import_decl.repeated())
-        .then(top_decl.repeated())
+        .ignore_then(top_decl.repeated())
         .then(main_func)
         .then_ignore(ws())
         .then_ignore(end())
-        .map(|(((pkg, imp), decls), main)| {
+        .map(|(decls, main)| {
+            let mut pkg = None;
+            let mut imports = vec![];
             let mut aliases = vec![]; let mut ifaces = vec![];
             let mut enums = vec![]; let mut classes = vec![];
             for d in decls { match d {
-                TopDecl::Alias(a)  => aliases.push(a),
-                TopDecl::Iface(i)  => ifaces.push(i),
-                TopDecl::Enum(e)   => enums.push(e),
-                TopDecl::Class(c)  => classes.push(c),
+                TopDecl::Package(p)  => { if pkg.is_none() { pkg = Some(p); } }
+                TopDecl::Import(i)   => imports.push(i),
+                TopDecl::Alias(a)    => aliases.push(a),
+                TopDecl::Iface(i)    => ifaces.push(i),
+                TopDecl::Enum(e)     => enums.push(e),
+                TopDecl::Class(c)    => classes.push(c),
             }}
-            Program { package: pkg, imports: imp, type_aliases: aliases,
+            Program { package: pkg, imports, type_aliases: aliases,
                       interfaces: ifaces, enums, classes, main }
         })
 }
