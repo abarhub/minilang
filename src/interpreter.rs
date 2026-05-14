@@ -185,6 +185,8 @@ impl Interpreter {
         if let Some(c) = self.classes.get(cn) {
             if let Some(m) = c.methods.iter().find(|m| m.name == mn) { return Some(m.clone()); }
             if let Some(p) = &c.parent { return self.find_method(p, mn); }
+            // Fallback vers Object si pas de parent explicite
+            if cn != "Object" { return self.find_method("Object", mn); }
         }
         if let Some(e) = self.enums.get(cn) {
             if let Some(m) = e.methods.iter().find(|m| m.name == mn) { return Some(m.clone()); }
@@ -459,16 +461,21 @@ impl Interpreter {
                 match obj {
                     Value::Object(rc) => {
                         let cn = rc.borrow().class_name.clone();
-                        if let Some(m) = self.find_method(&cn, method) {
-                            self.call_method(&m, args, rc)
-                        } else if method == "equals" && args.len() == 1 {
-                            let result = match &args[0] {
-                                Value::Object(other) => Rc::ptr_eq(&rc, other),
-                                _ => false,
-                            };
-                            Ok(Value::Bool(result))
+                        let m = self.find_method(&cn, method)
+                            .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method)))?;
+                        if matches!(m.body.as_slice(), [Stmt::Builtin]) {
+                            match method.as_str() {
+                                "equals" if args.len() == 1 => {
+                                    let result = match &args[0] {
+                                        Value::Object(other) => Rc::ptr_eq(&rc, other),
+                                        _ => false,
+                                    };
+                                    Ok(Value::Bool(result))
+                                }
+                                _ => Err(RuntimeError(format!("Méthode builtin Object inconnue '{}'", method))),
+                            }
                         } else {
-                            Err(RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method)))
+                            self.call_method(&m, args, rc)
                         }
                     }
                     Value::Enum(ed) => {
@@ -605,7 +612,7 @@ impl Interpreter {
                                 if args.len() != 1 { return err!("equals() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Str(other) => Ok(Value::Bool(s == other)),
-                                    _ => err!("equals() requiert une string"),
+                                    _ => Ok(Value::Bool(false)),
                                 }
                             }
                             "split" => {
@@ -636,6 +643,13 @@ impl Interpreter {
                             "toLowerCase" => Ok(Value::Char(c.to_lowercase().next().unwrap_or(c))),
                             "toInt"       => Ok(Value::Int(c as i64)),
                             "toString"    => Ok(Value::Str(c.to_string())),
+                            "equals" => {
+                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Char(o) => Ok(Value::Bool(c == *o)),
+                                    _ => Ok(Value::Bool(false)),
+                                }
+                            }
                             _ => err!("Méthode inconnue '{}' sur char", method),
                         }
                     }
@@ -646,7 +660,7 @@ impl Interpreter {
                                 if args.len() != 1 { return err!("equals() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Bool(o) => Ok(Value::Bool(b == *o)),
-                                    _ => err!("equals() requiert un bool"),
+                                    _ => Ok(Value::Bool(false)),
                                 }
                             }
                             "and" => {
@@ -712,7 +726,7 @@ impl Interpreter {
                                 if args.len() != 1 { return err!("equals() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Int(o) => Ok(Value::Bool(n == *o)),
-                                    _ => err!("equals() requiert un int"),
+                                    _ => Ok(Value::Bool(false)),
                                 }
                             }
                             _ => err!("Méthode inconnue '{}' sur int", method),
@@ -749,7 +763,7 @@ impl Interpreter {
                                 if args.len() != 1 { return err!("equals() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Float(o) => Ok(Value::Bool((f - o).abs() < 1e-12)),
-                                    _ => err!("equals() requiert un float/double"),
+                                    _ => Ok(Value::Bool(false)),
                                 }
                             }
                             _ => err!("Méthode inconnue '{}' sur float/double", method),

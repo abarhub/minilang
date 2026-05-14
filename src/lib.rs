@@ -6,6 +6,7 @@ pub mod typechecker;
 
 /// Bibliothèque standard embarquée — tous les fichiers lib/std/*.mini
 pub const STDLIB: &str = concat!(
+    include_str!("../lib/std/object.mini"), "\n",
     include_str!("../lib/std/option.mini"), "\n",
     include_str!("../lib/std/result.mini"), "\n",
     include_str!("../lib/std/either.mini"), "\n",

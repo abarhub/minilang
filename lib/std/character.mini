@@ -31,4 +31,7 @@ class Character {
 
     // Retourne le caractère converti en chaîne d'un caractère.
     string toString() builtin;
+
+    // Retourne true si ce caractère est égal à l'objet donné.
+    bool equals(Object other) builtin;
 }

@@ -48,5 +48,5 @@ class Integer {
     int compareTo(int other) builtin;
 
     // Retourne true si les deux entiers sont égaux.
-    bool equals(int other) builtin;
+    bool equals(Object other) builtin;
 }
