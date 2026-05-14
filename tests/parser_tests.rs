@@ -370,3 +370,106 @@ fn test_char_escape_single_quote() {
 fn test_char_comparison() {
     parses_ok("int main() { char c = 'z'; bool b = (c == 'z'); return 0; }");
 }
+
+// ── Commentaires multi-lignes ─────────────────────────────────────────────────
+
+#[test]
+fn test_block_comment_in_function() {
+    parses_ok(r#"
+        int main() {
+            /* ceci est un commentaire */
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_block_comment_multiline() {
+    parses_ok(r#"
+        int main() {
+            /* commentaire
+               sur plusieurs
+               lignes */
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_block_comment_before_declaration() {
+    parses_ok(r#"
+        /* commentaire avant la classe */
+        class Foo {
+            int x;
+            int bar() { return x; }
+        }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn test_block_comment_between_statements() {
+    parses_ok(r#"
+        int main() {
+            int x = 1;
+            /* entre deux statements */
+            int y = 2;
+            return x + y;
+        }
+    "#);
+}
+
+#[test]
+fn test_doc_comment_before_class() {
+    parses_ok(r#"
+        /** Classe Point représentant un point 2D */
+        class Point {
+            int x;
+            int y;
+            Point(int a, int b) { x = a; y = b; }
+            int getX() { return x; }
+        }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn test_doc_comment_before_function() {
+    parses_ok(r#"
+        /** Calcule le carré d'un entier */
+        int square(int n) { return n * n; }
+        int main() { return square(4); }
+    "#);
+}
+
+#[test]
+fn test_doc_comment_multiline() {
+    parses_ok(r#"
+        /**
+         * Additionne deux entiers
+         * @param a premier operande
+         * @param b second operande
+         */
+        int add(int a, int b) { return a + b; }
+        int main() { return add(1, 2); }
+    "#);
+}
+
+#[test]
+fn test_block_comment_inline() {
+    parses_ok("int main() { int x = /* valeur */ 42; return x; }");
+}
+
+#[test]
+fn test_mixed_comments() {
+    parses_ok(r#"
+        // commentaire simple
+        /* commentaire bloc */
+        /** commentaire doc */
+        int main() {
+            // dans le corps
+            /* autre bloc */
+            return 0;
+        }
+    "#);
+}
