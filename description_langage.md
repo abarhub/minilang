@@ -7,12 +7,12 @@ Il est conçu pour être sécurisé, tout en permettant de créer des programmes
 
 ## Primitives
 
-* bool : le type booléen
-* int : le type entier
-* string :
-* float : le type flottant
-* double : le type double
-* char : le type caractère
+* bool: le type booléen
+* int: le type entier 32 bits
+* float: le type flottant 32 bits
+* double: le type double
+* string: le type chaîne de caractères
+* char: le type caractère. Correspond à un caractère unicode
 
 ## Types complexes
 
@@ -25,6 +25,8 @@ Il est conçu pour être sécurisé, tout en permettant de créer des programmes
 ### classe générique
 
 ### enum
+
+# fonctions
 
 
 
