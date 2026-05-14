@@ -7,6 +7,9 @@
   * gérer les entiers avec une taille différente de 32 bits
   * gérer les entiers non signés
   * mécanisme de pakage et d'import à completer (gestion des classes avec le même nom, arborescence de dossiers, etc...)
+  * ajouter le let au niveau des instructions
+  * ajouter le let au niveau du if, avec extraction des variables
+  * définition des élements incomplet des classes
 * completer la librairie standard
   * faire les methodes pour les math, et voir pour les constantes
   * ajouter la classe List, pour avoir des tableaux de taille variable
