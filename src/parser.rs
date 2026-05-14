@@ -10,6 +10,7 @@ use crate::ast::*;
 fn ws() -> impl Parser<char, (), Error = Simple<char>> + Clone {
     just("//")
         .then(none_of('\n').repeated()).ignored()
+        .or(just("/*").then(take_until(just("*/"))).ignored())
         .or(filter(|c: &char| c.is_whitespace()).ignored())
         .repeated().ignored()
 }
