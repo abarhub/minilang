@@ -15,13 +15,14 @@ Il est conçu pour être sécurisé, tout en permettant de créer des programmes
 * char: le type caractère. Correspond à un caractère unicode
 * void: le type void. absent de valeur. Utilisé pour les fonctions qui ne retournent rien
 
-Classe	Type	Sélection de méthodes
-Boolean	bool	toString, and, or, not, equals
-Integer	int	abs, min, max, pow, isEven, isOdd, compareTo, toBinaryString, toFloat…
-Float	float	abs, floor, ceil, round, isNaN, min, max, toInt…
-Double	double	idem Float + toFloat
-String	string	length, isEmpty, charAt, contains, substring, toUpperCase, toLowerCase, startsWith, endsWith, indexOf, trim, replace, split…
-Character	char	isLetter, isDigit, isWhitespace, isUpperCase, isLowerCase, toUpperCase, toLowerCase, toInt, toString
+|Classe	|Type	| Sélection de méthodes                                                                                                             |
+|-----|-----|-----------------------------------------------------------------------------------------------------------------------------------|
+|Boolean|	bool| 	toString, and, or, not, equals                                                                                                   |
+|Integer|	int| 	abs, min, max, pow, isEven, isOdd, compareTo, toBinaryString, toFloat…                                                           |
+|Float|	float| 	abs, floor, ceil, round, isNaN, min, max, toInt…                                                                                 |
+|Double|	double| 	idem Float + toFloat                                                                                                             |
+|String|	string| 	length, isEmpty, charAt, contains, substring, toUpperCase, toLowerCase, startsWith, endsWith, indexOf, trim, replace, split…     |
+|Character|	char| 	isLetter, isDigit, isWhitespace, isUpperCase, isLowerCase, toUpperCase, toLowerCase, toInt, toString                             |
 
 Les opérations arithmétiques sont disponibles pour les types int et float.
 Exemples :
@@ -140,6 +141,7 @@ Empty;
 Une fonction permet de faire un traitement avec des instructions.
 Elle peut être dans une classe ou hors de la classe.
 La fonction doit retourner un type. S'il n'y a pas de valeur à retourner, la méthode doit retourner void.
+La méthode main est le point d'entrée du programme. Elle doit retourner int.
 
 Exemple :
 ```
@@ -149,7 +151,7 @@ int add(int a, int b) {
 ```
 
 
-Exemple de la méthode main :
+Exemple de méthode main :
 ```
 int main() {
     // ...
