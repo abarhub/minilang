@@ -77,7 +77,8 @@ pub struct TypeChecker {
     classes:         HashMap<String, ClassDef>,
     interfaces:      HashMap<String, InterfaceDef>,
     enums:           HashMap<String, EnumDef>,
-    aliases:         HashMap<String, Type>,    // ← résolution des alias
+    aliases:         HashMap<String, Type>,
+    funcs:           HashMap<String, FuncDef>,
     type_params:     HashSet<String>,
     current_class:   Option<String>,
     current_enum:    Option<String>,
@@ -92,6 +93,7 @@ impl TypeChecker {
             interfaces:      program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),
             enums:           program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
             aliases:         program.type_aliases.iter().map(|a| (a.name.clone(), a.ty.clone())).collect(),
+            funcs:           program.funcs.iter().map(|f| (f.name.clone(), f.clone())).collect(),
             type_params:     HashSet::new(),
             current_class:   None,
             current_enum:    None,
@@ -149,9 +151,19 @@ impl TypeChecker {
         self.check_interface_impls();
         self.check_enums(program);
         for class in &program.classes.clone() { self.check_class(class); }
+        for func in &program.funcs.clone() { self.check_func(func); }
         let mut env = TypeEnv::new();
         self.expected_return = Type::Int;
         for stmt in &program.main.body.clone() { self.check_stmt(stmt, &mut env); }
+    }
+
+    fn check_func(&mut self, func: &FuncDef) {
+        let mut env = TypeEnv::new();
+        for p in &func.params { env.declare(p.name.clone(), p.ty.clone()); }
+        let saved = self.expected_return.clone();
+        self.expected_return = func.return_type.clone();
+        for stmt in &func.body.clone() { self.check_stmt(stmt, &mut env); }
+        self.expected_return = saved;
     }
 
     // ── Hiérarchie ────────────────────────────────────────────────────────────
@@ -629,6 +641,23 @@ impl TypeChecker {
                         }
                     }
                 }
+
+                // Fonction de haut niveau
+                if let Some(f) = self.funcs.get(name.as_str()).cloned() {
+                    if args.len() != f.params.len() {
+                        return type_err!("{}() : {} arg(s) attendus, {} fournis",
+                            name, f.params.len(), args.len());
+                    }
+                    for (arg, p) in args.iter().zip(f.params.iter()) {
+                        if let Ok(at) = self.infer_expr(arg, env) {
+                            if !self.is_compatible(&at, &p.ty) {
+                                self.err(format!("Arg de {}() : incompatible {} ≠ {}", name, at, p.ty));
+                            }
+                        }
+                    }
+                    return Ok(self.resolve(&f.return_type));
+                }
+
                 type_err!("Fonction inconnue '{}'", name)
             }
 

@@ -194,6 +194,16 @@ pub struct EnumDef {
     pub variants: Vec<EnumVariant>, pub methods: Vec<Method>,
 }
 
+// ── Fonction de haut niveau ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct FuncDef {
+    pub return_type: Type,
+    pub name:        String,
+    pub params:      Vec<Param>,
+    pub body:        Vec<Stmt>,
+}
+
 // ── Fonction main ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -205,9 +215,10 @@ pub struct MainFunc { pub body: Vec<Stmt> }
 pub struct Program {
     pub package:      Option<PackageDecl>,
     pub imports:      Vec<Import>,
-    pub type_aliases: Vec<TypeAlias>,    // ← nouveau
+    pub type_aliases: Vec<TypeAlias>,
     pub interfaces:   Vec<InterfaceDef>,
     pub enums:        Vec<EnumDef>,
     pub classes:      Vec<ClassDef>,
+    pub funcs:        Vec<FuncDef>,
     pub main:         MainFunc,
 }

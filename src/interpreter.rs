@@ -117,6 +117,7 @@ enum Flow { Next, Break, Continue, Return(Value) }
 pub struct Interpreter {
     classes:  HashMap<String, ClassDef>,
     enums:    HashMap<String, EnumDef>,
+    funcs:    HashMap<String, FuncDef>,
     print_fn: Box<dyn FnMut(&str)>,
 }
 
@@ -131,6 +132,7 @@ impl Interpreter {
         Self {
             classes:  program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
             enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
+            funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
             print_fn,
         }
     }
@@ -771,6 +773,17 @@ impl Interpreter {
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| "panic".to_string());
                     return err!("{}", msg);
+                }
+                // Fonction de haut niveau
+                if let Some(func) = self.funcs.get(name.as_str()).cloned() {
+                    let mut fenv = Env::new();
+                    for (p, v) in func.params.iter().zip(args.into_iter()) {
+                        fenv.declare(p.name.clone(), v);
+                    }
+                    return match self.exec_body(&func.body, &mut fenv, None)? {
+                        Flow::Return(v) => Ok(v),
+                        _               => Ok(Value::Void),
+                    };
                 }
                 err!("Fonction inconnue '{}'", name)
             }

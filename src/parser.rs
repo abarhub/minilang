@@ -651,7 +651,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     let main_func = kw("int").ignore_then(kw("main"))
         .ignore_then(just('(').padded_by(ws()).then(just(')').padded_by(ws())))
-        .ignore_then(body)
+        .ignore_then(body.clone())
         .map(|stmts| MainFunc { body: stmts });
 
     // ── Package & imports ─────────────────────────────────────────────────────
@@ -691,7 +691,23 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         Iface(InterfaceDef),
         Enum(EnumDef),
         Class(ClassDef),
+        Func(FuncDef),
     }
+
+    // Fonction de haut niveau : `Type name(params) { body }`
+    // On exclut "main" pour que main_func le prenne en charge séparément.
+    let func_def = ty.clone()
+        .then(text::ident().padded_by(ws()).try_map(|name: String, span| {
+            if name == "main" {
+                Err(Simple::custom(span, "main is reserved"))
+            } else {
+                Ok(name)
+            }
+        }))
+        .then(params.clone()
+            .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
+        .then(body.clone())
+        .map(|(((rt, name), p), b)| FuncDef { return_type: rt, name, params: p, body: b });
 
     let top_decl = choice((
         package_decl.map(TopDecl::Package),
@@ -700,6 +716,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         interface_def.map(TopDecl::Iface),
         enum_def.map(TopDecl::Enum),
         class_def.map(TopDecl::Class),
+        func_def.map(TopDecl::Func),
     ));
 
     ws()
@@ -712,6 +729,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             let mut imports = vec![];
             let mut aliases = vec![]; let mut ifaces = vec![];
             let mut enums = vec![]; let mut classes = vec![];
+            let mut funcs = vec![];
             for d in decls { match d {
                 TopDecl::Package(p)  => { if pkg.is_none() { pkg = Some(p); } }
                 TopDecl::Import(i)   => imports.push(i),
@@ -719,8 +737,9 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 TopDecl::Iface(i)    => ifaces.push(i),
                 TopDecl::Enum(e)     => enums.push(e),
                 TopDecl::Class(c)    => classes.push(c),
+                TopDecl::Func(f)     => funcs.push(f),
             }}
             Program { package: pkg, imports, type_aliases: aliases,
-                      interfaces: ifaces, enums, classes, main }
+                      interfaces: ifaces, enums, classes, funcs, main }
         })
 }
