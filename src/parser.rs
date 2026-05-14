@@ -140,8 +140,11 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         // a '.' followed by digits to produce a float.  This avoids the chumsky
         // backtracking issue where consuming the integer part of "0" and then
         // failing on the '.' check left the int parser unable to match.
+        // `text::int(10)` interprète la partie entière (pas de zéros initiaux
+        // significatifs) ; pour la partie fractionnaire on utilise `digits(10)`
+        // afin de conserver les zéros initiaux (ex : ".001" → "001", pas "1").
         let number_lit = text::int(10)
-            .then(just('.').ignore_then(text::int(10)).or_not())
+            .then(just('.').ignore_then(text::digits(10)).or_not())
             .map(|(i, maybe_frac): (String, Option<String>)| match maybe_frac {
                 Some(f) => Expr::FloatLit(format!("{}.{}", i, f).parse().unwrap()),
                 None    => Expr::IntLit(i.parse().unwrap()),
