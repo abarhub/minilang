@@ -117,6 +117,7 @@ enum Flow { Next, Break, Continue, Return(Value) }
 pub struct Interpreter {
     classes: HashMap<String, ClassDef>,
     enums:   HashMap<String, EnumDef>,
+    output:  Vec<String>,
 }
 
 impl Interpreter {
@@ -124,17 +125,19 @@ impl Interpreter {
         Self {
             classes: program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
             enums:   program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
+            output:  Vec::new(),
         }
     }
 
-    pub fn run(&mut self, program: &Program) -> Result<i64, RuntimeError> {
+    pub fn run(&mut self, program: &Program) -> Result<(i64, Vec<String>), RuntimeError> {
         info!("▶ Exécution");
         let mut env = Env::new();
-        match self.exec_body(&program.main.body, &mut env, None)? {
-            Flow::Return(Value::Int(n)) => { info!("✓ main → {}", n); Ok(n) }
-            Flow::Return(v) => { warn!("main valeur non-int : {}", v); Ok(0) }
-            _ => { warn!("main sans return"); Ok(0) }
-        }
+        let ret = match self.exec_body(&program.main.body, &mut env, None)? {
+            Flow::Return(Value::Int(n)) => { info!("✓ main → {}", n); n }
+            Flow::Return(v) => { warn!("main valeur non-int : {}", v); 0 }
+            _ => { warn!("main sans return"); 0 }
+        };
+        Ok((ret, std::mem::take(&mut self.output)))
     }
 
     // ── Valeur par défaut ─────────────────────────────────────────────────────
@@ -243,7 +246,7 @@ impl Interpreter {
                 let parts: Vec<String> = args.iter()
                     .map(|e| self.eval(e, env, this.clone()).map(|v| v.to_string()))
                     .collect::<Result<_, _>>()?;
-                println!("{}", parts.join(" "));
+                self.output.push(parts.join(" "));
             }
 
             Stmt::Return(e) => {
@@ -1125,6 +1128,12 @@ fn val_eq(a: &Value, b: &Value) -> bool {
 // ── API de test ───────────────────────────────────────────────────────────────
 
 pub fn run_source(src: &str) -> Result<i64, String> {
+    let (ret, lines) = run_source_with_output(src)?;
+    for line in lines { println!("{}", line); }
+    Ok(ret)
+}
+
+pub fn run_source_with_output(src: &str) -> Result<(i64, Vec<String>), String> {
     use chumsky::Parser;
     let full = format!("{}\n{}", crate::STDLIB, src);
     let program = crate::parser::program_parser()

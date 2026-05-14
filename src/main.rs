@@ -49,8 +49,12 @@ fn main() {
     println!("\n{}\n  EXÉCUTION\n{}\n", "─".repeat(50), "─".repeat(50));
     let mut interp = Interpreter::new(&program);
     match interp.run(&program) {
-        Ok(code) => { println!("\n{}", "─".repeat(50)); info!("Code de sortie : {}", code); }
-        Err(e)   => { error!("{}", e); process::exit(1); }
+        Ok((code, lines)) => {
+            for line in lines { println!("{}", line); }
+            println!("\n{}", "─".repeat(50));
+            info!("Code de sortie : {}", code);
+        }
+        Err(e) => { error!("{}", e); process::exit(1); }
     }
 }
 
