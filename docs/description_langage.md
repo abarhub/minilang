@@ -137,12 +137,18 @@ Empty;
 
 # Fonctions
 
+Une fonction permet de faire un traitement avec des instructions.
+Elle peut être dans une classe ou hors de la classe.
+La fonction doit retourner un type. S'il n'y a pas de valeur à retourner, la méthode doit retourner void.
+
 Exemple :
 ```
 int add(int a, int b) {
     return a + b;
 }
 ```
+
+
 Exemple de la méthode main :
 ```
 int main() {
