@@ -1,0 +1,10 @@
+// ── Bibliothèque standard – Object ────────────────────────────────────────────
+//  Classe racine implicite de toute la hiérarchie de types.
+//  Toute classe hérite d'Object sans avoir besoin de l'écrire explicitement.
+
+class Object {
+
+    // Retourne true si les deux objets sont identiques (même référence).
+    // Les sous-classes peuvent redéfinir cette méthode pour une égalité sémantique.
+    bool equals(Object other) builtin;
+}

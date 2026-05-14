@@ -42,5 +42,5 @@ class Double {
     float toFloat() builtin;
 
     // Retourne true si les deux valeurs sont égales.
-    bool equals(double other) builtin;
+    bool equals(Object other) builtin;
 }

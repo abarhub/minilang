@@ -101,7 +101,7 @@ impl TypeChecker {
                 return_type: Type::Bool,
                 name: "equals".to_string(),
                 params: vec![Param { name: "other".to_string(), ty: Type::UserDefined("Object".to_string()) }],
-                body: vec![],
+                body: vec![Stmt::Builtin],
             }],
         });
         Self {
@@ -887,6 +887,8 @@ impl TypeChecker {
         if let Type::UserDefined(n) = &actual   { if self.type_params.contains(n) { return true; } }
         if let Type::UserDefined(n) = &expected { if self.type_params.contains(n) { return true; } }
         if actual == expected { return true; }
+        // Object est le supertype universel : tout est compatible avec Object
+        if let Type::UserDefined(n) = &expected { if n == "Object" { return true; } }
         if matches!(actual, Type::Void) { return true; }
 
         // Type::Fn (non annoté) = compatible avec TOUT

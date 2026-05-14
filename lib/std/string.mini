@@ -43,7 +43,7 @@ class String {
     string replace(string old, string replacement) builtin;
 
     // Retourne true si les deux chaînes sont égales.
-    bool equals(string other) builtin;
+    bool equals(Object other) builtin;
 
     // Découpe la chaîne selon le séparateur et retourne un tableau.
     string[] split(string separator) builtin;
