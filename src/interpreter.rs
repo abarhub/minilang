@@ -459,9 +459,17 @@ impl Interpreter {
                 match obj {
                     Value::Object(rc) => {
                         let cn = rc.borrow().class_name.clone();
-                        let m = self.find_method(&cn, method)
-                            .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method)))?;
-                        self.call_method(&m, args, rc)
+                        if let Some(m) = self.find_method(&cn, method) {
+                            self.call_method(&m, args, rc)
+                        } else if method == "equals" && args.len() == 1 {
+                            let result = match &args[0] {
+                                Value::Object(other) => Rc::ptr_eq(&rc, other),
+                                _ => false,
+                            };
+                            Ok(Value::Bool(result))
+                        } else {
+                            Err(RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method)))
+                        }
                     }
                     Value::Enum(ed) => {
                         let en = ed.enum_name.clone();

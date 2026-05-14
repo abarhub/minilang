@@ -629,3 +629,74 @@ fn test_char_reassign() {
         }
     "#), 1);
 }
+
+// ── Object.equals ─────────────────────────────────────────────────────────────
+
+#[test]
+fn test_equals_same_instance() {
+    assert_eq!(run_ok(r#"
+        class Point { int x; Point(int a) { x = a; } }
+        int main() {
+            Point p = new Point(1);
+            if (p.equals(p)) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_equals_different_instances() {
+    assert_eq!(run_ok(r#"
+        class Point { int x; Point(int a) { x = a; } }
+        int main() {
+            Point a = new Point(1);
+            Point b = new Point(1);
+            if (a.equals(b)) { return 0; }
+            return 1;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_equals_assigned_reference() {
+    assert_eq!(run_ok(r#"
+        class Box { int v; Box(int n) { v = n; } }
+        int main() {
+            Box a = new Box(42);
+            Box b = a;
+            if (a.equals(b)) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_equals_override() {
+    assert_eq!(run_ok(r#"
+        class Point {
+            int x;
+            Point(int a) { x = a; }
+            bool equals(Object other) {
+                return x == 99;
+            }
+        }
+        int main() {
+            Point p = new Point(99);
+            Point q = new Point(42);
+            if (p.equals(q)) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_object_as_parameter_type() {
+    assert_eq!(run_ok(r#"
+        class Wrapper { int val; Wrapper(int v) { val = v; } }
+        int main() {
+            Wrapper w = new Wrapper(7);
+            if (w.equals(w)) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}

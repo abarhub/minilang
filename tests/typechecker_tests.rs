@@ -458,3 +458,60 @@ fn test_char_escape_sequences_ok() {
         }
     "#);
 }
+
+// ── Object et equals ──────────────────────────────────────────────────────────
+
+#[test]
+fn test_object_equals_ok() {
+    assert_ok(r#"
+        class Foo { int x; Foo(int a) { x = a; } }
+        int main() {
+            Foo a = new Foo(1);
+            Foo b = new Foo(2);
+            bool r = a.equals(b);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_object_param_accepts_subclass() {
+    assert_ok(r#"
+        class Animal { string name; }
+        int check(Object o) { return 1; }
+        int main() {
+            Animal a = new Animal();
+            int r = check(a);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_equals_override_ok() {
+    assert_ok(r#"
+        class Point {
+            int x;
+            Point(int a) { x = a; }
+            bool equals(Object other) { return true; }
+        }
+        int main() {
+            Point p = new Point(1);
+            Point q = new Point(2);
+            bool r = p.equals(q);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn test_subclass_is_compatible_with_object() {
+    assert_ok(r#"
+        class Node { int val; Node(int v) { val = v; } }
+        int main() {
+            Node n = new Node(5);
+            Object o = n;
+            return 0;
+        }
+    "#);
+}

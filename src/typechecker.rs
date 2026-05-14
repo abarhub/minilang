@@ -88,8 +88,24 @@ pub struct TypeChecker {
 
 impl TypeChecker {
     pub fn new(program: &Program) -> Self {
+        let mut classes: HashMap<String, ClassDef> =
+            program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
+        classes.entry("Object".to_string()).or_insert_with(|| ClassDef {
+            name: "Object".to_string(),
+            type_params: vec![],
+            parent: None,
+            implements: vec![],
+            fields: vec![],
+            constructors: vec![],
+            methods: vec![Method {
+                return_type: Type::Bool,
+                name: "equals".to_string(),
+                params: vec![Param { name: "other".to_string(), ty: Type::UserDefined("Object".to_string()) }],
+                body: vec![],
+            }],
+        });
         Self {
-            classes:         program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
+            classes,
             interfaces:      program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),
             enums:           program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
             aliases:         program.type_aliases.iter().map(|a| (a.name.clone(), a.ty.clone())).collect(),
@@ -899,6 +915,7 @@ impl TypeChecker {
 
     fn is_subclass(&self, sub: &str, sup: &str) -> bool {
         if sub == sup { return true; }
+        if sup == "Object" { return true; }
         if let Some(c) = self.classes.get(sub) {
             if let Some(p) = &c.parent { return self.is_subclass(p, sup); }
         }
@@ -996,6 +1013,7 @@ impl TypeChecker {
         let c = self.classes.get(cn)?;
         if let Some(m) = c.methods.iter().find(|m| m.name == mn) { return Some(m); }
         if let Some(p) = &c.parent { return self.find_method_def(p, mn); }
+        if cn != "Object" { return self.find_method_def("Object", mn); }
         None
     }
 
