@@ -3,7 +3,7 @@
 use mini_parser::interpreter::run_source_with_output;
 
 fn run_example() -> (i64, Vec<String>) {
-    let src = include_str!("../examples/example.mini");
+    let src = include_str!("../../examples/example.mini");
     match run_source_with_output(src) {
         Ok(result) => result,
         Err(e)     => panic!("Erreur d'exécution :\n{}", e),

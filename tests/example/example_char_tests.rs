@@ -1,9 +1,9 @@
-//! Test de l'exemple example_enum_generic.mini — enums génériques Option/Result/Either/Pair.
+//! Test de l'exemple example_char.mini — type char, comparaisons, escape.
 
 use mini_parser::interpreter::run_source_with_output;
 
 fn run_example() -> (i64, Vec<String>) {
-    let src = include_str!("../examples/example_enum_generic.mini");
+    let src = include_str!("../../examples/example_char.mini");
     match run_source_with_output(src) {
         Ok(result) => result,
         Err(e)     => panic!("Erreur d'exécution :\n{}", e),
@@ -11,13 +11,13 @@ fn run_example() -> (i64, Vec<String>) {
 }
 
 #[test]
-fn example_enum_generic_returns_zero() {
+fn example_char_returns_zero() {
     let (ret, _) = run_example();
     assert_eq!(ret, 0);
 }
 
 #[test]
-fn example_enum_generic_output_lines() {
+fn example_char_output_lines() {
     let (_, lines) = run_example();
 
     for (i, l) in lines.iter().enumerate() {
@@ -25,23 +25,32 @@ fn example_enum_generic_output_lines() {
     }
 
     let expected: &[&str] = &[
-        // Option<int>
-        "Option::Some : 42",
-        "Option::None OK",
-        // Option<string>
-        "message : bonjour",
-        // Result<int, string>
-        "10 / 2 = 5",
-        "erreur capturee : division par zero",
-        // Either<int, string>
-        "Left : 99",
-        "Right : texte",
-        // Pair<int, bool>
-        "Pair : 7 true",
-        // find_first(5) → Some(10)
-        "trouve : 10",
-        // find_first(-1) → None
-        "rien : OK",
+        // Littéraux char
+        "A",
+        "7",
+        " ",
+        // Séquences d'échappement reconnues
+        "saut de ligne OK",
+        "tabulation OK",
+        "antislash OK",
+        "apostrophe OK",
+        "nul OK",
+        // Comparaisons == et !=
+        "c1 == c2 : vrai",
+        "c1 != c3 : vrai",
+        // Valeur par défaut '\0'
+        "valeur par defaut = nul OK",
+        // Réaffectation
+        "reassignation OK",
+        // CharBox
+        "m",
+        "CharBox.equals OK",
+        // classify()
+        "classify a = 1 OK",
+        "classify e = 2 OK",
+        "classify z = 0 (autre) OK",
+        // Fin
+        "fin de l'exemple char",
     ];
 
     assert_eq!(lines.len(), expected.len(),
