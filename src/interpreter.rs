@@ -115,15 +115,23 @@ enum Flow { Next, Break, Continue, Return(Value) }
 // ── Interpréteur ─────────────────────────────────────────────────────────────
 
 pub struct Interpreter {
-    classes: HashMap<String, ClassDef>,
-    enums:   HashMap<String, EnumDef>,
+    classes:  HashMap<String, ClassDef>,
+    enums:    HashMap<String, EnumDef>,
+    print_fn: Box<dyn FnMut(&str)>,
 }
 
 impl Interpreter {
+    /// Crée un interpréteur qui affiche sur la console (comportement par défaut).
     pub fn new(program: &Program) -> Self {
+        Self::new_with_print(program, Box::new(|line| println!("{}", line)))
+    }
+
+    /// Crée un interpréteur avec une fonction d'affichage personnalisée.
+    pub fn new_with_print(program: &Program, print_fn: Box<dyn FnMut(&str)>) -> Self {
         Self {
-            classes: program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
-            enums:   program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
+            classes:  program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
+            enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
+            print_fn,
         }
     }
 
@@ -243,7 +251,7 @@ impl Interpreter {
                 let parts: Vec<String> = args.iter()
                     .map(|e| self.eval(e, env, this.clone()).map(|v| v.to_string()))
                     .collect::<Result<_, _>>()?;
-                println!("{}", parts.join(" "));
+                (self.print_fn)(&parts.join(" "));
             }
 
             Stmt::Return(e) => {
@@ -1131,4 +1139,24 @@ pub fn run_source(src: &str) -> Result<i64, String> {
         .parse(full.as_str())
         .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n"))?;
     Interpreter::new(&program).run(&program).map_err(|e| e.to_string())
+}
+
+/// Exécute la source et retourne la valeur de retour + toutes les lignes imprimées.
+/// Les lignes sont également affichées sur la console.
+pub fn run_source_with_output(src: &str) -> Result<(i64, Vec<String>), String> {
+    use chumsky::Parser;
+    let full = format!("{}\n{}", crate::STDLIB, src);
+    let program = crate::parser::program_parser()
+        .parse(full.as_str())
+        .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n"))?;
+    let captured = Rc::new(RefCell::new(Vec::<String>::new()));
+    let cap = captured.clone();
+    let print_fn: Box<dyn FnMut(&str)> = Box::new(move |line: &str| {
+        println!("{}", line);
+        cap.borrow_mut().push(line.to_string());
+    });
+    let ret = Interpreter::new_with_print(&program, print_fn)
+        .run(&program)
+        .map_err(|e| e.to_string())?;
+    Ok((ret, Rc::try_unwrap(captured).unwrap().into_inner()))
 }
