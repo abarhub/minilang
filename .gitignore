@@ -3,3 +3,8 @@
 /.idea
 
 justfile
+lcov_to_sonar.ps1
+sonar-project.properties
+clippy-to-sonar.jq
+
+
