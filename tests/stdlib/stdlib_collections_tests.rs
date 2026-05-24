@@ -212,7 +212,7 @@ fn test_array_get_option_some() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] arr = new int[]{10, 20, 30};
-            Option<int> opt = arr.getOption(1);
+            Option<int> opt = arr.get(1);
             if (opt.isSome()) { return opt.get(); }
             return -1;
         }
@@ -224,7 +224,7 @@ fn test_array_get_option_none() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] arr = new int[]{10, 20, 30};
-            Option<int> opt = arr.getOption(99);
+            Option<int> opt = arr.get(99);
             if (opt.isNone()) { return 1; }
             return 0;
         }
@@ -324,32 +324,6 @@ fn test_set_contains() {
             Set<string> s = new HashSet<string>();
             s.add("hello");
             if (s.contains("hello")) { return 1; }
-            return 0;
-        }
-    "#), 1);
-}
-
-#[test]
-fn test_set_get_found() {
-    assert_eq!(run_ok(r#"
-        int main() {
-            Set<int> s = new HashSet<int>();
-            s.add(42);
-            Option<int> opt = s.get(42);
-            if (opt.isSome()) { return opt.get(); }
-            return -1;
-        }
-    "#), 42);
-}
-
-#[test]
-fn test_set_get_not_found() {
-    assert_eq!(run_ok(r#"
-        int main() {
-            Set<int> s = new HashSet<int>();
-            s.add(42);
-            Option<int> opt = s.get(99);
-            if (opt.isNone()) { return 1; }
             return 0;
         }
     "#), 1);

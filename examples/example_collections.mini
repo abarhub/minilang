@@ -17,6 +17,13 @@ int main() {
     print("after remove(0) size=" + numbers.size().toString());
     print("get(0) after remove=" + numbers.get(0).get().toString());
 
+    // ── Array<int> méthodes Option ────────────────────────────────────────────
+    int[] arr = new int[]{5, 15, 25};
+    print("arr.get(1)=" + arr.get(1).get().toString());
+    print("arr.get(99) isNone=" + arr.get(99).isNone().toString());
+    print("arr.indexOf(15)=" + arr.indexOf(15).get().toString());
+    print("arr.find(25)=" + arr.find(25).get().toString());
+
     // ── HashSet<string> via interface Set<string> ─────────────────────────────
     Set<string> words = new HashSet<string>();
     bool a1 = words.add("hello");
@@ -26,8 +33,6 @@ int main() {
     print("add new=" + a1.toString());
     print("add dup=" + a3.toString());
     print("contains hello=" + words.contains("hello").toString());
-    print("get hello isSome=" + words.get("hello").isSome().toString());
-    print("get missing isNone=" + words.get("missing").isNone().toString());
     bool r1 = words.remove("hello");
     print("after remove size=" + words.size().toString());
 

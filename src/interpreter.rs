@@ -585,25 +585,12 @@ impl Interpreter {
                                     Value::Int(i) => {
                                         let data = v.borrow();
                                         if *i < 0 || *i as usize >= data.len() {
-                                            return err!("get(): index {} hors bornes (taille {})", i, data.len());
-                                        }
-                                        Ok(data[*i as usize].clone())
-                                    }
-                                    _ => err!("get() requiert un int"),
-                                }
-                            }
-                            "getOption" => {
-                                if args.len() != 1 { return err!("getOption() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(i) => {
-                                        let data = v.borrow();
-                                        if *i < 0 || *i as usize >= data.len() {
                                             Ok(make_none())
                                         } else {
                                             Ok(make_some(data[*i as usize].clone()))
                                         }
                                     }
-                                    _ => err!("getOption() requiert un int"),
+                                    _ => err!("get() requiert un int"),
                                 }
                             }
                             "set" => {
@@ -913,16 +900,6 @@ impl Interpreter {
                                 if args.len() != 1 { return err!("contains() attend 1 argument"); }
                                 let found = v.borrow().iter().any(|x| val_eq(x, &args[0]));
                                 Ok(Value::Bool(found))
-                            }
-                            "get" => {
-                                if args.len() != 1 { return err!("get() attend 1 argument"); }
-                                let needle = &args[0];
-                                let data = v.borrow();
-                                if let Some(found) = data.iter().find(|x| val_eq(x, needle)) {
-                                    Ok(make_some(found.clone()))
-                                } else {
-                                    Ok(make_none())
-                                }
                             }
                             "size"    => Ok(Value::Int(v.borrow().len() as i64)),
                             "isEmpty" => Ok(Value::Bool(v.borrow().is_empty())),

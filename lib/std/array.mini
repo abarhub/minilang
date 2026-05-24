@@ -9,12 +9,9 @@
 enum Array<T> {
     ;
 
-    // Retourne l'élément à l'index donné.
-    // Lève une erreur d'exécution si index hors bornes.
-    T get(int index) builtin;
-
     // Retourne Some(element) si l'index est valide, None sinon.
-    Option<T> getOption(int index) builtin;
+    // Pour arr[i] (sucre syntaxique) : lève une erreur si hors bornes.
+    Option<T> get(int index) builtin;
 
     // Affecte une valeur à l'index donné.
     // Lève une erreur d'exécution si index hors bornes.

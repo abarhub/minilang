@@ -256,9 +256,20 @@ fn interp_array_get_method() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[]{100, 200};
-            return a.get(0);
+            return a.get(0).get();
         }
     "#), 100);
+}
+
+#[test]
+fn interp_array_get_method_none() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] a = new int[]{100, 200};
+            if (a.get(99).isNone()) { return 1; }
+            return 0;
+        }
+    "#), 1);
 }
 
 #[test]
@@ -267,7 +278,7 @@ fn interp_array_set_method() {
         int main() {
             int[] a = new int[2];
             a.set(0, 42);
-            return a.get(0);
+            return a.get(0).get();
         }
     "#), 42);
 }
