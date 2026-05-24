@@ -503,6 +503,30 @@ impl Interpreter {
                                         _ => err!("ArrayList.get() requiert un int"),
                                     }
                                 }
+                                ("ArrayList", "set") if args.len() == 2 => {
+                                    let count = match rc.borrow().fields.get("count") {
+                                        Some(Value::Int(n)) => *n as usize,
+                                        _ => 0,
+                                    };
+                                    let data = match rc.borrow().fields.get("data").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("ArrayList: champ 'data' introuvable"),
+                                    };
+                                    match &args[0] {
+                                        Value::Int(i) => {
+                                            let i = *i;
+                                            if i < 0 || i as usize >= count {
+                                                Ok(Value::Bool(false))
+                                            } else {
+                                                let producer = args[1].clone();
+                                                let new_val = self.call_lambda(producer, vec![])?;
+                                                data.borrow_mut()[i as usize] = new_val;
+                                                Ok(Value::Bool(true))
+                                            }
+                                        }
+                                        _ => err!("ArrayList.set() requiert un int comme index"),
+                                    }
+                                }
                                 ("ArrayList", "contains") if args.len() == 1 => {
                                     let needle = &args[0];
                                     let count = match rc.borrow().fields.get("count") {
