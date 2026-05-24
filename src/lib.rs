@@ -17,5 +17,8 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/boolean.mini"),   "\n",
     include_str!("../lib/std/integer.mini"),   "\n",
     include_str!("../lib/std/float.mini"),     "\n",
-    include_str!("../lib/std/double.mini"),
+    include_str!("../lib/std/double.mini"),    "\n",
+    include_str!("../lib/std/list.mini"),      "\n",
+    include_str!("../lib/std/set.mini"),       "\n",
+    include_str!("../lib/std/map.mini"),
 );

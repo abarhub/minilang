@@ -16,3 +16,5 @@ mod example_enum_generic_tests;
 mod example_errors_tests;
 #[path = "example/example_optional_tests.rs"]
 mod example_optional_tests;
+#[path = "example/example_collections_tests.rs"]
+mod example_collections_tests;

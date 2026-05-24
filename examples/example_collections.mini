@@ -1,0 +1,41 @@
+// Exemple d'utilisation des collections : List, Set, Map
+
+int main() {
+
+    // ── List<int> ─────────────────────────────────────────────────────────────
+    List<int> numbers = new List<int>();
+    numbers.add(10);
+    numbers.add(20);
+    numbers.add(30);
+    print("size=" + numbers.size().toString());
+    print("get(1)=" + numbers.get(1).toString());
+    print("contains(20)=" + numbers.contains(20).toString());
+    numbers.remove(0);
+    print("after remove(0) size=" + numbers.size().toString());
+    print("get(0) after remove=" + numbers.get(0).toString());
+
+    // ── Set<string> ───────────────────────────────────────────────────────────
+    Set<string> words = new Set<string>();
+    bool a1 = words.add("hello");
+    bool a2 = words.add("world");
+    bool a3 = words.add("hello");
+    print("set size=" + words.size().toString());
+    print("add new=" + a1.toString());
+    print("add dup=" + a3.toString());
+    print("contains hello=" + words.contains("hello").toString());
+    bool r1 = words.remove("hello");
+    print("after remove size=" + words.size().toString());
+
+    // ── Map<string,int> ───────────────────────────────────────────────────────
+    Map<string, int> scores = new Map<string, int>();
+    scores.put("alice", 95);
+    scores.put("bob", 87);
+    scores.put("alice", 99);
+    print("map size=" + scores.size().toString());
+    print("alice=" + scores.get("alice").toString());
+    print("containsKey bob=" + scores.containsKey("bob").toString());
+    bool rm = scores.remove("bob");
+    print("after remove map size=" + scores.size().toString());
+
+    return 0;
+}
