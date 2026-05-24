@@ -35,9 +35,9 @@ class ArrayList<T> implements List<T> {
     // Retourne Some(element) si l'index est valide, None sinon.
     Option<T> get(int index) builtin;
 
-    void set(int index, T element) {
-        data.set(index, element);
-    }
+    // Appelle le producteur et place la valeur à l'index si valide.
+    // Retourne true si succès, false si index hors bornes.
+    bool set(int index, fn() -> T producer) builtin;
 
     int size() {
         return count;

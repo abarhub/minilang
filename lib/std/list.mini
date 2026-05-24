@@ -4,7 +4,7 @@
 interface List<T> {
     void add(T element);
     Option<T> get(int index);
-    void set(int index, T element);
+    bool set(int index, fn() -> T producer);
     int size();
     bool isEmpty();
     bool contains(T element);

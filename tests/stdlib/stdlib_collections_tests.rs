@@ -56,15 +56,29 @@ fn test_list_get_none() {
 }
 
 #[test]
-fn test_list_set() {
+fn test_list_set_valid() {
     assert_eq!(run_ok(r#"
         int main() {
             List<int> l = new ArrayList<int>();
             l.add(10); l.add(20);
-            l.set(0, 99);
-            return l.get(0).get();
+            bool ok = l.set(0, () => 99);
+            if (ok) { return l.get(0).get(); }
+            return -1;
         }
     "#), 99);
+}
+
+#[test]
+fn test_list_set_out_of_bounds() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10);
+            bool ok = l.set(99, () => 42);
+            if (ok) { return 0; }
+            return 1;
+        }
+    "#), 1);
 }
 
 #[test]
