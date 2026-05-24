@@ -3,6 +3,8 @@
 //  Appel : n.abs(), n.toString(), etc.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 class Integer {
 
     // Retourne la représentation décimale.

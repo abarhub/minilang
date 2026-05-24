@@ -1,6 +1,8 @@
 // ── Bibliothèque standard – Set<T> ───────────────────────────────────────────
 //  Interface pour les ensembles sans doublons.
 
+package minilang.collection;
+
 interface Set<T> {
     bool add(T element);
     bool contains(T element);

@@ -1,24 +1,26 @@
-// ── Bibliothèque standard – Double ───────────────────────────────────────────
-//  Méthodes sur le type primitif double.
-//  Appel : d.abs(), d.floor(), etc.
+// ── Bibliothèque standard – Float ────────────────────────────────────────────
+//  Méthodes sur le type primitif float.
+//  Appel : f.abs(), f.floor(), etc.
 //  Accessible sans import dans tout fichier minilang.
 
-class Double {
+package minilang.lang;
+
+class Float {
 
     // Retourne la représentation décimale.
     string toString() builtin;
 
     // Retourne la valeur absolue.
-    double abs() builtin;
+    float abs() builtin;
 
     // Retourne l'entier inférieur ou égal (arrondi vers -∞).
-    double floor() builtin;
+    float floor() builtin;
 
     // Retourne l'entier supérieur ou égal (arrondi vers +∞).
-    double ceil() builtin;
+    float ceil() builtin;
 
     // Retourne l'arrondi au plus proche.
-    double round() builtin;
+    float round() builtin;
 
     // Retourne true si this > 0.
     bool isPositive() builtin;
@@ -30,16 +32,16 @@ class Double {
     bool isNaN() builtin;
 
     // Retourne le minimum entre this et other.
-    double min(double other) builtin;
+    float min(float other) builtin;
 
     // Retourne le maximum entre this et other.
-    double max(double other) builtin;
+    float max(float other) builtin;
 
     // Tronque vers zéro et retourne un int.
     int toInt() builtin;
 
-    // Convertit en float (peut perdre en précision).
-    float toFloat() builtin;
+    // Convertit en double.
+    double toDouble() builtin;
 
     // Retourne true si les deux valeurs sont égales.
     bool equals(Object other) builtin;

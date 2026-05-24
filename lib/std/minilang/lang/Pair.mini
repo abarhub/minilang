@@ -2,6 +2,8 @@
 //  Représente une paire de deux valeurs de types potentiellement différents.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 enum Pair<A, B> {
     Of(A first, B second);
 

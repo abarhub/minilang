@@ -2,6 +2,8 @@
 //  Représente une valeur optionnelle : soit Some(valeur), soit None.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 enum Option<T> {
     Some(T value),
     None;

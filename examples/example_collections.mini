@@ -1,5 +1,12 @@
 // Exemple collections : ArrayList, HashSet, HashMap
 
+import minilang.collection.List;
+import minilang.collection.ArrayList;
+import minilang.collection.Set;
+import minilang.collection.HashSet;
+import minilang.collection.Map;
+import minilang.collection.HashMap;
+
 int main() {
 
     // ── ArrayList<int> via interface List<int> ────────────────────────────────

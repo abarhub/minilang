@@ -3,6 +3,8 @@
 //  Appel : b.toString(), b.and(other), etc.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 class Boolean {
 
     // Retourne "true" ou "false".

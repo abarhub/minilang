@@ -1,6 +1,10 @@
 // ── Bibliothèque standard – HashSet<T> ───────────────────────────────────────
 //  Implémentation builtin de Set<T> (unicité garantie par val_eq).
 
+package minilang.collection;
+
+import minilang.collection.Set;
+
 class HashSet<T> implements Set<T> {
     bool add(T element) builtin;
     bool contains(T element) builtin;

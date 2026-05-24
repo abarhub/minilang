@@ -3,6 +3,8 @@
 //  Appel : s.length(), s.toUpperCase(), etc.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 class String {
 
     // Retourne le nombre de caractères.

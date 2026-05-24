@@ -2,6 +2,8 @@
 //  Classe racine implicite de toute la hiérarchie de types.
 //  Toute classe hérite d'Object sans avoir besoin de l'écrire explicitement.
 
+package minilang.lang;
+
 class Object {
 
     // Retourne true si les deux objets sont identiques (même référence).

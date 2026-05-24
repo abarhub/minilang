@@ -1,6 +1,10 @@
 // ── Bibliothèque standard – List<T> ──────────────────────────────────────────
 //  Interface pour les listes ordonnées.
 
+package minilang.collection;
+
+import minilang.lang.Option;
+
 interface List<T> {
     void add(T element);
     Option<T> get(int index);

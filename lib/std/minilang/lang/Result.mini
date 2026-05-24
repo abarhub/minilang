@@ -2,6 +2,8 @@
 //  Représente soit un succès Ok(valeur), soit une erreur Err(erreur).
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 enum Result<T, E> {
     Ok(T value),
     Err(E error);
