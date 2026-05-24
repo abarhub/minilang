@@ -1,16 +1,54 @@
 // ── Bibliothèque standard – HashSet<T> ───────────────────────────────────────
-//  Implémentation builtin de Set<T> (unicité garantie par val_eq).
+//  Implémentation de Set<T> via HashMap<T, bool>.
+//  Chaque élément est stocké comme clé dans la map avec true comme valeur sentinelle.
 
 package minilang.collection;
 
 import minilang.collection.Set;
+import minilang.collection.HashMap;
 
 class HashSet<T> implements Set<T> {
-    bool add(T element) builtin;
-    bool contains(T element) builtin;
-    int size() builtin;
-    bool isEmpty() builtin;
-    bool remove(T element) builtin;
-    void clear() builtin;
+
+    HashMap<T, bool> map;
+
+    HashSet() {
+        map = new HashMap<T, bool>();
+    }
+
+    // Ajoute l'élément. Retourne true si ajouté, false s'il existait déjà.
+    bool add(T element) {
+        if (map.containsKey(element)) {
+            return false;
+        }
+        map.put(element, true);
+        return true;
+    }
+
+    // Retourne true si l'élément est présent.
+    bool contains(T element) {
+        return map.containsKey(element);
+    }
+
+    // Retourne le nombre d'éléments.
+    int size() {
+        return map.size();
+    }
+
+    // Retourne true si l'ensemble est vide.
+    bool isEmpty() {
+        return map.isEmpty();
+    }
+
+    // Supprime l'élément. Retourne true si supprimé, false s'il était absent.
+    bool remove(T element) {
+        return map.remove(element);
+    }
+
+    // Vide l'ensemble.
+    void clear() {
+        map.clear();
+    }
+
+    // Représentation textuelle — implémentée en natif pour itérer les clés.
     string toString() builtin;
 }
