@@ -4,6 +4,7 @@
 interface Set<T> {
     bool add(T element);
     bool contains(T element);
+    Option<T> get(T element);
     int size();
     bool isEmpty();
     bool remove(T element);

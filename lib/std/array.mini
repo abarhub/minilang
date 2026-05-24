@@ -13,6 +13,9 @@ enum Array<T> {
     // Lève une erreur d'exécution si index hors bornes.
     T get(int index) builtin;
 
+    // Retourne Some(element) si l'index est valide, None sinon.
+    Option<T> getOption(int index) builtin;
+
     // Affecte une valeur à l'index donné.
     // Lève une erreur d'exécution si index hors bornes.
     void set(int index, T value) builtin;
@@ -22,6 +25,12 @@ enum Array<T> {
 
     // Retourne true si le tableau contient la valeur donnée.
     bool contains(T value) builtin;
+
+    // Retourne Some(index) du premier élément égal à value, None sinon.
+    Option<int> indexOf(T value) builtin;
+
+    // Retourne Some(element) du premier élément égal à value, None sinon.
+    Option<T> find(T value) builtin;
 
     // Remplit tout le tableau avec la valeur donnée.
     void fill(T value) builtin;

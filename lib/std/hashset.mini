@@ -4,6 +4,7 @@
 class HashSet<T> implements Set<T> {
     bool add(T element) builtin;
     bool contains(T element) builtin;
+    Option<T> get(T element) builtin;
     int size() builtin;
     bool isEmpty() builtin;
     bool remove(T element) builtin;
