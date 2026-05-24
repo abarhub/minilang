@@ -27,7 +27,6 @@ pub struct EnumData {
 pub enum Value {
     Int(i64), Float(f64), Bool(bool), Str(String), Char(char),
     Array(Rc<RefCell<Vec<Value>>>),
-    HashSet(Rc<RefCell<Vec<Value>>>),
     HashMap(Rc<RefCell<Vec<(Value, Value)>>>),
     Object(Rc<RefCell<ObjectData>>),
     Enum(Rc<EnumData>),
@@ -48,10 +47,6 @@ impl std::fmt::Display for Value {
             Value::Void      => write!(f, ""),
             Value::Array(v)  => {
                 write!(f, "[{}]", v.borrow().iter()
-                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
-            }
-            Value::HashSet(v) => {
-                write!(f, "HashSet{{{}}}", v.borrow().iter()
                     .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
             }
             Value::HashMap(v) => {
@@ -588,6 +583,16 @@ impl Interpreter {
                                         .collect();
                                     Ok(Value::Str(format!("ArrayList[{}]", parts.join(", "))))
                                 }
+                                ("HashSet", "toString") if args.is_empty() => {
+                                    let map = match rc.borrow().fields.get("map").cloned() {
+                                        Some(Value::HashMap(m)) => m,
+                                        _ => return err!("HashSet: champ 'map' introuvable"),
+                                    };
+                                    let s = format!("HashSet{{{}}}", map.borrow().iter()
+                                        .map(|(k, _)| k.to_string())
+                                        .collect::<Vec<_>>().join(", "));
+                                    Ok(Value::Str(s))
+                                }
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -907,46 +912,6 @@ impl Interpreter {
                             _ => err!("Méthode inconnue '{}' sur float/double", method),
                         }
                     }
-                    Value::HashSet(v) => {
-                        match method.as_str() {
-                            "add" => {
-                                if args.len() != 1 { return err!("add() attend 1 argument"); }
-                                let val = args[0].clone();
-                                let mut data = v.borrow_mut();
-                                if !data.iter().any(|x| val_eq(x, &val)) {
-                                    data.push(val);
-                                    Ok(Value::Bool(true))
-                                } else {
-                                    Ok(Value::Bool(false))
-                                }
-                            }
-                            "contains" => {
-                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
-                                let found = v.borrow().iter().any(|x| val_eq(x, &args[0]));
-                                Ok(Value::Bool(found))
-                            }
-                            "size"    => Ok(Value::Int(v.borrow().len() as i64)),
-                            "isEmpty" => Ok(Value::Bool(v.borrow().is_empty())),
-                            "remove" => {
-                                if args.len() != 1 { return err!("remove() attend 1 argument"); }
-                                let val = args[0].clone();
-                                let mut data = v.borrow_mut();
-                                if let Some(pos) = data.iter().position(|x| val_eq(x, &val)) {
-                                    data.remove(pos);
-                                    Ok(Value::Bool(true))
-                                } else {
-                                    Ok(Value::Bool(false))
-                                }
-                            }
-                            "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
-                            "toString" => {
-                                let s = format!("HashSet{{{}}}", v.borrow().iter()
-                                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "));
-                                Ok(Value::Str(s))
-                            }
-                            _ => err!("Méthode inconnue '{}' sur HashSet", method),
-                        }
-                    }
                     Value::HashMap(v) => {
                         match method.as_str() {
                             "put" => {
@@ -990,6 +955,20 @@ impl Interpreter {
                                 }
                             }
                             "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
+                            "keys" => {
+                                if !args.is_empty() { return err!("keys() ne prend pas d'arguments"); }
+                                let pairs = v.borrow();
+                                let keys: Vec<Value> = pairs.iter().map(|(k, _)| k.clone()).collect();
+                                let count = keys.len() as i64;
+                                let arr = Value::Array(Rc::new(RefCell::new(keys)));
+                                let mut fields = HashMap::new();
+                                fields.insert("data".to_string(), arr);
+                                fields.insert("count".to_string(), Value::Int(count));
+                                Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
+                                    class_name: "ArrayList".to_string(),
+                                    fields,
+                                }))))
+                            }
                             "toString" => {
                                 let s = format!("HashMap{{{}}}", v.borrow().iter()
                                     .map(|(k, val)| format!("{}={}", k, val))
@@ -1042,7 +1021,6 @@ impl Interpreter {
 
             Expr::New { class_name, args, .. } => {
                 match class_name.as_str() {
-                    "HashSet"  => return Ok(Value::HashSet(Rc::new(RefCell::new(vec![])))),
                     "HashMap"  => return Ok(Value::HashMap(Rc::new(RefCell::new(vec![])))),
                     _ => {}
                 }
