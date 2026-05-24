@@ -1,0 +1,29 @@
+// ── Bibliothèque standard – HashSetIterator<T> ───────────────────────────────
+//  Itérateur sur HashSet<T> : itère sur les clés extraites de la HashMap interne.
+
+package minilang.collection;
+
+import minilang.lang.Option;
+import minilang.collection.Iterator;
+import minilang.collection.ArrayList;
+
+class HashSetIterator<T> implements Iterator<T> {
+
+    ArrayList<T> keys;
+    int index;
+
+    HashSetIterator(ArrayList<T> keys) {
+        this.keys = keys;
+        this.index = 0;
+    }
+
+    // Retourne Some(élément) et avance, ou None si l'ensemble est épuisé.
+    Option<T> next() {
+        if (index >= keys.size()) {
+            return Option<T>::None;
+        }
+        Option<T> val = keys.get(index);
+        index = index + 1;
+        return val;
+    }
+}

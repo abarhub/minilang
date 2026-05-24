@@ -1,0 +1,12 @@
+// ── Bibliothèque standard – Iterable<T> ──────────────────────────────────────
+//  Interface implémentée par toute collection qui peut produire un Iterator<T>.
+//  Permet l'utilisation du for-in : for (T x in collection) { ... }
+
+package minilang.collection;
+
+import minilang.collection.Iterator;
+
+interface Iterable<T> {
+    // Retourne un nouvel itérateur positionné au début de la collection.
+    Iterator<T> iterator();
+}

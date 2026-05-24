@@ -1,0 +1,12 @@
+// ── Bibliothèque standard – Iterator<T> ──────────────────────────────────────
+//  Interface d'itération style Rust : next() retourne None quand l'itération
+//  est terminée, évitant les appels hasNext()/next() séparés.
+
+package minilang.collection;
+
+import minilang.lang.Option;
+
+interface Iterator<T> {
+    // Retourne l'élément suivant emballé dans Some, ou None si épuisé.
+    Option<T> next();
+}

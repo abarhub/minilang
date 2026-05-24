@@ -437,6 +437,21 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             expr.clone().map(|e| Box::new(Stmt::ExprStmt(e))),
         ));
 
+        // for (Type varName in expr) { body }  — for-in (essayé en premier)
+        let for_in_stmt = kw("for")
+            .ignore_then(
+                type_parser()
+                    .then(text::ident().padded_by(ws()))
+                    .then_ignore(kw("in"))
+                    .then(expr.clone())
+                    .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()))
+            )
+            .then(body.clone())
+            .map(|(((ty, name), iter), b)| Stmt::ForIn {
+                var_type: ty, var_name: name, iter_expr: Box::new(iter), body: b
+            });
+
+        // for (init; cond; update) { body }  — for classique
         let for_stmt = kw("for")
             .ignore_then(
                 for_init.or_not()
@@ -524,7 +539,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         choice((
             print_stmt, return_stmt, break_stmt, continue_stmt,
             builtin_stmt,
-            if_stmt, while_stmt, do_while, for_stmt, match_stmt,
+            if_stmt, while_stmt, do_while, for_in_stmt, for_stmt, match_stmt,
             kw_var_decl, index_assign, field_assign, generic_var_decl, assign_stmt, expr_stmt,
         ))
         .padded_by(ws())

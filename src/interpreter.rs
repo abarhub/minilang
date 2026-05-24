@@ -324,6 +324,68 @@ impl Interpreter {
                 }
             },
 
+            Stmt::ForIn { var_name, iter_expr, body, .. } => {
+                let iterable = self.eval(iter_expr, env, this.clone())?;
+                match iterable {
+                    // ── Tableau natif : itération directe ──────────────────────
+                    Value::Array(v) => {
+                        let items: Vec<Value> = v.borrow().clone();
+                        'arr: for item in items {
+                            env.push();
+                            env.declare(var_name.clone(), item);
+                            let f = self.exec_body(body, env, this.clone())?;
+                            env.pop();
+                            match f {
+                                Flow::Break         => break 'arr,
+                                Flow::Return(v)     => return Ok(Flow::Return(v)),
+                                Flow::Continue | Flow::Next => {}
+                            }
+                        }
+                    }
+                    // ── Objet : appel de iterator() puis next() en boucle ──────
+                    Value::Object(rc) => {
+                        let cn = rc.borrow().class_name.clone();
+                        let iter_m = self.find_method(&cn, "iterator")
+                            .ok_or_else(|| RuntimeError(format!(
+                                "'{}' n'est pas Iterable : méthode iterator() absente", cn)))?;
+                        let iterator = self.call_method(&iter_m, vec![], rc)?;
+                        let iter_rc = match iterator {
+                            Value::Object(r) => r,
+                            _ => return err!("iterator() doit retourner un objet"),
+                        };
+                        'obj: loop {
+                            let iter_cn = iter_rc.borrow().class_name.clone();
+                            let next_m = self.find_method(&iter_cn, "next")
+                                .ok_or_else(|| RuntimeError(format!(
+                                    "Iterator '{}' n'a pas de méthode next()", iter_cn)))?;
+                            let next_val = self.call_method(&next_m, vec![], iter_rc.clone())?;
+                            match next_val {
+                                Value::Enum(ref ed)
+                                    if ed.enum_name == "Option" && ed.variant_name == "None"
+                                    => break 'obj,
+                                Value::Enum(ref ed)
+                                    if ed.enum_name == "Option" && ed.variant_name == "Some"
+                                    => {
+                                    let item = ed.fields.get("value")
+                                        .cloned().unwrap_or(Value::Null);
+                                    env.push();
+                                    env.declare(var_name.clone(), item);
+                                    let f = self.exec_body(body, env, this.clone())?;
+                                    env.pop();
+                                    match f {
+                                        Flow::Break     => break 'obj,
+                                        Flow::Return(v) => return Ok(Flow::Return(v)),
+                                        Flow::Continue | Flow::Next => {}
+                                    }
+                                }
+                                _ => return err!("next() doit retourner Option<T>"),
+                            }
+                        }
+                    }
+                    other => return err!("for-in : valeur non itérable : {}", other),
+                }
+            }
+
             Stmt::For { init, condition, update, body } => {
                 env.push();
                 if let Some(s) = init { self.exec_stmt(s, env, this.clone())?; }
@@ -672,6 +734,15 @@ impl Interpreter {
                                 for x in data.iter_mut() { *x = val.clone(); }
                                 Ok(Value::Void)
                             }
+                            "forEach" => {
+                                if args.len() != 1 { return err!("forEach() attend 1 argument"); }
+                                let consumer = args[0].clone();
+                                let items: Vec<Value> = v.borrow().clone();
+                                for item in items {
+                                    self.call_lambda(consumer.clone(), vec![item])?;
+                                }
+                                Ok(Value::Void)
+                            }
                             _ => err!("Méthode inconnue '{}' sur Array", method),
                         }
                     }
@@ -969,6 +1040,37 @@ impl Interpreter {
                                     fields,
                                 }))))
                             }
+                            "entries" => {
+                                if !args.is_empty() { return err!("entries() ne prend pas d'arguments"); }
+                                let pairs = v.borrow();
+                                let entries: Vec<Value> = pairs.iter().map(|(k, val)| {
+                                    let mut fields = HashMap::new();
+                                    fields.insert("first".to_string(),  k.clone());
+                                    fields.insert("second".to_string(), val.clone());
+                                    Value::Object(Rc::new(RefCell::new(ObjectData {
+                                        class_name: "Pair".to_string(),
+                                        fields,
+                                    })))
+                                }).collect();
+                                let count = entries.len() as i64;
+                                let arr = Value::Array(Rc::new(RefCell::new(entries)));
+                                let mut fields = HashMap::new();
+                                fields.insert("data".to_string(),  arr);
+                                fields.insert("count".to_string(), Value::Int(count));
+                                Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
+                                    class_name: "ArrayList".to_string(),
+                                    fields,
+                                }))))
+                            }
+                            "forEach" => {
+                                if args.len() != 1 { return err!("forEach() attend 1 argument"); }
+                                let consumer = args[0].clone();
+                                let pairs: Vec<(Value, Value)> = v.borrow().clone();
+                                for (k, val) in pairs {
+                                    self.call_lambda(consumer.clone(), vec![k, val])?;
+                                }
+                                Ok(Value::Void)
+                            }
                             "toString" => {
                                 let s = format!("HashMap{{{}}}", v.borrow().iter()
                                     .map(|(k, val)| format!("{}={}", k, val))
@@ -1033,7 +1135,7 @@ impl Interpreter {
                         .ok_or_else(|| RuntimeError(format!(
                             "Pas de constructeur à {} arg(s) pour '{}'", args.len(), class_name)))?;
                     let eargs: Vec<Value> = args.iter()
-                        .map(|a| self.eval(a, env, None)).collect::<Result<_, _>>()?;
+                        .map(|a| self.eval(a, env, this.clone())).collect::<Result<_, _>>()?;
                     let mut ce = Env::new(); ce.push();
                     for (p, v) in ctor.params.iter().zip(eargs) { ce.declare(p.name.clone(), v); }
                     self.exec_body(&ctor.body, &mut ce, Some(rc))?;
@@ -1047,7 +1149,7 @@ impl Interpreter {
                 let vd = ed.variants.iter().find(|v| &v.name == variant)
                     .ok_or_else(|| RuntimeError(format!("Variante '{}' inconnue", variant)))?.clone();
                 let eargs: Vec<Value> = args.iter()
-                    .map(|a| self.eval(a, env, None)).collect::<Result<_, _>>()?;
+                    .map(|a| self.eval(a, env, this.clone())).collect::<Result<_, _>>()?;
                 let mut fields = HashMap::new();
                 let mut field_order = Vec::new();
                 for (p, v) in vd.fields.iter().zip(eargs) {

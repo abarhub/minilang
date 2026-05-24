@@ -170,6 +170,11 @@ fn print_stmt(s: &Stmt, d: usize) {
             for s in body { print_stmt(s, d + 1); }
             println!("{}}}", pad(d));
         }
+        Stmt::ForIn { var_type, var_name, iter_expr, body } => {
+            println!("{}for ({} {} in {}) {{", pad(d), var_type, var_name, fmt_expr(iter_expr));
+            for s in body { print_stmt(s, d + 1); }
+            println!("{}}}", pad(d));
+        }
         Stmt::Match { expr, arms } => {
             println!("{}match {} {{", pad(d), fmt_expr(expr));
             for arm in arms {

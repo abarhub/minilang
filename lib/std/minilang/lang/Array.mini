@@ -33,4 +33,7 @@ enum Array<T> {
 
     // Remplit tout le tableau avec la valeur donnée.
     void fill(T value) builtin;
+
+    // Appelle consumer pour chaque élément du tableau.
+    void forEach(fn(T) -> void consumer) builtin;
 }

@@ -4,6 +4,7 @@
 package minilang.collection;
 
 import minilang.lang.Option;
+import minilang.collection.Iterator;
 
 interface List<T> {
     void add(T element);
@@ -17,4 +18,6 @@ interface List<T> {
     void remove(int index);
     void clear();
     string toString();
+    void forEach(fn(T) -> void consumer);
+    Iterator<T> iterator();
 }
