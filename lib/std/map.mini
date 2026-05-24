@@ -1,0 +1,30 @@
+// ── Bibliothèque standard – Map<K,V> ─────────────────────────────────────────
+//  Table associative clé→valeur.
+//  Usage : Map<string,int> m = new Map<string,int>();
+
+class Map<K, V> {
+
+    // Insère ou met à jour une entrée.
+    void put(K key, V value) builtin;
+
+    // Retourne la valeur associée à la clé, ou null si absente.
+    V get(K key) builtin;
+
+    // Retourne true si la clé est présente.
+    bool containsKey(K key) builtin;
+
+    // Retourne le nombre d'entrées.
+    int size() builtin;
+
+    // Retourne true si la map est vide.
+    bool isEmpty() builtin;
+
+    // Supprime l'entrée ; retourne true si la clé était présente.
+    bool remove(K key) builtin;
+
+    // Vide la map.
+    void clear() builtin;
+
+    // Retourne une représentation textuelle.
+    string toString() builtin;
+}

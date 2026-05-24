@@ -27,6 +27,9 @@ pub struct EnumData {
 pub enum Value {
     Int(i64), Float(f64), Bool(bool), Str(String), Char(char),
     Array(Rc<RefCell<Vec<Value>>>),
+    List(Rc<RefCell<Vec<Value>>>),
+    Set(Rc<RefCell<Vec<Value>>>),
+    Map(Rc<RefCell<Vec<(Value, Value)>>>),
     Object(Rc<RefCell<ObjectData>>),
     Enum(Rc<EnumData>),
     /// Fermeture : paramètres nommés, corps, variables capturées au moment de la création
@@ -47,6 +50,19 @@ impl std::fmt::Display for Value {
             Value::Array(v)  => {
                 write!(f, "[{}]", v.borrow().iter()
                     .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+            }
+            Value::List(v) => {
+                write!(f, "List[{}]", v.borrow().iter()
+                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+            }
+            Value::Set(v) => {
+                write!(f, "Set{{{}}}", v.borrow().iter()
+                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+            }
+            Value::Map(v) => {
+                write!(f, "Map{{{}}}", v.borrow().iter()
+                    .map(|(k, val)| format!("{}={}", k, val))
+                    .collect::<Vec<_>>().join(", "))
             }
             Value::Object(o) => write!(f, "<{}>", o.borrow().class_name),
             Value::Enum(e)   => {
@@ -769,6 +785,161 @@ impl Interpreter {
                             _ => err!("Méthode inconnue '{}' sur float/double", method),
                         }
                     }
+                    Value::List(v) => {
+                        match method.as_str() {
+                            "add" => {
+                                if args.len() != 1 { return err!("add() attend 1 argument"); }
+                                v.borrow_mut().push(args[0].clone());
+                                Ok(Value::Void)
+                            }
+                            "get" => {
+                                if args.len() != 1 { return err!("get() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(i) => {
+                                        let data = v.borrow();
+                                        if *i < 0 || *i as usize >= data.len() {
+                                            return err!("List.get(): index {} hors bornes (taille {})", i, data.len());
+                                        }
+                                        Ok(data[*i as usize].clone())
+                                    }
+                                    _ => err!("get() requiert un int"),
+                                }
+                            }
+                            "set" => {
+                                if args.len() != 2 { return err!("set() attend 2 arguments"); }
+                                match &args[0] {
+                                    Value::Int(i) => {
+                                        let i = *i as usize;
+                                        let val = args[1].clone();
+                                        let mut data = v.borrow_mut();
+                                        if i >= data.len() { return err!("List.set(): index {} hors bornes", i); }
+                                        data[i] = val;
+                                        Ok(Value::Void)
+                                    }
+                                    _ => err!("set() requiert un int en premier argument"),
+                                }
+                            }
+                            "size"     => Ok(Value::Int(v.borrow().len() as i64)),
+                            "isEmpty"  => Ok(Value::Bool(v.borrow().is_empty())),
+                            "contains" => {
+                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
+                                let found = v.borrow().iter().any(|x| val_eq(x, &args[0]));
+                                Ok(Value::Bool(found))
+                            }
+                            "remove" => {
+                                if args.len() != 1 { return err!("remove() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Int(i) => {
+                                        let i = *i as usize;
+                                        let mut data = v.borrow_mut();
+                                        if i >= data.len() { return err!("List.remove(): index {} hors bornes", i); }
+                                        data.remove(i);
+                                        Ok(Value::Void)
+                                    }
+                                    _ => err!("remove() requiert un int"),
+                                }
+                            }
+                            "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
+                            "toString" => {
+                                let s = format!("List[{}]", v.borrow().iter()
+                                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "));
+                                Ok(Value::Str(s))
+                            }
+                            _ => err!("Méthode inconnue '{}' sur List", method),
+                        }
+                    }
+                    Value::Set(v) => {
+                        match method.as_str() {
+                            "add" => {
+                                if args.len() != 1 { return err!("add() attend 1 argument"); }
+                                let val = args[0].clone();
+                                let mut data = v.borrow_mut();
+                                if !data.iter().any(|x| val_eq(x, &val)) {
+                                    data.push(val);
+                                    Ok(Value::Bool(true))
+                                } else {
+                                    Ok(Value::Bool(false))
+                                }
+                            }
+                            "contains" => {
+                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
+                                let found = v.borrow().iter().any(|x| val_eq(x, &args[0]));
+                                Ok(Value::Bool(found))
+                            }
+                            "size"    => Ok(Value::Int(v.borrow().len() as i64)),
+                            "isEmpty" => Ok(Value::Bool(v.borrow().is_empty())),
+                            "remove" => {
+                                if args.len() != 1 { return err!("remove() attend 1 argument"); }
+                                let val = args[0].clone();
+                                let mut data = v.borrow_mut();
+                                if let Some(pos) = data.iter().position(|x| val_eq(x, &val)) {
+                                    data.remove(pos);
+                                    Ok(Value::Bool(true))
+                                } else {
+                                    Ok(Value::Bool(false))
+                                }
+                            }
+                            "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
+                            "toString" => {
+                                let s = format!("Set{{{}}}", v.borrow().iter()
+                                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "));
+                                Ok(Value::Str(s))
+                            }
+                            _ => err!("Méthode inconnue '{}' sur Set", method),
+                        }
+                    }
+                    Value::Map(v) => {
+                        match method.as_str() {
+                            "put" => {
+                                if args.len() != 2 { return err!("put() attend 2 arguments"); }
+                                let key = args[0].clone();
+                                let val = args[1].clone();
+                                let mut data = v.borrow_mut();
+                                if let Some(entry) = data.iter_mut().find(|(k, _)| val_eq(k, &key)) {
+                                    entry.1 = val;
+                                } else {
+                                    data.push((key, val));
+                                }
+                                Ok(Value::Void)
+                            }
+                            "get" => {
+                                if args.len() != 1 { return err!("get() attend 1 argument"); }
+                                let key = &args[0];
+                                let data = v.borrow();
+                                if let Some((_, val)) = data.iter().find(|(k, _)| val_eq(k, key)) {
+                                    Ok(val.clone())
+                                } else {
+                                    Ok(Value::Null)
+                                }
+                            }
+                            "containsKey" => {
+                                if args.len() != 1 { return err!("containsKey() attend 1 argument"); }
+                                let found = v.borrow().iter().any(|(k, _)| val_eq(k, &args[0]));
+                                Ok(Value::Bool(found))
+                            }
+                            "size"    => Ok(Value::Int(v.borrow().len() as i64)),
+                            "isEmpty" => Ok(Value::Bool(v.borrow().is_empty())),
+                            "remove" => {
+                                if args.len() != 1 { return err!("remove() attend 1 argument"); }
+                                let key = args[0].clone();
+                                let mut data = v.borrow_mut();
+                                if let Some(pos) = data.iter().position(|(k, _)| val_eq(k, &key)) {
+                                    data.remove(pos);
+                                    Ok(Value::Bool(true))
+                                } else {
+                                    Ok(Value::Bool(false))
+                                }
+                            }
+                            "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
+                            "toString" => {
+                                let s = format!("Map{{{}}}", v.borrow().iter()
+                                    .map(|(k, val)| format!("{}={}", k, val))
+                                    .collect::<Vec<_>>().join(", "));
+                                Ok(Value::Str(s))
+                            }
+                            _ => err!("Méthode inconnue '{}' sur Map", method),
+                        }
+                    }
                     _ => err!("Appel de méthode sur non-objet"),
                 }
             }
@@ -811,6 +982,12 @@ impl Interpreter {
             }
 
             Expr::New { class_name, args, .. } => {
+                match class_name.as_str() {
+                    "List" => return Ok(Value::List(Rc::new(RefCell::new(vec![])))),
+                    "Set"  => return Ok(Value::Set(Rc::new(RefCell::new(vec![])))),
+                    "Map"  => return Ok(Value::Map(Rc::new(RefCell::new(vec![])))),
+                    _ => {}
+                }
                 let obj = self.instantiate(class_name)?;
                 let rc = match &obj { Value::Object(r) => r.clone(), _ => unreachable!() };
                 let ctors = self.classes.get(class_name)
