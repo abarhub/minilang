@@ -232,3 +232,135 @@ int? maybe = Option<int>::Some(42);
 int? none  = Option<int>::None;
 int  val   = maybe ?? 0;           // null coalescing
 ```
+
+# Collections
+
+Les collections se trouvent dans le package `minilang.collection`. Elles doivent être importées avant d'être utilisées.
+
+## List / ArrayList
+
+`List<T>` est une interface représentant une liste ordonnée d'éléments.
+`ArrayList<T>` est l'implémentation fournie par la bibliothèque standard. Sa taille croît automatiquement.
+
+```
+import minilang.collection.List;
+import minilang.collection.ArrayList;
+
+// Création
+List<int> liste = new ArrayList<int>();
+
+// Ajout d'éléments
+liste.add(10);
+liste.add(20);
+liste.add(30);
+
+// Accès par index — retourne Option<T>
+Option<int> opt = liste.get(1);    // Some(20)
+int val = liste.get(1).get();      // 20 (lève une erreur si absent)
+int val2 = liste.get(99) ?? 0;    // 0 si hors limites
+
+// Modification — la lambda n'est appelée que si l'index est valide
+bool ok = liste.set(0, () => 99); // true si modifié, false si hors limites
+
+// Recherche
+bool found   = liste.contains(20);           // true
+Option<int> idx = liste.indexOf(20);         // Some(1)
+Option<int> found2 = liste.find(20);         // Some(20)
+
+// Suppression
+liste.remove(0);     // supprime l'élément à l'index 0
+
+// Taille
+int n = liste.size();
+bool empty = liste.isEmpty();
+
+// Vidage
+liste.clear();
+
+// Affichage
+print(liste.toString());
+```
+
+## Set / HashSet
+
+`Set<T>` est une interface représentant un ensemble sans doublons.
+`HashSet<T>` est l'implémentation fournie par la bibliothèque standard.
+
+```
+import minilang.collection.Set;
+import minilang.collection.HashSet;
+
+// Création
+Set<string> ensemble = new HashSet<string>();
+
+// Ajout — retourne true si l'élément a été ajouté, false s'il existait déjà
+bool added = ensemble.add("alice");   // true
+bool dup   = ensemble.add("alice");   // false (déjà présent)
+ensemble.add("bob");
+ensemble.add("charlie");
+
+// Recherche
+bool present = ensemble.contains("bob");    // true
+bool absent  = ensemble.contains("dave");   // false
+
+// Suppression — retourne true si l'élément existait
+bool removed = ensemble.remove("bob");      // true
+
+// Taille
+int n = ensemble.size();
+bool empty = ensemble.isEmpty();
+
+// Vidage
+ensemble.clear();
+
+// Affichage
+print(ensemble.toString());
+```
+
+## Map / HashMap
+
+`Map<K, V>` est une interface représentant une table associative (clé → valeur).
+`HashMap<K, V>` est l'implémentation fournie par la bibliothèque standard.
+
+```
+import minilang.collection.Map;
+import minilang.collection.HashMap;
+import minilang.collection.ArrayList;
+
+// Création
+Map<string, int> scores = new HashMap<string, int>();
+
+// Insertion / mise à jour
+scores.put("alice", 100);
+scores.put("bob",   85);
+scores.put("alice", 110);   // remplace la valeur existante
+
+// Accès — retourne Option<V>
+Option<int> opt  = scores.get("alice");    // Some(110)
+int val          = scores.get("alice").get(); // 110
+int missing      = scores.get("dave") ?? 0;  // 0 si absent
+
+// Vérification de présence
+bool exists = scores.containsKey("bob");    // true
+
+// Suppression — retourne true si la clé existait
+bool removed = scores.remove("bob");        // true
+
+// Liste des clés
+ArrayList<string> cles = scores.keys();
+int i = 0;
+while (i < cles.size()) {
+    print(cles.get(i).get());
+    i = i + 1;
+}
+
+// Taille
+int n = scores.size();
+bool empty = scores.isEmpty();
+
+// Vidage
+scores.clear();
+
+// Affichage
+print(scores.toString());
+```
