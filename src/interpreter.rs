@@ -483,6 +483,26 @@ impl Interpreter {
                                     };
                                     Ok(Value::Bool(result))
                                 }
+                                ("ArrayList", "get") if args.len() == 1 => {
+                                    let count = match rc.borrow().fields.get("count") {
+                                        Some(Value::Int(n)) => *n as usize,
+                                        _ => 0,
+                                    };
+                                    let data = match rc.borrow().fields.get("data").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("ArrayList: champ 'data' introuvable"),
+                                    };
+                                    match &args[0] {
+                                        Value::Int(i) => {
+                                            if *i < 0 || *i as usize >= count {
+                                                Ok(make_none())
+                                            } else {
+                                                Ok(make_some(data.borrow()[*i as usize].clone()))
+                                            }
+                                        }
+                                        _ => err!("ArrayList.get() requiert un int"),
+                                    }
+                                }
                                 ("ArrayList", "contains") if args.len() == 1 => {
                                     let needle = &args[0];
                                     let count = match rc.borrow().fields.get("count") {
@@ -495,6 +515,40 @@ impl Interpreter {
                                     };
                                     let found = (0..count).any(|i| val_eq(&data.borrow()[i], needle));
                                     Ok(Value::Bool(found))
+                                }
+                                ("ArrayList", "indexOf") if args.len() == 1 => {
+                                    let needle = &args[0];
+                                    let count = match rc.borrow().fields.get("count") {
+                                        Some(Value::Int(n)) => *n as usize,
+                                        _ => 0,
+                                    };
+                                    let data = match rc.borrow().fields.get("data").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("ArrayList: champ 'data' introuvable"),
+                                    };
+                                    let arr = data.borrow();
+                                    if let Some(pos) = (0..count).find(|&i| val_eq(&arr[i], needle)) {
+                                        Ok(make_some(Value::Int(pos as i64)))
+                                    } else {
+                                        Ok(make_none())
+                                    }
+                                }
+                                ("ArrayList", "find") if args.len() == 1 => {
+                                    let needle = &args[0];
+                                    let count = match rc.borrow().fields.get("count") {
+                                        Some(Value::Int(n)) => *n as usize,
+                                        _ => 0,
+                                    };
+                                    let data = match rc.borrow().fields.get("data").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("ArrayList: champ 'data' introuvable"),
+                                    };
+                                    let arr = data.borrow();
+                                    if let Some(pos) = (0..count).find(|&i| val_eq(&arr[i], needle)) {
+                                        Ok(make_some(arr[pos].clone()))
+                                    } else {
+                                        Ok(make_none())
+                                    }
                                 }
                                 ("ArrayList", "toString") if args.is_empty() => {
                                     let count = match rc.borrow().fields.get("count") {
@@ -531,9 +585,10 @@ impl Interpreter {
                                     Value::Int(i) => {
                                         let data = v.borrow();
                                         if *i < 0 || *i as usize >= data.len() {
-                                            return err!("get(): index {} hors bornes (taille {})", i, data.len());
+                                            Ok(make_none())
+                                        } else {
+                                            Ok(make_some(data[*i as usize].clone()))
                                         }
-                                        Ok(data[*i as usize].clone())
                                     }
                                     _ => err!("get() requiert un int"),
                                 }
@@ -560,6 +615,26 @@ impl Interpreter {
                                 let needle = &args[0];
                                 let found = v.borrow().iter().any(|x| val_eq(x, needle));
                                 Ok(Value::Bool(found))
+                            }
+                            "indexOf" => {
+                                if args.len() != 1 { return err!("indexOf() attend 1 argument"); }
+                                let needle = &args[0];
+                                let data = v.borrow();
+                                if let Some(pos) = data.iter().position(|x| val_eq(x, needle)) {
+                                    Ok(make_some(Value::Int(pos as i64)))
+                                } else {
+                                    Ok(make_none())
+                                }
+                            }
+                            "find" => {
+                                if args.len() != 1 { return err!("find() attend 1 argument"); }
+                                let needle = &args[0];
+                                let data = v.borrow();
+                                if let Some(found) = data.iter().find(|x| val_eq(x, needle)) {
+                                    Ok(make_some(found.clone()))
+                                } else {
+                                    Ok(make_none())
+                                }
                             }
                             "fill" => {
                                 if args.len() != 1 { return err!("fill() attend 1 argument"); }
@@ -867,9 +942,9 @@ impl Interpreter {
                                 let key = &args[0];
                                 let data = v.borrow();
                                 if let Some((_, val)) = data.iter().find(|(k, _)| val_eq(k, key)) {
-                                    Ok(val.clone())
+                                    Ok(make_some(val.clone()))
                                 } else {
-                                    Ok(Value::Null)
+                                    Ok(make_none())
                                 }
                             }
                             "containsKey" => {

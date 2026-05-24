@@ -3,7 +3,7 @@
 
 class HashMap<K, V> implements Map<K, V> {
     void put(K key, V value) builtin;
-    V get(K key) builtin;
+    Option<V> get(K key) builtin;
     bool containsKey(K key) builtin;
     int size() builtin;
     bool isEmpty() builtin;

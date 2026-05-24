@@ -18,7 +18,7 @@ class ArrayList<T> implements List<T> {
         T[] newData = new T[newCap];
         int i = 0;
         while (i < count) {
-            newData.set(i, data.get(i));
+            newData.set(i, data.get(i).get());
             i = i + 1;
         }
         data = newData;
@@ -32,9 +32,8 @@ class ArrayList<T> implements List<T> {
         count = count + 1;
     }
 
-    T get(int index) {
-        return data.get(index);
-    }
+    // Retourne Some(element) si l'index est valide, None sinon.
+    Option<T> get(int index) builtin;
 
     void set(int index, T element) {
         data.set(index, element);
@@ -51,10 +50,16 @@ class ArrayList<T> implements List<T> {
     // Implémenté en natif (comparaison val_eq sur les éléments).
     bool contains(T element) builtin;
 
+    // Retourne Some(index) du premier élément égal, None sinon.
+    Option<int> indexOf(T element) builtin;
+
+    // Retourne Some(element) du premier élément égal, None sinon.
+    Option<T> find(T element) builtin;
+
     void remove(int index) {
         int i = index;
         while (i < count - 1) {
-            data.set(i, data.get(i + 1));
+            data.set(i, data.get(i + 1).get());
             i = i + 1;
         }
         count = count - 1;

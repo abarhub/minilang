@@ -8,11 +8,21 @@ int main() {
     numbers.add(20);
     numbers.add(30);
     print("size=" + numbers.size().toString());
-    print("get(1)=" + numbers.get(1).toString());
+    print("get(1)=" + numbers.get(1).get().toString());
+    print("get(99) isNone=" + numbers.get(99).isNone().toString());
     print("contains(20)=" + numbers.contains(20).toString());
+    print("indexOf(20)=" + numbers.indexOf(20).get().toString());
+    print("find(30)=" + numbers.find(30).get().toString());
     numbers.remove(0);
     print("after remove(0) size=" + numbers.size().toString());
-    print("get(0) after remove=" + numbers.get(0).toString());
+    print("get(0) after remove=" + numbers.get(0).get().toString());
+
+    // ── Array<int> méthodes Option ────────────────────────────────────────────
+    int[] arr = new int[]{5, 15, 25};
+    print("arr.get(1)=" + arr.get(1).get().toString());
+    print("arr.get(99) isNone=" + arr.get(99).isNone().toString());
+    print("arr.indexOf(15)=" + arr.indexOf(15).get().toString());
+    print("arr.find(25)=" + arr.find(25).get().toString());
 
     // ── HashSet<string> via interface Set<string> ─────────────────────────────
     Set<string> words = new HashSet<string>();
@@ -32,7 +42,8 @@ int main() {
     scores.put("bob", 87);
     scores.put("alice", 99);
     print("map size=" + scores.size().toString());
-    print("alice=" + scores.get("alice").toString());
+    print("alice=" + scores.get("alice").get().toString());
+    print("missing isNone=" + scores.get("missing").isNone().toString());
     print("containsKey bob=" + scores.containsKey("bob").toString());
     bool rm = scores.remove("bob");
     print("after remove map size=" + scores.size().toString());

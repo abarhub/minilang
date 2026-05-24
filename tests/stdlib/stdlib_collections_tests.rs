@@ -30,14 +30,29 @@ fn test_list_add_size() {
 }
 
 #[test]
-fn test_list_get() {
+fn test_list_get_some() {
     assert_eq!(run_ok(r#"
         int main() {
             List<int> l = new ArrayList<int>();
             l.add(10); l.add(20); l.add(30);
-            return l.get(1);
+            Option<int> opt = l.get(1);
+            if (opt.isSome()) { return opt.get(); }
+            return -1;
         }
     "#), 20);
+}
+
+#[test]
+fn test_list_get_none() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10);
+            Option<int> opt = l.get(99);
+            if (opt.isNone()) { return 1; }
+            return 0;
+        }
+    "#), 1);
 }
 
 #[test]
@@ -47,7 +62,7 @@ fn test_list_set() {
             List<int> l = new ArrayList<int>();
             l.add(10); l.add(20);
             l.set(0, 99);
-            return l.get(0);
+            return l.get(0).get();
         }
     "#), 99);
 }
@@ -72,6 +87,58 @@ fn test_list_contains_false() {
             l.add(5);
             if (l.contains(99)) { return 0; }
             return 1;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_list_index_of_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10); l.add(20); l.add(30);
+            Option<int> idx = l.indexOf(20);
+            if (idx.isSome()) { return idx.get(); }
+            return -1;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_list_index_of_not_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10); l.add(20);
+            Option<int> idx = l.indexOf(99);
+            if (idx.isNone()) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_list_find_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10); l.add(20); l.add(30);
+            Option<int> found = l.find(20);
+            if (found.isSome()) { return found.get(); }
+            return -1;
+        }
+    "#), 20);
+}
+
+#[test]
+fn test_list_find_not_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10); l.add(20);
+            Option<int> found = l.find(99);
+            if (found.isNone()) { return 1; }
+            return 0;
         }
     "#), 1);
 }
@@ -118,6 +185,95 @@ fn test_list_string_elements() {
             List<string> l = new ArrayList<string>();
             l.add("a"); l.add("b"); l.add("c");
             if (l.contains("b")) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_list_grow_resize() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            int i = 0;
+            while (i < 20) {
+                l.add(i);
+                i = i + 1;
+            }
+            return l.size();
+        }
+    "#), 20);
+}
+
+// ── Array méthodes Option ─────────────────────────────────────────────────────
+
+#[test]
+fn test_array_get_option_some() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{10, 20, 30};
+            Option<int> opt = arr.get(1);
+            if (opt.isSome()) { return opt.get(); }
+            return -1;
+        }
+    "#), 20);
+}
+
+#[test]
+fn test_array_get_option_none() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{10, 20, 30};
+            Option<int> opt = arr.get(99);
+            if (opt.isNone()) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_array_index_of_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{10, 20, 30};
+            Option<int> idx = arr.indexOf(20);
+            if (idx.isSome()) { return idx.get(); }
+            return -1;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_array_index_of_not_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{10, 20, 30};
+            Option<int> idx = arr.indexOf(99);
+            if (idx.isNone()) { return 1; }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
+fn test_array_find_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{10, 20, 30};
+            Option<int> found = arr.find(30);
+            if (found.isSome()) { return found.get(); }
+            return -1;
+        }
+    "#), 30);
+}
+
+#[test]
+fn test_array_find_not_found() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{10, 20, 30};
+            Option<int> found = arr.find(99);
+            if (found.isNone()) { return 1; }
             return 0;
         }
     "#), 1);
@@ -217,7 +373,7 @@ fn test_map_put_get() {
         int main() {
             Map<string, int> m = new HashMap<string, int>();
             m.put("x", 42);
-            return m.get("x");
+            return m.get("x").get();
         }
     "#), 42);
 }
@@ -229,7 +385,7 @@ fn test_map_put_updates() {
             Map<string, int> m = new HashMap<string, int>();
             m.put("x", 1);
             m.put("x", 99);
-            return m.get("x");
+            return m.get("x").get();
         }
     "#), 99);
 }
@@ -306,14 +462,28 @@ fn test_map_clear() {
 }
 
 #[test]
-fn test_map_get_missing_returns_null() {
+fn test_map_get_missing_returns_none() {
     assert_eq!(run_ok(r#"
         int main() {
             Map<string, int> m = new HashMap<string, int>();
-            int v = m.get("missing");
+            Option<int> opt = m.get("missing");
+            if (opt.isNone()) { return 1; }
             return 0;
         }
-    "#), 0);
+    "#), 1);
+}
+
+#[test]
+fn test_map_get_some() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Map<string, int> m = new HashMap<string, int>();
+            m.put("key", 7);
+            Option<int> opt = m.get("key");
+            if (opt.isSome()) { return opt.get(); }
+            return -1;
+        }
+    "#), 7);
 }
 
 // ── Typecheck ─────────────────────────────────────────────────────────────────
@@ -324,7 +494,6 @@ fn test_tc_list_ok() {
         int main() {
             List<int> l = new ArrayList<int>();
             l.add(1);
-            int n = l.get(0);
             int s = l.size();
             return 0;
         }
@@ -387,7 +556,7 @@ fn test_map_interface_usage() {
         int main() {
             Map<string, int> m = new HashMap<string, int>();
             m.put("k", 42);
-            return m.get("k");
+            return m.get("k").get();
         }
     "#), 42);
 }

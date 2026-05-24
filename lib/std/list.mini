@@ -3,11 +3,13 @@
 
 interface List<T> {
     void add(T element);
-    T get(int index);
+    Option<T> get(int index);
     void set(int index, T element);
     int size();
     bool isEmpty();
     bool contains(T element);
+    Option<int> indexOf(T element);
+    Option<T> find(T element);
     void remove(int index);
     void clear();
     string toString();
