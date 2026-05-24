@@ -26,4 +26,16 @@ class ArrayListIterator<T> implements Iterator<T> {
         index = index + 1;
         return val;
     }
+
+    // Appelle consumer pour chaque élément restant.
+    void forEach(fn(T) -> void consumer) {
+        Option<T> nxt = next();
+        bool cont = true;
+        while (cont) {
+            match nxt {
+                Option::Some(v) => { consumer(v); nxt = next(); }
+                Option::None    => { cont = false; }
+            }
+        }
+    }
 }
