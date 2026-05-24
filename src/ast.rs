@@ -181,7 +181,7 @@ pub struct ClassDef {
 // ── Interface ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct InterfaceDef { pub name: String, pub methods: Vec<MethodSig> }
+pub struct InterfaceDef { pub name: String, pub type_params: Vec<String>, pub methods: Vec<MethodSig> }
 
 // ── Enum ──────────────────────────────────────────────────────────────────────
 

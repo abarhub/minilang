@@ -605,12 +605,6 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then_ignore(just(';').padded_by(ws()))
         .map(|((rt, n), p)| MethodSig { return_type: rt, name: n, params: p });
 
-    let interface_def = kw("interface")
-        .ignore_then(text::ident().padded_by(ws()))
-        .then(method_sig.repeated()
-            .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|(name, methods)| InterfaceDef { name, methods });
-
     // ── Classe ────────────────────────────────────────────────────────────────
 
     let type_param_list = text::ident().padded_by(ws())
@@ -618,13 +612,29 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
 
+    let interface_def = kw("interface")
+        .ignore_then(text::ident().padded_by(ws()))
+        .then(type_param_list.clone())
+        .then(method_sig.repeated()
+            .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
+        .map(|((name, tp), methods)| InterfaceDef { name, type_params: tp, methods });
+
     let class_def = kw("class")
         .ignore_then(text::ident().padded_by(ws()))
-        .then(type_param_list)
+        .then(type_param_list.clone())
         .then(kw("extends").ignore_then(text::ident().padded_by(ws())).or_not())
         .then(kw("implements")
-            .ignore_then(text::ident().padded_by(ws())
-                .separated_by(just(',').padded_by(ws())).at_least(1))
+            .ignore_then(
+                text::ident().padded_by(ws())
+                    .then(
+                        just('<')
+                            .ignore_then(type_parser().separated_by(just(',').padded_by(ws())).at_least(1))
+                            .then_ignore(just('>').padded_by(ws()))
+                            .or_not()
+                    )
+                    .map(|(name, _)| name)
+                    .separated_by(just(',').padded_by(ws())).at_least(1)
+            )
             .or_not().map(|v| v.unwrap_or_default()))
         .then(class_member.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))

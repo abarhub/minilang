@@ -1,33 +1,14 @@
 // ── Bibliothèque standard – List<T> ──────────────────────────────────────────
-//  Liste ordonnée redimensionnable.
-//  Usage : List<int> l = new List<int>();
+//  Interface pour les listes ordonnées.
 
-class List<T> {
-
-    // Ajoute un élément en fin de liste.
-    void add(T element) builtin;
-
-    // Retourne l'élément à l'index donné (0-based).
-    T get(int index) builtin;
-
-    // Remplace l'élément à l'index donné.
-    void set(int index, T element) builtin;
-
-    // Retourne le nombre d'éléments.
-    int size() builtin;
-
-    // Retourne true si la liste est vide.
-    bool isEmpty() builtin;
-
-    // Retourne true si la liste contient l'élément.
-    bool contains(T element) builtin;
-
-    // Supprime l'élément à l'index donné.
-    void remove(int index) builtin;
-
-    // Vide la liste.
-    void clear() builtin;
-
-    // Retourne une représentation textuelle.
-    string toString() builtin;
+interface List<T> {
+    void add(T element);
+    T get(int index);
+    void set(int index, T element);
+    int size();
+    bool isEmpty();
+    bool contains(T element);
+    void remove(int index);
+    void clear();
+    string toString();
 }
