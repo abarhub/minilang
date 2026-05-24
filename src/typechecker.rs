@@ -904,7 +904,7 @@ impl TypeChecker {
             (Type::Generic(an, _), Type::UserDefined(en)) => self.is_subclass(an, en),
             (Type::UserDefined(an), Type::Generic(en, _)) => self.is_subclass(an, en),
             (Type::Generic(an, aa), Type::Generic(en, ea)) =>
-                an == en && aa.len() == ea.len()
+                self.is_subclass(an, en) && aa.len() == ea.len()
                     && aa.iter().zip(ea.iter()).all(|(a, e)| self.is_compatible(a, e)),
             // FnType compatible si params et retour compatibles
             (Type::FnType(ap, ar), Type::FnType(ep, er)) =>
@@ -919,7 +919,10 @@ impl TypeChecker {
         if sub == sup { return true; }
         if sup == "Object" { return true; }
         if let Some(c) = self.classes.get(sub) {
-            if let Some(p) = &c.parent { return self.is_subclass(p, sup); }
+            if let Some(p) = &c.parent { if self.is_subclass(p, sup) { return true; } }
+            for iface in &c.implements {
+                if iface == sup { return true; }
+            }
         }
         false
     }
@@ -1002,6 +1005,19 @@ impl TypeChecker {
                 return Ok((
                     m.params.iter().map(|p| substitute(&p.ty, &subst)).collect(),
                     substitute(&m.return_type, &subst),
+                    subst,
+                ));
+            }
+        }
+        if let Some(iface) = self.interfaces.get(&cn) {
+            if let Some(sig) = iface.methods.iter().find(|m| m.name == method) {
+                let subst: Vec<(String, Type)> = iface.type_params.iter()
+                    .zip(type_args.iter())
+                    .map(|(p, t)| (p.clone(), t.clone()))
+                    .collect();
+                return Ok((
+                    sig.params.iter().map(|p| substitute(&p.ty, &subst)).collect(),
+                    substitute(&sig.return_type, &subst),
                     subst,
                 ));
             }

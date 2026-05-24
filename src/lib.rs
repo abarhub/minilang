@@ -20,5 +20,8 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/double.mini"),    "\n",
     include_str!("../lib/std/list.mini"),      "\n",
     include_str!("../lib/std/set.mini"),       "\n",
-    include_str!("../lib/std/map.mini"),
+    include_str!("../lib/std/map.mini"),       "\n",
+    include_str!("../lib/std/arraylist.mini"), "\n",
+    include_str!("../lib/std/hashset.mini"),   "\n",
+    include_str!("../lib/std/hashmap.mini"),
 );

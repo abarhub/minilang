@@ -27,9 +27,8 @@ pub struct EnumData {
 pub enum Value {
     Int(i64), Float(f64), Bool(bool), Str(String), Char(char),
     Array(Rc<RefCell<Vec<Value>>>),
-    List(Rc<RefCell<Vec<Value>>>),
-    Set(Rc<RefCell<Vec<Value>>>),
-    Map(Rc<RefCell<Vec<(Value, Value)>>>),
+    HashSet(Rc<RefCell<Vec<Value>>>),
+    HashMap(Rc<RefCell<Vec<(Value, Value)>>>),
     Object(Rc<RefCell<ObjectData>>),
     Enum(Rc<EnumData>),
     /// Fermeture : paramètres nommés, corps, variables capturées au moment de la création
@@ -51,16 +50,12 @@ impl std::fmt::Display for Value {
                 write!(f, "[{}]", v.borrow().iter()
                     .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
             }
-            Value::List(v) => {
-                write!(f, "List[{}]", v.borrow().iter()
+            Value::HashSet(v) => {
+                write!(f, "HashSet{{{}}}", v.borrow().iter()
                     .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
             }
-            Value::Set(v) => {
-                write!(f, "Set{{{}}}", v.borrow().iter()
-                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
-            }
-            Value::Map(v) => {
-                write!(f, "Map{{{}}}", v.borrow().iter()
+            Value::HashMap(v) => {
+                write!(f, "HashMap{{{}}}", v.borrow().iter()
                     .map(|(k, val)| format!("{}={}", k, val))
                     .collect::<Vec<_>>().join(", "))
             }
@@ -480,15 +475,43 @@ impl Interpreter {
                         let m = self.find_method(&cn, method)
                             .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method)))?;
                         if matches!(m.body.as_slice(), [Stmt::Builtin]) {
-                            match method.as_str() {
-                                "equals" if args.len() == 1 => {
+                            match (cn.as_str(), method.as_str()) {
+                                (_, "equals") if args.len() == 1 => {
                                     let result = match &args[0] {
                                         Value::Object(other) => Rc::ptr_eq(&rc, other),
                                         _ => false,
                                     };
                                     Ok(Value::Bool(result))
                                 }
-                                _ => Err(RuntimeError(format!("Méthode builtin Object inconnue '{}'", method))),
+                                ("ArrayList", "contains") if args.len() == 1 => {
+                                    let needle = &args[0];
+                                    let count = match rc.borrow().fields.get("count") {
+                                        Some(Value::Int(n)) => *n as usize,
+                                        _ => 0,
+                                    };
+                                    let data = match rc.borrow().fields.get("data").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("ArrayList: champ 'data' introuvable"),
+                                    };
+                                    let found = (0..count).any(|i| val_eq(&data.borrow()[i], needle));
+                                    Ok(Value::Bool(found))
+                                }
+                                ("ArrayList", "toString") if args.is_empty() => {
+                                    let count = match rc.borrow().fields.get("count") {
+                                        Some(Value::Int(n)) => *n as usize,
+                                        _ => 0,
+                                    };
+                                    let data = match rc.borrow().fields.get("data").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("ArrayList: champ 'data' introuvable"),
+                                    };
+                                    let parts: Vec<String> = (0..count)
+                                        .map(|i| data.borrow()[i].to_string())
+                                        .collect();
+                                    Ok(Value::Str(format!("ArrayList[{}]", parts.join(", "))))
+                                }
+                                _ => Err(RuntimeError(format!(
+                                    "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
                         } else {
                             self.call_method(&m, args, rc)
@@ -785,70 +808,7 @@ impl Interpreter {
                             _ => err!("Méthode inconnue '{}' sur float/double", method),
                         }
                     }
-                    Value::List(v) => {
-                        match method.as_str() {
-                            "add" => {
-                                if args.len() != 1 { return err!("add() attend 1 argument"); }
-                                v.borrow_mut().push(args[0].clone());
-                                Ok(Value::Void)
-                            }
-                            "get" => {
-                                if args.len() != 1 { return err!("get() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(i) => {
-                                        let data = v.borrow();
-                                        if *i < 0 || *i as usize >= data.len() {
-                                            return err!("List.get(): index {} hors bornes (taille {})", i, data.len());
-                                        }
-                                        Ok(data[*i as usize].clone())
-                                    }
-                                    _ => err!("get() requiert un int"),
-                                }
-                            }
-                            "set" => {
-                                if args.len() != 2 { return err!("set() attend 2 arguments"); }
-                                match &args[0] {
-                                    Value::Int(i) => {
-                                        let i = *i as usize;
-                                        let val = args[1].clone();
-                                        let mut data = v.borrow_mut();
-                                        if i >= data.len() { return err!("List.set(): index {} hors bornes", i); }
-                                        data[i] = val;
-                                        Ok(Value::Void)
-                                    }
-                                    _ => err!("set() requiert un int en premier argument"),
-                                }
-                            }
-                            "size"     => Ok(Value::Int(v.borrow().len() as i64)),
-                            "isEmpty"  => Ok(Value::Bool(v.borrow().is_empty())),
-                            "contains" => {
-                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
-                                let found = v.borrow().iter().any(|x| val_eq(x, &args[0]));
-                                Ok(Value::Bool(found))
-                            }
-                            "remove" => {
-                                if args.len() != 1 { return err!("remove() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(i) => {
-                                        let i = *i as usize;
-                                        let mut data = v.borrow_mut();
-                                        if i >= data.len() { return err!("List.remove(): index {} hors bornes", i); }
-                                        data.remove(i);
-                                        Ok(Value::Void)
-                                    }
-                                    _ => err!("remove() requiert un int"),
-                                }
-                            }
-                            "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
-                            "toString" => {
-                                let s = format!("List[{}]", v.borrow().iter()
-                                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "));
-                                Ok(Value::Str(s))
-                            }
-                            _ => err!("Méthode inconnue '{}' sur List", method),
-                        }
-                    }
-                    Value::Set(v) => {
+                    Value::HashSet(v) => {
                         match method.as_str() {
                             "add" => {
                                 if args.len() != 1 { return err!("add() attend 1 argument"); }
@@ -881,14 +841,14 @@ impl Interpreter {
                             }
                             "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
                             "toString" => {
-                                let s = format!("Set{{{}}}", v.borrow().iter()
+                                let s = format!("HashSet{{{}}}", v.borrow().iter()
                                     .map(|x| x.to_string()).collect::<Vec<_>>().join(", "));
                                 Ok(Value::Str(s))
                             }
-                            _ => err!("Méthode inconnue '{}' sur Set", method),
+                            _ => err!("Méthode inconnue '{}' sur HashSet", method),
                         }
                     }
-                    Value::Map(v) => {
+                    Value::HashMap(v) => {
                         match method.as_str() {
                             "put" => {
                                 if args.len() != 2 { return err!("put() attend 2 arguments"); }
@@ -932,12 +892,12 @@ impl Interpreter {
                             }
                             "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
                             "toString" => {
-                                let s = format!("Map{{{}}}", v.borrow().iter()
+                                let s = format!("HashMap{{{}}}", v.borrow().iter()
                                     .map(|(k, val)| format!("{}={}", k, val))
                                     .collect::<Vec<_>>().join(", "));
                                 Ok(Value::Str(s))
                             }
-                            _ => err!("Méthode inconnue '{}' sur Map", method),
+                            _ => err!("Méthode inconnue '{}' sur HashMap", method),
                         }
                     }
                     _ => err!("Appel de méthode sur non-objet"),
@@ -983,9 +943,8 @@ impl Interpreter {
 
             Expr::New { class_name, args, .. } => {
                 match class_name.as_str() {
-                    "List" => return Ok(Value::List(Rc::new(RefCell::new(vec![])))),
-                    "Set"  => return Ok(Value::Set(Rc::new(RefCell::new(vec![])))),
-                    "Map"  => return Ok(Value::Map(Rc::new(RefCell::new(vec![])))),
+                    "HashSet"  => return Ok(Value::HashSet(Rc::new(RefCell::new(vec![])))),
+                    "HashMap"  => return Ok(Value::HashMap(Rc::new(RefCell::new(vec![])))),
                     _ => {}
                 }
                 let obj = self.instantiate(class_name)?;

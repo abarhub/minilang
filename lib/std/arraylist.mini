@@ -1,0 +1,70 @@
+// ── Bibliothèque standard – ArrayList<T> ─────────────────────────────────────
+//  Implémentation de List<T> avec tableau interne redimensionnable.
+//  La quasi-totalité de l'implémentation est écrite en minilang.
+
+class ArrayList<T> implements List<T> {
+
+    T[] data;
+    int count;
+
+    ArrayList() {
+        data = new T[8];
+        count = 0;
+    }
+
+    // Double la capacité du tableau interne.
+    void grow() {
+        int newCap = data.length() * 2;
+        T[] newData = new T[newCap];
+        int i = 0;
+        while (i < count) {
+            newData.set(i, data.get(i));
+            i = i + 1;
+        }
+        data = newData;
+    }
+
+    void add(T element) {
+        if (count == data.length()) {
+            grow();
+        }
+        data.set(count, element);
+        count = count + 1;
+    }
+
+    T get(int index) {
+        return data.get(index);
+    }
+
+    void set(int index, T element) {
+        data.set(index, element);
+    }
+
+    int size() {
+        return count;
+    }
+
+    bool isEmpty() {
+        return count == 0;
+    }
+
+    // Implémenté en natif (comparaison val_eq sur les éléments).
+    bool contains(T element) builtin;
+
+    void remove(int index) {
+        int i = index;
+        while (i < count - 1) {
+            data.set(i, data.get(i + 1));
+            i = i + 1;
+        }
+        count = count - 1;
+    }
+
+    void clear() {
+        data = new T[8];
+        count = 0;
+    }
+
+    // Implémenté en natif.
+    string toString() builtin;
+}
