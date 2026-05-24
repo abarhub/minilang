@@ -2,9 +2,11 @@
 //  Tableau de taille fixe à éléments homogènes.
 //  Créer  : new T[n]            — n éléments initialisés à la valeur par défaut
 //           new T[]{a, b, ...}  — avec des valeurs initiales
-//  Accès  : arr[i]              — sucre syntaxique pour arr.get(i)
+//  Accès  : arr[i]              — sucre syntaxique (lève une erreur hors bornes)
 //  Affect : arr[i] = val        — sucre syntaxique pour arr.set(i, val)
 //  Accessible sans import dans tout fichier minilang.
+
+package minilang.lang;
 
 enum Array<T> {
     ;

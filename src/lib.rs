@@ -4,24 +4,26 @@ pub mod interpreter;
 pub mod parser;
 pub mod typechecker;
 
-/// Bibliothèque standard embarquée — tous les fichiers lib/std/*.mini
+/// Bibliothèque standard embarquée — lib/std/lang/ et lib/std/collection/
 pub const STDLIB: &str = concat!(
-    include_str!("../lib/std/object.mini"), "\n",
-    include_str!("../lib/std/option.mini"), "\n",
-    include_str!("../lib/std/result.mini"), "\n",
-    include_str!("../lib/std/either.mini"), "\n",
-    include_str!("../lib/std/pair.mini"),   "\n",
-    include_str!("../lib/std/array.mini"),  "\n",
-    include_str!("../lib/std/string.mini"),    "\n",
-    include_str!("../lib/std/character.mini"), "\n",
-    include_str!("../lib/std/boolean.mini"),   "\n",
-    include_str!("../lib/std/integer.mini"),   "\n",
-    include_str!("../lib/std/float.mini"),     "\n",
-    include_str!("../lib/std/double.mini"),    "\n",
-    include_str!("../lib/std/list.mini"),      "\n",
-    include_str!("../lib/std/set.mini"),       "\n",
-    include_str!("../lib/std/map.mini"),       "\n",
-    include_str!("../lib/std/arraylist.mini"), "\n",
-    include_str!("../lib/std/hashset.mini"),   "\n",
-    include_str!("../lib/std/hashmap.mini"),
+    // ── minilang.lang ──────────────────────────────────────────────────────────
+    include_str!("../lib/std/lang/Object.mini"),    "\n",
+    include_str!("../lib/std/lang/Option.mini"),    "\n",
+    include_str!("../lib/std/lang/Result.mini"),    "\n",
+    include_str!("../lib/std/lang/Either.mini"),    "\n",
+    include_str!("../lib/std/lang/Pair.mini"),      "\n",
+    include_str!("../lib/std/lang/Array.mini"),     "\n",
+    include_str!("../lib/std/lang/String.mini"),    "\n",
+    include_str!("../lib/std/lang/Character.mini"), "\n",
+    include_str!("../lib/std/lang/Boolean.mini"),   "\n",
+    include_str!("../lib/std/lang/Integer.mini"),   "\n",
+    include_str!("../lib/std/lang/Float.mini"),     "\n",
+    include_str!("../lib/std/lang/Double.mini"),    "\n",
+    // ── minilang.collection ────────────────────────────────────────────────────
+    include_str!("../lib/std/collection/List.mini"),      "\n",
+    include_str!("../lib/std/collection/Set.mini"),       "\n",
+    include_str!("../lib/std/collection/Map.mini"),       "\n",
+    include_str!("../lib/std/collection/ArrayList.mini"), "\n",
+    include_str!("../lib/std/collection/HashSet.mini"),   "\n",
+    include_str!("../lib/std/collection/HashMap.mini"),
 );

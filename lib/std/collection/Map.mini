@@ -1,6 +1,10 @@
 // ── Bibliothèque standard – Map<K,V> ─────────────────────────────────────────
 //  Interface pour les tables associatives.
 
+package minilang.collection;
+
+import minilang.lang.Option;
+
 interface Map<K, V> {
     void put(K key, V value);
     Option<V> get(K key);

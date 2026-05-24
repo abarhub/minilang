@@ -2,6 +2,11 @@
 //  Implémentation de List<T> avec tableau interne redimensionnable.
 //  La quasi-totalité de l'implémentation est écrite en minilang.
 
+package minilang.collection;
+
+import minilang.lang.Option;
+import minilang.collection.List;
+
 class ArrayList<T> implements List<T> {
 
     T[] data;

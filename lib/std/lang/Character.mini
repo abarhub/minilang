@@ -3,6 +3,8 @@
 //  Appel : c.isLetter(), c.toUpperCase(), etc.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 class Character {
 
     // Retourne true si le caractère est une lettre.

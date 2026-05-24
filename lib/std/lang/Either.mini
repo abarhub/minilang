@@ -3,6 +3,8 @@
 //  Utile pour représenter deux cas distincts sans notion d'erreur.
 //  Accessible sans import dans tout fichier minilang.
 
+package minilang.lang;
+
 enum Either<L, R> {
     Left(L left),
     Right(R right);
