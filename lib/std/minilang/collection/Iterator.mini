@@ -9,4 +9,7 @@ import minilang.lang.Option;
 interface Iterator<T> {
     // Retourne l'élément suivant emballé dans Some, ou None si épuisé.
     Option<T> next();
+
+    // Appelle consumer pour chaque élément restant de l'itérateur.
+    void forEach(fn(T) -> void consumer);
 }

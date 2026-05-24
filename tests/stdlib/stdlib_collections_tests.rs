@@ -743,6 +743,38 @@ fn test_for_in_map_keys() {
     "#), 3);
 }
 
+// ── Iterator.forEach ──────────────────────────────────────────────────────────
+
+#[test]
+fn test_iterator_for_each_list() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(10); l.add(20); l.add(30);
+            Iterator<int> it = l.iterator();
+            int[] box = new int[]{0};
+            it.forEach((x) => { box[0] = box[0] + x; });
+            return box[0];
+        }
+    "#), 60);
+}
+
+#[test]
+fn test_iterator_for_each_partial() {
+    // Avancer l'itérateur manuellement, puis forEach consomme le reste.
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(1); l.add(2); l.add(3); l.add(4);
+            Iterator<int> it = l.iterator();
+            it.next();                            // consomme 1
+            int[] box = new int[]{0};
+            it.forEach((x) => { box[0] = box[0] + x; }); // 2+3+4
+            return box[0];
+        }
+    "#), 9);
+}
+
 #[test]
 fn test_for_in_break() {
     assert_eq!(run_ok(r#"

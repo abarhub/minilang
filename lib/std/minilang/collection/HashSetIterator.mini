@@ -5,14 +5,14 @@ package minilang.collection;
 
 import minilang.lang.Option;
 import minilang.collection.Iterator;
-import minilang.collection.ArrayList;
+import minilang.collection.List;
 
 class HashSetIterator<T> implements Iterator<T> {
 
-    ArrayList<T> keys;
+    List<T> keys;
     int index;
 
-    HashSetIterator(ArrayList<T> keys) {
+    HashSetIterator(List<T> keys) {
         this.keys = keys;
         this.index = 0;
     }
@@ -25,5 +25,17 @@ class HashSetIterator<T> implements Iterator<T> {
         Option<T> val = keys.get(index);
         index = index + 1;
         return val;
+    }
+
+    // Appelle consumer pour chaque élément restant.
+    void forEach(fn(T) -> void consumer) {
+        Option<T> nxt = next();
+        bool cont = true;
+        while (cont) {
+            match nxt {
+                Option::Some(v) => { consumer(v); nxt = next(); }
+                Option::None    => { cont = false; }
+            }
+        }
     }
 }

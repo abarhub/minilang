@@ -8,7 +8,7 @@ import minilang.collection.Set;
 import minilang.collection.HashMap;
 import minilang.collection.Iterator;
 import minilang.collection.HashSetIterator;
-import minilang.collection.ArrayList;
+import minilang.collection.List;
 
 class HashSet<T> implements Set<T> {
 
@@ -56,9 +56,8 @@ class HashSet<T> implements Set<T> {
     string toString() builtin;
 
     // Appelle consumer pour chaque élément de l'ensemble.
-    // Délègue à ArrayList.forEach pour éviter les appels intermédiaires sur Option.
     void forEach(fn(T) -> void consumer) {
-        ArrayList<T> cles = map.keys();
+        List<T> cles = map.keys();
         cles.forEach(consumer);
     }
 
