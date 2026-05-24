@@ -407,6 +407,13 @@ impl TypeChecker {
                 env.pop();
             }
 
+            Stmt::ForIn { var_type, var_name, body, .. } => {
+                env.push();
+                env.declare(var_name.clone(), var_type.clone());
+                for s in body { self.check_stmt(s, env); }
+                env.pop();
+            }
+
             Stmt::Builtin => { /* implémentation native — no-op */ }
 
             Stmt::IndexAssign { name, index, value } => {

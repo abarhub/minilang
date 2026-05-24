@@ -4,6 +4,7 @@
 package minilang.collection;
 
 import minilang.lang.Option;
+import minilang.lang.Pair;
 import minilang.collection.ArrayList;
 
 interface Map<K, V> {
@@ -15,5 +16,7 @@ interface Map<K, V> {
     bool remove(K key);
     void clear();
     ArrayList<K> keys();
+    ArrayList<Pair<K, V>> entries();
+    void forEach(fn(K, V) -> void consumer);
     string toString();
 }

@@ -6,6 +6,8 @@ package minilang.collection;
 
 import minilang.lang.Option;
 import minilang.collection.List;
+import minilang.collection.Iterator;
+import minilang.collection.ArrayListIterator;
 
 class ArrayList<T> implements List<T> {
 
@@ -77,4 +79,18 @@ class ArrayList<T> implements List<T> {
 
     // Implémenté en natif.
     string toString() builtin;
+
+    // Appelle consumer pour chaque élément.
+    void forEach(fn(T) -> void consumer) {
+        int i = 0;
+        while (i < count) {
+            consumer(data[i]);
+            i = i + 1;
+        }
+    }
+
+    // Retourne un itérateur positionné au début de la liste.
+    Iterator<T> iterator() {
+        return new ArrayListIterator<T>(this);
+    }
 }

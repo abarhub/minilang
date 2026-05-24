@@ -1,0 +1,29 @@
+// ── Bibliothèque standard – ArrayListIterator<T> ─────────────────────────────
+//  Itérateur sur ArrayList<T> : parcourt les éléments de l'index 0 à size()-1.
+
+package minilang.collection;
+
+import minilang.lang.Option;
+import minilang.collection.Iterator;
+import minilang.collection.ArrayList;
+
+class ArrayListIterator<T> implements Iterator<T> {
+
+    ArrayList<T> list;
+    int index;
+
+    ArrayListIterator(ArrayList<T> list) {
+        this.list = list;
+        this.index = 0;
+    }
+
+    // Retourne Some(élément) et avance, ou None si la liste est épuisée.
+    Option<T> next() {
+        if (index >= list.size()) {
+            return Option<T>::None;
+        }
+        Option<T> val = list.get(index);
+        index = index + 1;
+        return val;
+    }
+}

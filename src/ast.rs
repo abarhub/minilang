@@ -144,6 +144,8 @@ pub enum Stmt {
     DoWhile { body: Vec<Stmt>, condition: Expr },
     For     { init: Option<Box<Stmt>>, condition: Option<Expr>,
               update: Option<Box<Stmt>>, body: Vec<Stmt> },
+    /// `for (T varName in expr) { body }` — syntaxe d'itération sur Iterable<T>
+    ForIn   { var_type: Type, var_name: String, iter_expr: Box<Expr>, body: Vec<Stmt> },
     Break, Continue,
     Match { expr: Expr, arms: Vec<MatchArm> },
     /// Méthode native — corps de tableau (no-op à l'exécution)

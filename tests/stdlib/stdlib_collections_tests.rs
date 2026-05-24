@@ -574,3 +574,187 @@ fn test_map_interface_usage() {
         }
     "#), 42);
 }
+
+// ── forEach ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_list_for_each() {
+    // Les lambdas capturent les int par valeur ; on utilise un tableau (Rc partagé)
+    // comme boîte mutable pour accumuler le résultat.
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(1); l.add(2); l.add(3);
+            int[] box = new int[]{0};
+            l.forEach((x) => { box[0] = box[0] + x; });
+            return box[0];
+        }
+    "#), 6);
+}
+
+#[test]
+fn test_set_for_each() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Set<int> s = new HashSet<int>();
+            s.add(10); s.add(20); s.add(30);
+            int[] box = new int[]{0};
+            s.forEach((x) => { box[0] = box[0] + x; });
+            return box[0];
+        }
+    "#), 60);
+}
+
+#[test]
+fn test_map_for_each() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Map<string, int> m = new HashMap<string, int>();
+            m.put("a", 1); m.put("b", 2); m.put("c", 3);
+            int[] box = new int[]{0};
+            m.forEach((k, v) => { box[0] = box[0] + v; });
+            return box[0];
+        }
+    "#), 6);
+}
+
+#[test]
+fn test_array_for_each() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{5, 10, 15};
+            int[] box = new int[]{0};
+            arr.forEach((x) => { box[0] = box[0] + x; });
+            return box[0];
+        }
+    "#), 30);
+}
+
+// ── Iterator ──────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_list_iterator() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(4); l.add(5); l.add(6);
+            Iterator<int> it = l.iterator();
+            int sum = 0;
+            Option<int> nxt = it.next();
+            while (nxt.isSome()) {
+                sum = sum + nxt.get();
+                nxt = it.next();
+            }
+            return sum;
+        }
+    "#), 15);
+}
+
+#[test]
+fn test_set_iterator() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Set<int> s = new HashSet<int>();
+            s.add(100); s.add(200);
+            Iterator<int> it = s.iterator();
+            int count = 0;
+            Option<int> nxt = it.next();
+            while (nxt.isSome()) {
+                count = count + 1;
+                nxt = it.next();
+            }
+            return count;
+        }
+    "#), 2);
+}
+
+// ── map.entries() ─────────────────────────────────────────────────────────────
+
+#[test]
+fn test_map_entries() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Map<string, int> m = new HashMap<string, int>();
+            m.put("x", 10); m.put("y", 20);
+            ArrayList<Pair<string, int>> entries = m.entries();
+            return entries.size();
+        }
+    "#), 2);
+}
+
+// ── for-in ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_for_in_list() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(1); l.add(2); l.add(3);
+            int sum = 0;
+            for (int x in l) {
+                sum = sum + x;
+            }
+            return sum;
+        }
+    "#), 6);
+}
+
+#[test]
+fn test_for_in_set() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Set<int> s = new HashSet<int>();
+            s.add(5); s.add(10); s.add(15);
+            int sum = 0;
+            for (int x in s) {
+                sum = sum + x;
+            }
+            return sum;
+        }
+    "#), 30);
+}
+
+#[test]
+fn test_for_in_array() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] arr = new int[]{7, 8, 9};
+            int sum = 0;
+            for (int x in arr) {
+                sum = sum + x;
+            }
+            return sum;
+        }
+    "#), 24);
+}
+
+#[test]
+fn test_for_in_map_keys() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            Map<string, int> m = new HashMap<string, int>();
+            m.put("a", 1); m.put("b", 2); m.put("c", 3);
+            int count = 0;
+            for (string k in m.keys()) {
+                count = count + 1;
+            }
+            return count;
+        }
+    "#), 3);
+}
+
+#[test]
+fn test_for_in_break() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            List<int> l = new ArrayList<int>();
+            l.add(1); l.add(2); l.add(3); l.add(4); l.add(5);
+            int sum = 0;
+            for (int x in l) {
+                if (x == 3) { break; }
+                sum = sum + x;
+            }
+            return sum;
+        }
+    "#), 3);
+}

@@ -4,6 +4,7 @@
 package minilang.collection;
 
 import minilang.lang.Option;
+import minilang.lang.Pair;
 import minilang.collection.ArrayList;
 import minilang.collection.Map;
 
@@ -16,5 +17,7 @@ class HashMap<K, V> implements Map<K, V> {
     bool remove(K key) builtin;
     void clear() builtin;
     ArrayList<K> keys() builtin;
+    ArrayList<Pair<K, V>> entries() builtin;
+    void forEach(fn(K, V) -> void consumer) builtin;
     string toString() builtin;
 }

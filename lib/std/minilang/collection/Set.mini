@@ -3,6 +3,8 @@
 
 package minilang.collection;
 
+import minilang.collection.Iterator;
+
 interface Set<T> {
     bool add(T element);
     bool contains(T element);
@@ -11,4 +13,6 @@ interface Set<T> {
     bool remove(T element);
     void clear();
     string toString();
+    void forEach(fn(T) -> void consumer);
+    Iterator<T> iterator();
 }
