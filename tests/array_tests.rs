@@ -352,10 +352,42 @@ fn interp_array_set_method() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[2];
-            a.set(0, 42);
+            match a.set(0) {
+                Option::Some(r) => { r.set(42); }
+                Option::None    => { }
+            }
             return a.get(0).get();
         }
     "#), 42);
+}
+
+#[test]
+fn interp_array_set_oob_returns_none() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] a = new int[2];
+            match a.set(99) {
+                Option::Some(r) => { return 1; }
+                Option::None    => { return 0; }
+            }
+        }
+    "#), 0);
+}
+
+#[test]
+fn interp_array_set_ref_get() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] a = new int[]{10, 20, 30};
+            match a.set(1) {
+                Option::Some(r) => {
+                    r.set(99);
+                    return r.get();
+                }
+                Option::None => { return -1; }
+            }
+        }
+    "#), 99);
 }
 
 #[test]

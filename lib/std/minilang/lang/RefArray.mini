@@ -1,0 +1,22 @@
+// ── Bibliothèque standard – RefArray<T> ──────────────────────────────────────
+//  Référence vers une case d'un tableau, retournée par Array<T>.set(index).
+//  Permet de modifier ou lire la case ciblée de façon sûre.
+//
+//  Exemple :
+//      match arr.set(i) {
+//          Option::Some(ref) => { ref.set(42); }
+//          Option::None      => { /* index invalide */ }
+//      }
+//
+//  Accessible sans import dans tout fichier minilang.
+
+package minilang.lang;
+
+class RefArray<T> {
+
+    // Affecte une valeur à la case référencée.
+    void set(T value) builtin;
+
+    // Retourne la valeur courante de la case référencée.
+    T get() builtin;
+}
