@@ -12,6 +12,7 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/minilang/lang/Result.mini"),    "\n",
     include_str!("../lib/std/minilang/lang/Either.mini"),    "\n",
     include_str!("../lib/std/minilang/lang/Pair.mini"),      "\n",
+    include_str!("../lib/std/minilang/lang/RefArray.mini"),   "\n",
     include_str!("../lib/std/minilang/lang/Array.mini"),     "\n",
     include_str!("../lib/std/minilang/lang/String.mini"),    "\n",
     include_str!("../lib/std/minilang/lang/Character.mini"), "\n",

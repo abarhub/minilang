@@ -420,11 +420,10 @@ impl Interpreter {
                 match (arr, idx) {
                     (Value::Array(v), Value::Int(i)) => {
                         let mut data = v.borrow_mut();
-                        let i = i as usize;
-                        if i >= data.len() {
-                            return err!("Index {} hors bornes (taille {})", i, data.len());
+                        // Index hors bornes : no-op silencieux (cohérent avec a[i] -> Option)
+                        if i >= 0 && (i as usize) < data.len() {
+                            data[i as usize] = val;
                         }
-                        data[i] = val;
                     }
                     _ => return err!("Affectation index sur non-tableau"),
                 }
@@ -655,6 +654,30 @@ impl Interpreter {
                                         .collect::<Vec<_>>().join(", "));
                                     Ok(Value::Str(s))
                                 }
+                                // ── RefArray<T> ───────────────────────────────
+                                ("RefArray", "set") if args.len() == 1 => {
+                                    let arr = match rc.borrow().fields.get("_array").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("RefArray: champ '_array' invalide"),
+                                    };
+                                    let idx = match rc.borrow().fields.get("_index").cloned() {
+                                        Some(Value::Int(i)) => i as usize,
+                                        _ => return err!("RefArray: champ '_index' invalide"),
+                                    };
+                                    arr.borrow_mut()[idx] = args[0].clone();
+                                    Ok(Value::Void)
+                                }
+                                ("RefArray", "get") if args.is_empty() => {
+                                    let arr = match rc.borrow().fields.get("_array").cloned() {
+                                        Some(Value::Array(a)) => a,
+                                        _ => return err!("RefArray: champ '_array' invalide"),
+                                    };
+                                    let idx = match rc.borrow().fields.get("_index").cloned() {
+                                        Some(Value::Int(i)) => i as usize,
+                                        _ => return err!("RefArray: champ '_index' invalide"),
+                                    };
+                                    Ok(arr.borrow()[idx].clone())
+                                }
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -685,19 +708,26 @@ impl Interpreter {
                                 }
                             }
                             "set" => {
-                                if args.len() != 2 { return err!("set() attend 2 arguments"); }
+                                // set(index) -> Option<RefArray<T>>
+                                if args.len() != 1 { return err!("set() attend 1 argument (l'index)"); }
                                 match &args[0] {
                                     Value::Int(i) => {
                                         let i = *i;
-                                        let val = args[1].clone();
-                                        let mut data = v.borrow_mut();
-                                        if i < 0 || i as usize >= data.len() {
-                                            return err!("set(): index {} hors bornes (taille {})", i, data.len());
+                                        let data_len = v.borrow().len();
+                                        if i < 0 || i as usize >= data_len {
+                                            Ok(make_none())
+                                        } else {
+                                            let mut fields = HashMap::new();
+                                            fields.insert("_array".to_string(), Value::Array(v.clone()));
+                                            fields.insert("_index".to_string(), Value::Int(i));
+                                            let ref_array = Value::Object(Rc::new(RefCell::new(ObjectData {
+                                                class_name: "RefArray".to_string(),
+                                                fields,
+                                            })));
+                                            Ok(make_some(ref_array))
                                         }
-                                        data[i as usize] = val;
-                                        Ok(Value::Void)
                                     }
-                                    _ => err!("set() requiert (int, T)"),
+                                    _ => err!("set() requiert un int"),
                                 }
                             }
                             "length" => Ok(Value::Int(v.borrow().len() as i64)),

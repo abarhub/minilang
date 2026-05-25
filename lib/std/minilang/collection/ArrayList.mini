@@ -25,7 +25,15 @@ class ArrayList<T> implements List<T> {
         T[] newData = new T[newCap];
         int i = 0;
         while (i < count) {
-            newData.set(i, data.get(i).get());
+            match data.get(i) {
+                Option::Some(v) => {
+                    match newData.set(i) {
+                        Option::Some(r) => { r.set(v); }
+                        Option::None    => { }
+                    }
+                }
+                Option::None => { }
+            }
             i = i + 1;
         }
         data = newData;
@@ -35,7 +43,10 @@ class ArrayList<T> implements List<T> {
         if (count == data.length()) {
             grow();
         }
-        data.set(count, element);
+        match data.set(count) {
+            Option::Some(r) => { r.set(element); }
+            Option::None    => { }
+        }
         count = count + 1;
     }
 
@@ -66,7 +77,15 @@ class ArrayList<T> implements List<T> {
     void remove(int index) {
         int i = index;
         while (i < count - 1) {
-            data.set(i, data.get(i + 1).get());
+            match data.get(i + 1) {
+                Option::Some(v) => {
+                    match data.set(i) {
+                        Option::Some(r) => { r.set(v); }
+                        Option::None    => { }
+                    }
+                }
+                Option::None => { }
+            }
             i = i + 1;
         }
         count = count - 1;
