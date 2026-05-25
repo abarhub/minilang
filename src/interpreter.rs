@@ -1273,18 +1273,21 @@ impl Interpreter {
                 Ok(Value::Array(Rc::new(RefCell::new(vals))))
             }
 
-            // ── Nouveau tableau de taille n : new T[n] ───────────────────────
-            Expr::ArrayNew { elem_type, size } => {
-                let n = match self.eval(size, env, this)? {
+            // ── Nouveau tableau de taille n : new T[n] ou new T[n](fill) ──────
+            Expr::ArrayNew { elem_type, size, fill } => {
+                let n = match self.eval(size, env, this.clone())? {
                     Value::Int(n) if n >= 0 => n as usize,
                     Value::Int(n) => return err!("Taille de tableau négative : {}", n),
                     _ => return err!("Taille de tableau doit être un entier"),
                 };
-                let default = Self::default_value(elem_type);
-                Ok(Value::Array(Rc::new(RefCell::new(vec![default; n]))))
+                let init = match fill {
+                    Some(f) => self.eval(f, env, this)?,
+                    None    => Self::default_value(elem_type),
+                };
+                Ok(Value::Array(Rc::new(RefCell::new(vec![init; n]))))
             }
 
-            // ── Accès indexé : arr[i] ─────────────────────────────────────────
+            // ── Accès indexé : arr[i] — retourne Option<T> ───────────────────
             Expr::Index { object, index } => {
                 let arr = self.eval(object, env, this.clone())?;
                 let idx = self.eval(index, env, this)?;
@@ -1292,9 +1295,10 @@ impl Interpreter {
                     (Value::Array(v), Value::Int(i)) => {
                         let data = v.borrow();
                         if i < 0 || i as usize >= data.len() {
-                            return err!("Index {} hors bornes (taille {})", i, data.len());
+                            Ok(make_none())
+                        } else {
+                            Ok(make_some(data[i as usize].clone()))
                         }
-                        Ok(data[i as usize].clone())
                     }
                     _ => err!("Accès index sur non-tableau"),
                 }

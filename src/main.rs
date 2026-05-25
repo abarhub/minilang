@@ -271,8 +271,10 @@ fn fmt_expr(e: &Expr) -> String {
             let es: Vec<String> = elements.iter().map(fmt_expr).collect();
             format!("new {}[]{{{}}}", elem_type, es.join(", "))
         }
-        Expr::ArrayNew { elem_type, size } =>
-            format!("new {}[{}]", elem_type, fmt_expr(size)),
+        Expr::ArrayNew { elem_type, size, fill } => match fill {
+            Some(f) => format!("new {}[{}]({})", elem_type, fmt_expr(size), fmt_expr(f)),
+            None    => format!("new {}[{}]", elem_type, fmt_expr(size)),
+        },
         Expr::Index { object, index } =>
             format!("{}[{}]", fmt_expr(object), fmt_expr(index)),
     }

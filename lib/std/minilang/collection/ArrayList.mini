@@ -84,7 +84,10 @@ class ArrayList<T> implements List<T> {
     void forEach(fn(T) -> void consumer) {
         int i = 0;
         while (i < count) {
-            consumer(data[i]);
+            match data.get(i) {
+                Option::Some(v) => { consumer(v); }
+                Option::None    => { }
+            }
             i = i + 1;
         }
     }
