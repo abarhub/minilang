@@ -4,8 +4,8 @@
 //
 //  Exemple :
 //      match arr.set(i) {
-//          Option::Some(ref) => { ref.set(42); }
-//          Option::None      => { /* index invalide */ }
+//          Option::Some(r) => { r.set(42); }
+//          Option::None    => { /* index invalide */ }
 //      }
 //
 //  Accessible sans import dans tout fichier minilang.

@@ -416,24 +416,6 @@ impl TypeChecker {
 
             Stmt::Builtin => { /* implémentation native — no-op */ }
 
-            Stmt::IndexAssign { name, index, value } => {
-                let arr_ty = env.get(name).cloned()
-                    .or_else(|| self.field_of_current_class(name))
-                    .map(|t| self.resolve(&t));
-                if let Some(it) = self.infer(index, env) {
-                    if it != Type::Int {
-                        self.err(format!("Index doit être int, trouvé {}", it));
-                    }
-                }
-                let val_ty = self.infer(value, env);
-                if let (Some(Type::Array(elem)), Some(vt)) = (arr_ty, val_ty) {
-                    if !self.is_compatible(&vt, &elem) {
-                        self.err(format!(
-                            "Affectation index : type incompatible {} ≠ {}", vt, elem));
-                    }
-                }
-            }
-
             Stmt::Break | Stmt::Continue => {}
 
             Stmt::Match { expr, arms } => {

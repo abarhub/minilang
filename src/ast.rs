@@ -151,8 +151,6 @@ pub enum Stmt {
     Match { expr: Expr, arms: Vec<MatchArm> },
     /// Méthode native — corps de tableau (no-op à l'exécution)
     Builtin,
-    /// `name[idx] = val;`
-    IndexAssign { name: String, index: Box<Expr>, value: Expr },
 }
 
 // ── Membres de classe ─────────────────────────────────────────────────────────

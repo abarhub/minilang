@@ -503,16 +503,6 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then_ignore(just(';').padded_by(ws()))
             .to(Stmt::Builtin);
 
-        let index_assign = text::ident().padded_by(ws())
-            .then(expr.clone()
-                .delimited_by(just('[').padded_by(ws()), just(']').padded_by(ws())))
-            .then_ignore(just('=').padded_by(ws()))
-            .then(expr.clone())
-            .then_ignore(just(';').padded_by(ws()))
-            .map(|((name, idx), val)| Stmt::IndexAssign {
-                name, index: Box::new(idx), value: val,
-            });
-
         let kw_var_decl = kw_type.clone()
             .then(text::ident().padded_by(ws()))
             .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
@@ -548,7 +538,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             print_stmt, return_stmt, break_stmt, continue_stmt,
             builtin_stmt,
             if_stmt, while_stmt, do_while, for_in_stmt, for_stmt, match_stmt,
-            kw_var_decl, index_assign, field_assign, generic_var_decl, assign_stmt, expr_stmt,
+            kw_var_decl, field_assign, generic_var_decl, assign_stmt, expr_stmt,
         ))
         .padded_by(ws())
         .boxed()
