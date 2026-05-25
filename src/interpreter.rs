@@ -412,23 +412,6 @@ impl Interpreter {
 
             Stmt::Builtin => { /* méthode native — ne devrait pas être exécutée directement */ }
 
-            Stmt::IndexAssign { name, index, value } => {
-                let idx = self.eval(index, env, this.clone())?;
-                let val = self.eval(value, env, this.clone())?;
-                let arr = env.get(name)
-                    .ok_or_else(|| RuntimeError(format!("Variable inconnue '{}'", name)))?;
-                match (arr, idx) {
-                    (Value::Array(v), Value::Int(i)) => {
-                        let mut data = v.borrow_mut();
-                        // Index hors bornes : no-op silencieux (cohérent avec a[i] -> Option)
-                        if i >= 0 && (i as usize) < data.len() {
-                            data[i as usize] = val;
-                        }
-                    }
-                    _ => return err!("Affectation index sur non-tableau"),
-                }
-            }
-
             Stmt::Break    => return Ok(Flow::Break),
             Stmt::Continue => return Ok(Flow::Continue),
 

@@ -82,14 +82,17 @@ fn parse_array_index_access() {
 }
 
 #[test]
-fn parse_array_index_assign() {
-    parses_ok(r#"
+fn parse_array_index_assign_rejected() {
+    // arr[i] = val n'est plus une syntaxe valide — il faut utiliser arr.set(i)
+    let full = format!("{}\n{}", mini_parser::STDLIB, r#"
         int main() {
             int[] a = new int[2];
             a[0] = 42;
             return 0;
         }
     "#);
+    assert!(program_parser().parse(full.as_str()).is_err(),
+        "arr[i]=val should no longer parse");
 }
 
 // ── Typecheck ─────────────────────────────────────────────────────────────────
@@ -136,11 +139,15 @@ fn tc_array_wrong_elem_type() {
 }
 
 #[test]
-fn tc_array_wrong_assign_type() {
+fn tc_array_set_wrong_type() {
+    // set(i) retourne Option<RefArray<int>> ; appeler r.set(true) sur un int[] doit échouer
     assert_tc_err(r#"
         int main() {
             int[] a = new int[2];
-            a[0] = true;
+            match a.set(0) {
+                Option::Some(r) => { r.set(true); }
+                Option::None    => { }
+            }
             return 0;
         }
     "#, "incompatible");
@@ -265,7 +272,10 @@ fn interp_array_assign() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[3];
-            a[1] = 99;
+            match a.set(1) {
+                Option::Some(r) => { r.set(99); }
+                Option::None    => { }
+            }
             match a[1] {
                 Option::Some(v) => { return v; }
                 Option::None    => { return -1; }

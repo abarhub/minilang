@@ -141,8 +141,6 @@ fn print_stmt(s: &Stmt, d: usize) {
         Stmt::Break            => println!("{}break;", pad(d)),
         Stmt::Continue         => println!("{}continue;", pad(d)),
         Stmt::Builtin          => println!("{}builtin;", pad(d)),
-        Stmt::IndexAssign { name, index, value } =>
-            println!("{}{}[{}] = {};", pad(d), name, fmt_expr(index), fmt_expr(value)),
         Stmt::If { condition, then_body, else_body } => {
             println!("{}if ({}) {{", pad(d), fmt_expr(condition));
             for s in then_body { print_stmt(s, d + 1); }

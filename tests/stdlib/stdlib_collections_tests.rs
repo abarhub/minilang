@@ -586,7 +586,7 @@ fn test_list_for_each() {
             List<int> l = new ArrayList<int>();
             l.add(1); l.add(2); l.add(3);
             int[] box = new int[]{0};
-            l.forEach((x) => { box[0] = box.get(0).get() + x; });
+            l.forEach((x) => { match box.set(0) { Option::Some(r) => { r.set(box.get(0).get() + x); } Option::None => { } } });
             return box.get(0).get();
         }
     "#), 6);
@@ -599,7 +599,7 @@ fn test_set_for_each() {
             Set<int> s = new HashSet<int>();
             s.add(10); s.add(20); s.add(30);
             int[] box = new int[]{0};
-            s.forEach((x) => { box[0] = box.get(0).get() + x; });
+            s.forEach((x) => { match box.set(0) { Option::Some(r) => { r.set(box.get(0).get() + x); } Option::None => { } } });
             return box.get(0).get();
         }
     "#), 60);
@@ -612,7 +612,7 @@ fn test_map_for_each() {
             Map<string, int> m = new HashMap<string, int>();
             m.put("a", 1); m.put("b", 2); m.put("c", 3);
             int[] box = new int[]{0};
-            m.forEach((k, v) => { box[0] = box.get(0).get() + v; });
+            m.forEach((k, v) => { match box.set(0) { Option::Some(r) => { r.set(box.get(0).get() + v); } Option::None => { } } });
             return box.get(0).get();
         }
     "#), 6);
@@ -624,7 +624,7 @@ fn test_array_for_each() {
         int main() {
             int[] arr = new int[]{5, 10, 15};
             int[] box = new int[]{0};
-            arr.forEach((x) => { box[0] = box.get(0).get() + x; });
+            arr.forEach((x) => { match box.set(0) { Option::Some(r) => { r.set(box.get(0).get() + x); } Option::None => { } } });
             return box.get(0).get();
         }
     "#), 30);
@@ -753,7 +753,7 @@ fn test_iterator_for_each_list() {
             l.add(10); l.add(20); l.add(30);
             Iterator<int> it = l.iterator();
             int[] box = new int[]{0};
-            it.forEach((x) => { box[0] = box.get(0).get() + x; });
+            it.forEach((x) => { match box.set(0) { Option::Some(r) => { r.set(box.get(0).get() + x); } Option::None => { } } });
             return box.get(0).get();
         }
     "#), 60);
@@ -769,7 +769,7 @@ fn test_iterator_for_each_partial() {
             Iterator<int> it = l.iterator();
             it.next();                            // consomme 1
             int[] box = new int[]{0};
-            it.forEach((x) => { box[0] = box.get(0).get() + x; }); // 2+3+4
+            it.forEach((x) => { match box.set(0) { Option::Some(r) => { r.set(box.get(0).get() + x); } Option::None => { } } }); // 2+3+4
             return box.get(0).get();
         }
     "#), 9);

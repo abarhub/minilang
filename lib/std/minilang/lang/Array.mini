@@ -4,7 +4,7 @@
 //           new T[]{a, b, ...}  — avec des valeurs initiales
 //  Accès  : arr[i]              — sucre syntaxique, retourne Option<T>
 //                                  (Some(val) si index valide, None sinon)
-//  Affect : arr[i] = val        — sucre syntaxique pour arr.set(i, val)
+//  Écriture : arr.set(i) retourne Option<RefArray<T>> — appeler .set(val) sur le résultat
 //  Accessible sans import dans tout fichier minilang.
 
 package minilang.lang;
@@ -13,7 +13,7 @@ enum Array<T> {
     ;
 
     // Retourne Some(element) si l'index est valide, None sinon.
-    // Pour arr[i] (sucre syntaxique) : lève une erreur si hors bornes.
+    // Pour arr[i] (sucre syntaxique) : retourne Option<T>.
     Option<T> get(int index) builtin;
 
     // Retourne Some(RefArray<T>) si l'index est valide, None sinon.
