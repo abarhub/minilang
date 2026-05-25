@@ -5,7 +5,9 @@
 
 package minilang.lang;
 
-class String {
+import minilang.lang.HashCode;
+
+class String implements HashCode {
 
     // Retourne le nombre de caractères.
     int length() builtin;
@@ -48,4 +50,7 @@ class String {
 
     // Découpe la chaîne selon le séparateur et retourne une liste.
     List<string> split(string separator) builtin;
+
+    // Retourne le code de hachage de la chaîne (hachage polynomial).
+    int hashCode() builtin;
 }

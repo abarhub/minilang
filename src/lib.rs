@@ -8,6 +8,7 @@ pub mod typechecker;
 pub const STDLIB: &str = concat!(
     // ── minilang.lang ──────────────────────────────────────────────────────────
     include_str!("../lib/std/minilang/lang/Object.mini"),    "\n",
+    include_str!("../lib/std/minilang/lang/HashCode.mini"),  "\n",
     include_str!("../lib/std/minilang/lang/Option.mini"),    "\n",
     include_str!("../lib/std/minilang/lang/Result.mini"),    "\n",
     include_str!("../lib/std/minilang/lang/Either.mini"),    "\n",

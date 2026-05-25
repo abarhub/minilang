@@ -1,0 +1,20 @@
+// ── Bibliothèque standard – HashCode ─────────────────────────────────────────
+//  Interface pour les types qui peuvent fournir un code de hachage entier.
+//  Implémentée par les types primitifs (int, bool, char, string, float, double)
+//  et par Pair<A, B>.
+//  Ne pas mettre dans Object : tous les objets ne sont pas forcément hashables.
+//
+//  Exemple :
+//      int h = "hello".hashCode();
+//      int h2 = 42.hashCode();
+//
+//  Accessible sans import dans tout fichier minilang.
+
+package minilang.lang;
+
+interface HashCode {
+
+    // Retourne un entier représentant le code de hachage de cet objet.
+    // Contrat : si a.equals(b) alors a.hashCode() == b.hashCode().
+    int hashCode();
+}
