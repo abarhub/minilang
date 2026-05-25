@@ -1,8 +1,9 @@
 // ── Bibliothèque standard – Array<T> ─────────────────────────────────────────
 //  Tableau de taille fixe à éléments homogènes.
-//  Créer  : new T[n]            — n éléments initialisés à la valeur par défaut
+//  Créer  : new T[n](val)       — n éléments initialisés avec val
 //           new T[]{a, b, ...}  — avec des valeurs initiales
-//  Accès  : arr[i]              — sucre syntaxique (lève une erreur hors bornes)
+//  Accès  : arr[i]              — sucre syntaxique, retourne Option<T>
+//                                  (Some(val) si index valide, None sinon)
 //  Affect : arr[i] = val        — sucre syntaxique pour arr.set(i, val)
 //  Accessible sans import dans tout fichier minilang.
 

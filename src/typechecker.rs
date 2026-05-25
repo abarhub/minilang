@@ -858,17 +858,27 @@ impl TypeChecker {
                 Ok(Type::Array(Box::new(elem_type.clone())))
             }
 
-            // ── Nouveau tableau : new T[n] ────────────────────────────────────
-            Expr::ArrayNew { elem_type, size } => {
+            // ── Nouveau tableau : new T[n] ou new T[n](fill) ─────────────────
+            Expr::ArrayNew { elem_type, size, fill } => {
                 if let Ok(st) = self.infer_expr(size, env) {
                     if st != Type::Int {
                         self.err(format!("Taille de tableau doit être int, trouvé {}", st));
                     }
                 }
+                if let Some(f) = fill {
+                    if let Ok(ft) = self.infer_expr(f, env) {
+                        if !self.is_compatible(&ft, elem_type) {
+                            self.err(format!(
+                                "Valeur initiale de type {} incompatible avec le tableau {}[]",
+                                ft, elem_type
+                            ));
+                        }
+                    }
+                }
                 Ok(Type::Array(Box::new(elem_type.clone())))
             }
 
-            // ── Accès indexé : arr[i] ─────────────────────────────────────────
+            // ── Accès indexé : arr[i] — retourne Option<T> ───────────────────
             Expr::Index { object, index } => {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
@@ -877,7 +887,10 @@ impl TypeChecker {
                     self.err(format!("Index doit être int, trouvé {}", it));
                 }
                 match ot {
-                    Type::Array(elem) => Ok(*elem),
+                    Type::Array(elem) => Ok(Type::Generic(
+                        "Option".to_string(),
+                        vec![*elem],
+                    )),
                     _ => type_err!("Accès index sur non-tableau : {}", ot),
                 }
             }

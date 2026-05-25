@@ -212,12 +212,20 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 _ => Err(Simple::custom(span, "new T[]{...} requires array type T[]")),
             });
 
-        // new int[5]  — type_parser() consomme "int", puis [5] est la taille
+        // new int[5]       — tableau de taille n, valeur par défaut
+        // new int[5](0)    — tableau de taille n, initialisé avec 0
         let array_new = kw("new")
             .ignore_then(type_parser())
             .then(expr.clone()
                 .delimited_by(just('[').padded_by(ws()), just(']').padded_by(ws())))
-            .map(|(t, size)| Expr::ArrayNew { elem_type: t, size: Box::new(size) });
+            .then(expr.clone()
+                .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()))
+                .or_not())
+            .map(|((t, size), fill)| Expr::ArrayNew {
+                elem_type: t,
+                size: Box::new(size),
+                fill: fill.map(Box::new),
+            });
 
         let atom = choice((
             str_lit, char_lit, number_lit, bool_lit,

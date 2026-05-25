@@ -38,12 +38,6 @@ fn run_ok(src: &str) -> i64 {
     }
 }
 
-fn run_fails(src: &str) {
-    if run_source(src).is_ok() {
-        panic!("Should have failed:\n{}", src);
-    }
-}
-
 // ── Parsing ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -61,6 +55,16 @@ fn parse_array_new_size() {
     parses_ok(r#"
         int main() {
             int[] a = new int[5];
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn parse_array_new_with_fill() {
+    parses_ok(r#"
+        int main() {
+            int[] a = new int[5](0);
             return 0;
         }
     "#);
@@ -115,8 +119,8 @@ fn tc_array_index_ok() {
     assert_tc_ok(r#"
         int main() {
             int[] a = new int[]{7};
-            int x = a[0];
-            return x;
+            Option<int> x = a[0];
+            return 0;
         }
     "#);
 }
@@ -137,6 +141,26 @@ fn tc_array_wrong_assign_type() {
         int main() {
             int[] a = new int[2];
             a[0] = true;
+            return 0;
+        }
+    "#, "incompatible");
+}
+
+#[test]
+fn tc_array_new_with_fill_ok() {
+    assert_tc_ok(r#"
+        int main() {
+            int[] a = new int[5](42);
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_array_new_with_fill_wrong_type() {
+    assert_tc_err(r#"
+        int main() {
+            int[] a = new int[5](true);
             return 0;
         }
     "#, "incompatible");
@@ -178,11 +202,47 @@ fn tc_array_contains_returns_bool() {
 // ── Interprétation ────────────────────────────────────────────────────────────
 
 #[test]
+fn interp_array_new_with_fill() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            int[] a = new int[4](7);
+            int sum = 0;
+            int i = 0;
+            while (i < a.length()) {
+                match a[i] {
+                    Option::Some(v) => { sum = sum + v; }
+                    Option::None    => { }
+                }
+                i = i + 1;
+            }
+            return sum;
+        }
+    "#), 28);
+}
+
+#[test]
+fn interp_array_new_with_fill_bool() {
+    assert_eq!(run_ok(r#"
+        int main() {
+            bool[] flags = new bool[3](true);
+            match flags[0] {
+                Option::Some(v) => { if (v) { return 1; } }
+                Option::None    => { }
+            }
+            return 0;
+        }
+    "#), 1);
+}
+
+#[test]
 fn interp_array_lit_get() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[]{10, 20, 30};
-            return a[1];
+            match a[1] {
+                Option::Some(v) => { return v; }
+                Option::None    => { return -1; }
+            }
         }
     "#), 20);
 }
@@ -192,7 +252,10 @@ fn interp_array_new_default_int() {
     assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[3];
-            return a[2];
+            match a[2] {
+                Option::Some(v) => { return v; }
+                Option::None    => { return -1; }
+            }
         }
     "#), 0);
 }
@@ -203,7 +266,10 @@ fn interp_array_assign() {
         int main() {
             int[] a = new int[3];
             a[1] = 99;
-            return a[1];
+            match a[1] {
+                Option::Some(v) => { return v; }
+                Option::None    => { return -1; }
+            }
         }
     "#), 99);
 }
@@ -246,7 +312,16 @@ fn interp_array_fill() {
         int main() {
             int[] a = new int[]{1, 2, 3};
             a.fill(7);
-            return a[0] + a[1] + a[2];
+            int sum = 0;
+            int i = 0;
+            while (i < a.length()) {
+                match a[i] {
+                    Option::Some(v) => { sum = sum + v; }
+                    Option::None    => { }
+                }
+                i = i + 1;
+            }
+            return sum;
         }
     "#), 21);
 }
@@ -284,23 +359,29 @@ fn interp_array_set_method() {
 }
 
 #[test]
-fn interp_array_oob_panics() {
-    run_fails(r#"
+fn interp_array_oob_returns_none() {
+    assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[]{1};
-            return a[5];
+            match a[5] {
+                Option::Some(v) => { return v; }
+                Option::None    => { return -1; }
+            }
         }
-    "#);
+    "#), -1);
 }
 
 #[test]
-fn interp_array_negative_index_panics() {
-    run_fails(r#"
+fn interp_array_negative_index_returns_none() {
+    assert_eq!(run_ok(r#"
         int main() {
             int[] a = new int[]{1, 2};
-            return a[-1];
+            match a[-1] {
+                Option::Some(v) => { return v; }
+                Option::None    => { return -1; }
+            }
         }
-    "#);
+    "#), -1);
 }
 
 #[test]
@@ -311,7 +392,10 @@ fn interp_array_loop_sum() {
             int sum = 0;
             int i = 0;
             while (i < a.length()) {
-                sum = sum + a[i];
+                match a[i] {
+                    Option::Some(v) => { sum = sum + v; }
+                    Option::None    => { }
+                }
                 i = i + 1;
             }
             return sum;
@@ -324,7 +408,10 @@ fn interp_array_bool_type() {
     assert_eq!(run_ok(r#"
         int main() {
             bool[] flags = new bool[]{true, false, true};
-            if (flags[0]) { return 1; }
+            match flags[0] {
+                Option::Some(v) => { if (v) { return 1; } }
+                Option::None    => { }
+            }
             return 0;
         }
     "#), 1);
@@ -337,7 +424,10 @@ fn interp_array_in_result() {
             int[] a = new int[]{42};
             Result<int[], string> r = Result<int[], string>::Ok(a);
             int[] b = r.getValue();
-            return b[0];
+            match b[0] {
+                Option::Some(v) => { return v; }
+                Option::None    => { return -1; }
+            }
         }
     "#), 42);
 }

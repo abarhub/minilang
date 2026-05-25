@@ -113,7 +113,8 @@ pub enum Expr {
     /// `new T[]{a, b, ...}` — tableau littéral
     ArrayLit { elem_type: Type, elements: Vec<Expr> },
     /// `new T[n]` — tableau de taille n initialisé à la valeur par défaut
-    ArrayNew { elem_type: Type, size: Box<Expr> },
+    /// `new T[n](fill)` — tableau de taille n initialisé avec la valeur fill
+    ArrayNew { elem_type: Type, size: Box<Expr>, fill: Option<Box<Expr>> },
     /// `obj[idx]` — accès indexé
     Index    { object: Box<Expr>, index: Box<Expr> },
 }

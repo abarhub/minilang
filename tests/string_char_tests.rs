@@ -382,7 +382,7 @@ fn interp_string_split_access() {
         int main() {
             string s = "x,y,z";
             string[] parts = s.split(",");
-            string first = parts[0];
+            string first = parts[0].get();
             return first.length();
         }
     "#), 1);
