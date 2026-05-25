@@ -669,6 +669,10 @@ impl Interpreter {
                         }
                     }
                     Value::Enum(ed) => {
+                        // Builtins spéciaux sur les enums
+                        if method == "hashCode" && args.is_empty() {
+                            return Ok(Value::Int(val_hash(&Value::Enum(ed))));
+                        }
                         let en = ed.enum_name.clone();
                         let m = self.find_method(&en, method)
                             .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}::{}()'", en, method)))?;
@@ -867,6 +871,7 @@ impl Interpreter {
                                     _ => err!("split() requiert une string"),
                                 }
                             }
+                            "hashCode" => Ok(Value::Int(val_hash(&Value::Str(s.clone())))),
                             _ => err!("Méthode inconnue '{}' sur string", method),
                         }
                     }
@@ -888,6 +893,7 @@ impl Interpreter {
                                     _ => Ok(Value::Bool(false)),
                                 }
                             }
+                            "hashCode" => Ok(Value::Int(c as i64)),
                             _ => err!("Méthode inconnue '{}' sur char", method),
                         }
                     }
@@ -916,6 +922,7 @@ impl Interpreter {
                                 }
                             }
                             "not" => Ok(Value::Bool(!b)),
+                            "hashCode" => Ok(Value::Int(if b { 1 } else { 0 })),
                             _ => err!("Méthode inconnue '{}' sur bool", method),
                         }
                     }
@@ -967,6 +974,7 @@ impl Interpreter {
                                     _ => Ok(Value::Bool(false)),
                                 }
                             }
+                            "hashCode" => Ok(Value::Int(n)),
                             _ => err!("Méthode inconnue '{}' sur int", method),
                         }
                     }
@@ -1004,6 +1012,7 @@ impl Interpreter {
                                     _ => Ok(Value::Bool(false)),
                                 }
                             }
+                            "hashCode" => Ok(Value::Int(f.to_bits() as i64)),
                             _ => err!("Méthode inconnue '{}' sur float/double", method),
                         }
                     }
@@ -1415,6 +1424,39 @@ fn make_some(v: Value) -> Value {
         enum_name: "Option".to_string(), variant_name: "Some".to_string(),
         fields, field_order: vec!["value".to_string()],
     }))
+}
+
+// ── Hachage de valeurs ────────────────────────────────────────────────────────
+
+/// Calcule un code de hachage entier pour toute valeur minilang.
+/// Utilisé par les builtins hashCode() des types primitifs et de Pair.
+pub fn val_hash(v: &Value) -> i64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    match v {
+        Value::Int(n)   => *n,
+        Value::Bool(b)  => if *b { 1 } else { 0 },
+        Value::Char(c)  => *c as i64,
+        Value::Str(s)   => {
+            let mut h = DefaultHasher::new();
+            s.hash(&mut h);
+            h.finish() as i64
+        }
+        Value::Float(f) => f.to_bits() as i64,
+        Value::Enum(ed) if ed.enum_name == "Pair" => {
+            // Pair::Of(first, second) — combine les deux hashes
+            let h1 = ed.fields.get("first").map(val_hash).unwrap_or(0);
+            let h2 = ed.fields.get("second").map(val_hash).unwrap_or(0);
+            h1.wrapping_mul(31).wrapping_add(h2)
+        }
+        Value::Object(rc) if rc.borrow().class_name == "Pair" => {
+            // Pair stocké comme Object (retourné par HashMap.entries())
+            let h1 = rc.borrow().fields.get("first").map(val_hash).unwrap_or(0);
+            let h2 = rc.borrow().fields.get("second").map(val_hash).unwrap_or(0);
+            h1.wrapping_mul(31).wrapping_add(h2)
+        }
+        _ => 0,
+    }
 }
 
 // ── Opérateurs binaires ───────────────────────────────────────────────────────

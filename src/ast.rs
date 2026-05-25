@@ -192,6 +192,7 @@ pub struct EnumVariant { pub name: String, pub fields: Vec<Param> }
 #[derive(Debug, Clone)]
 pub struct EnumDef {
     pub name: String, pub type_params: Vec<String>,
+    pub implements: Vec<String>,
     pub variants: Vec<EnumVariant>, pub methods: Vec<Method>,
 }
 

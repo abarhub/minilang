@@ -5,7 +5,9 @@
 
 package minilang.lang;
 
-class Double {
+import minilang.lang.HashCode;
+
+class Double implements HashCode {
 
     // Retourne la représentation décimale.
     string toString() builtin;
@@ -45,4 +47,7 @@ class Double {
 
     // Retourne true si les deux valeurs sont égales.
     bool equals(Object other) builtin;
+
+    // Retourne le code de hachage (basé sur la représentation binaire IEEE 754).
+    int hashCode() builtin;
 }

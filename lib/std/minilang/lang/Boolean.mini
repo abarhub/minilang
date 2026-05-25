@@ -5,7 +5,9 @@
 
 package minilang.lang;
 
-class Boolean {
+import minilang.lang.HashCode;
+
+class Boolean implements HashCode {
 
     // Retourne "true" ou "false".
     string toString() builtin;
@@ -21,4 +23,7 @@ class Boolean {
 
     // Retourne la négation logique (!this).
     bool not() builtin;
+
+    // Retourne le code de hachage (0 pour false, 1 pour true).
+    int hashCode() builtin;
 }

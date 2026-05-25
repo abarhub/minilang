@@ -599,16 +599,31 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
 
+    let enum_implements = kw("implements")
+        .ignore_then(
+            text::ident().padded_by(ws())
+                .then(
+                    just('<')
+                        .ignore_then(type_parser().separated_by(just(',').padded_by(ws())).at_least(1))
+                        .then_ignore(just('>').padded_by(ws()))
+                        .or_not()
+                )
+                .map(|(name, _)| name)
+                .separated_by(just(',').padded_by(ws())).at_least(1)
+        )
+        .or_not().map(|v| v.unwrap_or_default());
+
     let enum_def = kw("enum")
         .ignore_then(text::ident().padded_by(ws()))
         .then(enum_type_params)
+        .then(enum_implements)
         .then(
             enum_variant.separated_by(just(',').padded_by(ws())).allow_trailing()
                 .then(just(';').padded_by(ws()).ignore_then(enum_method.repeated())
                     .or_not().map(|v| v.unwrap_or_default()))
                 .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()))
         )
-        .map(|((name, type_params), (variants, methods))| EnumDef { name, type_params, variants, methods });
+        .map(|(((name, type_params), implements), (variants, methods))| EnumDef { name, type_params, implements, variants, methods });
 
     // ── Interface ─────────────────────────────────────────────────────────────
 

@@ -5,7 +5,9 @@
 
 package minilang.lang;
 
-class Integer {
+import minilang.lang.HashCode;
+
+class Integer implements HashCode {
 
     // Retourne la représentation décimale.
     string toString() builtin;
@@ -51,4 +53,7 @@ class Integer {
 
     // Retourne true si les deux entiers sont égaux.
     bool equals(Object other) builtin;
+
+    // Retourne le code de hachage (la valeur elle-même).
+    int hashCode() builtin;
 }

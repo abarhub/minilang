@@ -5,7 +5,9 @@
 
 package minilang.lang;
 
-class Character {
+import minilang.lang.HashCode;
+
+class Character implements HashCode {
 
     // Retourne true si le caractère est une lettre.
     bool isLetter() builtin;
@@ -36,4 +38,7 @@ class Character {
 
     // Retourne true si ce caractère est égal à l'objet donné.
     bool equals(Object other) builtin;
+
+    // Retourne le code de hachage (point de code Unicode).
+    int hashCode() builtin;
 }
