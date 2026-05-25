@@ -57,16 +57,6 @@ fn parse_string_hashcode() {
     "#);
 }
 
-#[test]
-fn parse_pair_hashcode() {
-    parses_ok(r#"
-        int main() {
-            Pair<int, int> p = Pair<int, int>::Of(1, 2);
-            int h = p.hashCode();
-            return 0;
-        }
-    "#);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Typecheck
@@ -138,16 +128,6 @@ fn tc_double_hashcode_returns_int() {
     "#);
 }
 
-#[test]
-fn tc_pair_hashcode_returns_int() {
-    assert_tc_ok(r#"
-        int main() {
-            Pair<int, string> p = Pair<int, string>::Of(1, "a");
-            int h = p.hashCode();
-            return 0;
-        }
-    "#);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Interprétation — valeurs exactes ou propriétés
@@ -264,31 +244,6 @@ fn interp_float_hashcode_same_values_equal() {
     "#), 1);
 }
 
-#[test]
-fn interp_pair_hashcode_same_pairs_equal() {
-    // Deux Pair identiques doivent avoir le même hashCode
-    assert_eq!(run_ok(r#"
-        int main() {
-            Pair<int, int> p1 = Pair<int, int>::Of(3, 7);
-            Pair<int, int> p2 = Pair<int, int>::Of(3, 7);
-            if (p1.hashCode() == p2.hashCode()) { return 1; }
-            return 0;
-        }
-    "#), 1);
-}
-
-#[test]
-fn interp_pair_hashcode_different_pairs() {
-    // (1,2) et (2,1) doivent avoir des hashCodes différents (ordre compte)
-    assert_eq!(run_ok(r#"
-        int main() {
-            Pair<int, int> p1 = Pair<int, int>::Of(1, 2);
-            Pair<int, int> p2 = Pair<int, int>::Of(2, 1);
-            if (p1.hashCode() == p2.hashCode()) { return 0; }
-            return 1;
-        }
-    "#), 1);
-}
 
 #[test]
 fn interp_hashcode_consistent_with_equals_int() {

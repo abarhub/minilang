@@ -4,9 +4,7 @@
 
 package minilang.lang;
 
-import minilang.lang.HashCode;
-
-enum Pair<A, B> implements HashCode {
+enum Pair<A, B> {
     Of(A first, B second);
 
     // Retourne le premier élément de la paire.
@@ -22,7 +20,4 @@ enum Pair<A, B> implements HashCode {
             Pair::Of(f, s) => { return s; }
         }
     }
-
-    // Retourne le code de hachage combinant ceux des deux éléments.
-    int hashCode() builtin;
 }

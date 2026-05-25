@@ -1443,18 +1443,6 @@ pub fn val_hash(v: &Value) -> i64 {
             h.finish() as i64
         }
         Value::Float(f) => f.to_bits() as i64,
-        Value::Enum(ed) if ed.enum_name == "Pair" => {
-            // Pair::Of(first, second) — combine les deux hashes
-            let h1 = ed.fields.get("first").map(val_hash).unwrap_or(0);
-            let h2 = ed.fields.get("second").map(val_hash).unwrap_or(0);
-            h1.wrapping_mul(31).wrapping_add(h2)
-        }
-        Value::Object(rc) if rc.borrow().class_name == "Pair" => {
-            // Pair stocké comme Object (retourné par HashMap.entries())
-            let h1 = rc.borrow().fields.get("first").map(val_hash).unwrap_or(0);
-            let h2 = rc.borrow().fields.get("second").map(val_hash).unwrap_or(0);
-            h1.wrapping_mul(31).wrapping_add(h2)
-        }
         _ => 0,
     }
 }
