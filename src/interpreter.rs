@@ -764,13 +764,14 @@ impl Interpreter {
                             "length" => Ok(Value::Int(s.chars().count() as i64)),
                             "isEmpty" => Ok(Value::Bool(s.is_empty())),
                             "charAt" => {
+                                // charAt(index) -> Option<char>
                                 if args.len() != 1 { return err!("charAt() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Int(i) => {
-                                        let i = *i as usize;
-                                        s.chars().nth(i)
-                                            .map(Value::Char)
-                                            .ok_or_else(|| RuntimeError(format!("charAt(): index {} hors bornes", i)))
+                                        match s.chars().nth(*i as usize) {
+                                            Some(c) => Ok(make_some(Value::Char(c))),
+                                            None    => Ok(make_none()),
+                                        }
                                     }
                                     _ => err!("charAt() requiert un int"),
                                 }
@@ -814,13 +815,14 @@ impl Interpreter {
                                 }
                             }
                             "indexOf" => {
+                                // indexOf(s) -> Option<int>
                                 if args.len() != 1 { return err!("indexOf() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Str(needle) => {
-                                        let idx = s.find(needle.as_str())
-                                            .map(|b| s[..b].chars().count() as i64)
-                                            .unwrap_or(-1);
-                                        Ok(Value::Int(idx))
+                                        match s.find(needle.as_str()) {
+                                            Some(b) => Ok(make_some(Value::Int(s[..b].chars().count() as i64))),
+                                            None    => Ok(make_none()),
+                                        }
                                     }
                                     _ => err!("indexOf() requiert une string"),
                                 }
@@ -843,6 +845,7 @@ impl Interpreter {
                                 }
                             }
                             "split" => {
+                                // split(sep) -> List<string>  (retourne un ArrayList<string>)
                                 if args.len() != 1 { return err!("split() attend 1 argument"); }
                                 match &args[0] {
                                     Value::Str(sep) => {
@@ -851,7 +854,15 @@ impl Interpreter {
                                         } else {
                                             s.split(sep.as_str()).map(|p| Value::Str(p.to_string())).collect()
                                         };
-                                        Ok(Value::Array(Rc::new(RefCell::new(parts))))
+                                        let count = parts.len() as i64;
+                                        let mut fields = HashMap::new();
+                                        fields.insert("data".to_string(),
+                                            Value::Array(Rc::new(RefCell::new(parts))));
+                                        fields.insert("count".to_string(), Value::Int(count));
+                                        Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
+                                            class_name: "ArrayList".to_string(),
+                                            fields,
+                                        }))))
                                     }
                                     _ => err!("split() requiert une string"),
                                 }
