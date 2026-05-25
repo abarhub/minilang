@@ -40,12 +40,6 @@ fn run_ok(src: &str) -> i64 {
     }
 }
 
-fn run_fails(src: &str) {
-    if run_source(src).is_ok() {
-        panic!("Should have failed:\n{}", src);
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  String — Parsing
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,7 +60,7 @@ fn parse_string_charat() {
     parses_ok(r#"
         int main() {
             string s = "abc";
-            char c = s.charAt(0);
+            Option<char> c = s.charAt(0);
             return 0;
         }
     "#);
@@ -77,8 +71,8 @@ fn parse_string_split() {
     parses_ok(r#"
         int main() {
             string s = "a,b,c";
-            string[] parts = s.split(",");
-            return parts.length();
+            List<string> parts = s.split(",");
+            return parts.size();
         }
     "#);
 }
@@ -103,7 +97,7 @@ fn tc_string_charat_returns_char() {
     assert_tc_ok(r#"
         int main() {
             string s = "abc";
-            char c = s.charAt(0);
+            Option<char> c = s.charAt(0);
             return 0;
         }
     "#);
@@ -125,8 +119,8 @@ fn tc_string_split_returns_array() {
     assert_tc_ok(r#"
         int main() {
             string s = "a,b,c";
-            string[] parts = s.split(",");
-            return parts.length();
+            List<string> parts = s.split(",");
+            return parts.size();
         }
     "#);
 }
@@ -194,21 +188,25 @@ fn interp_string_charat() {
     assert_eq!(run_ok(r#"
         int main() {
             string s = "abc";
-            char c = s.charAt(1);
-            return c.toInt();
+            match s.charAt(1) {
+                Option::Some(c) => { return c.toInt(); }
+                Option::None    => { return -1; }
+            }
         }
     "#), 'b' as i64);
 }
 
 #[test]
-fn interp_string_charat_oob_panics() {
-    run_fails(r#"
+fn interp_string_charat_oob_returns_none() {
+    assert_eq!(run_ok(r#"
         int main() {
             string s = "hi";
-            char c = s.charAt(10);
-            return 0;
+            match s.charAt(10) {
+                Option::Some(c) => { return 1; }
+                Option::None    => { return 0; }
+            }
         }
-    "#);
+    "#), 0);
 }
 
 #[test]
@@ -250,8 +248,10 @@ fn interp_string_to_upper() {
         int main() {
             string s = "hello";
             string u = s.toUpperCase();
-            char c = u.charAt(0);
-            return c.toInt();
+            match u.charAt(0) {
+                Option::Some(c) => { return c.toInt(); }
+                Option::None    => { return -1; }
+            }
         }
     "#), 'H' as i64);
 }
@@ -262,8 +262,10 @@ fn interp_string_to_lower() {
         int main() {
             string s = "HELLO";
             string l = s.toLowerCase();
-            char c = l.charAt(0);
-            return c.toInt();
+            match l.charAt(0) {
+                Option::Some(c) => { return c.toInt(); }
+                Option::None    => { return -1; }
+            }
         }
     "#), 'h' as i64);
 }
@@ -306,7 +308,10 @@ fn interp_string_index_of_found() {
     assert_eq!(run_ok(r#"
         int main() {
             string s = "hello";
-            return s.indexOf("ll");
+            match s.indexOf("ll") {
+                Option::Some(i) => { return i; }
+                Option::None    => { return -1; }
+            }
         }
     "#), 2);
 }
@@ -316,7 +321,10 @@ fn interp_string_index_of_not_found() {
     assert_eq!(run_ok(r#"
         int main() {
             string s = "hello";
-            return s.indexOf("xyz");
+            match s.indexOf("xyz") {
+                Option::Some(i) => { return i; }
+                Option::None    => { return -1; }
+            }
         }
     "#), -1);
 }
@@ -370,8 +378,8 @@ fn interp_string_split_count() {
     assert_eq!(run_ok(r#"
         int main() {
             string s = "a,b,c";
-            string[] parts = s.split(",");
-            return parts.length();
+            List<string> parts = s.split(",");
+            return parts.size();
         }
     "#), 3);
 }
@@ -381,8 +389,8 @@ fn interp_string_split_access() {
     assert_eq!(run_ok(r#"
         int main() {
             string s = "x,y,z";
-            string[] parts = s.split(",");
-            string first = parts[0].get();
+            List<string> parts = s.split(",");
+            string first = parts.get(0).get();
             return first.length();
         }
     "#), 1);
@@ -580,8 +588,10 @@ fn interp_char_chained_with_string() {
     assert_eq!(run_ok(r#"
         int main() {
             string s = "Hello";
-            char c = s.charAt(0);
-            if (c.isUpperCase()) { return 1; }
+            match s.charAt(0) {
+                Option::Some(c) => { if (c.isUpperCase()) { return 1; } }
+                Option::None    => { }
+            }
             return 0;
         }
     "#), 1);
