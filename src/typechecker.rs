@@ -321,7 +321,7 @@ impl TypeChecker {
             Stmt::FieldAssign { object, field, value } => {
                 let vt = self.infer(value, env);
                 let ot = if object == "this" {
-                    self.current_class.as_ref().map(|c| Type::UserDefined(c.clone()))
+                    Some(self.this_type())
                 } else {
                     env.get(object).cloned().or_else(|| self.field_of_current_class(object))
                 };
@@ -523,10 +523,7 @@ impl TypeChecker {
 
             Expr::Ident(name) => {
                 if name == "this" {
-                    return Ok(self.current_class.as_ref()
-                        .map(|c| Type::UserDefined(c.clone()))
-                        .or_else(|| self.current_enum.as_ref().map(|e| Type::UserDefined(e.clone())))
-                        .unwrap_or(Type::Void));
+                    return Ok(self.this_type());
                 }
                 if self.type_params.contains(name.as_str()) {
                     return Ok(Type::UserDefined(name.clone()));
@@ -1056,6 +1053,36 @@ impl TypeChecker {
 
     fn field_of_current_class(&self, field: &str) -> Option<Type> {
         self.current_class.as_ref().and_then(|cn| self.find_field_in(cn, field))
+    }
+
+    /// Retourne le type primitif correspondant à une classe wrapper, ou None.
+    /// Permet à `this` d'avoir le bon type primitif dans les méthodes de String,
+    /// Integer, Boolean, Character, Float, Double.
+    fn primitive_type_for_class(class_name: &str) -> Option<Type> {
+        match class_name {
+            "String"    => Some(Type::Str),
+            "Integer"   => Some(Type::Int),
+            "Boolean"   => Some(Type::Bool),
+            "Character" => Some(Type::Char),
+            "Float"     => Some(Type::Float),
+            "Double"    => Some(Type::Double),
+            _           => None,
+        }
+    }
+
+    /// Retourne le type de `this` dans le contexte courant :
+    /// type primitif si c'est une classe wrapper, type UserDefined sinon.
+    fn this_type(&self) -> Type {
+        if let Some(cn) = &self.current_class {
+            if let Some(pt) = Self::primitive_type_for_class(cn) {
+                return pt;
+            }
+            return Type::UserDefined(cn.clone());
+        }
+        if let Some(en) = &self.current_enum {
+            return Type::UserDefined(en.clone());
+        }
+        Type::Void
     }
 
     fn field_of_current_enum(&self, field: &str) -> Option<Type> {

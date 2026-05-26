@@ -872,7 +872,14 @@ impl Interpreter {
                                 }
                             }
                             "hashCode" => Ok(Value::Int(val_hash(&Value::Str(s.clone())))),
-                            _ => err!("Méthode inconnue '{}' sur string", method),
+                            _ => {
+                                // Fallthrough vers la définition minilang de la classe String
+                                match self.find_method("String", method) {
+                                    Some(m) if !matches!(m.body.as_slice(), [Stmt::Builtin]) =>
+                                        self.call_primitive_method(&m, args, Value::Str(s.clone())),
+                                    _ => err!("Méthode inconnue '{}' sur string", method),
+                                }
+                            }
                         }
                     }
                     Value::Char(c) => {
@@ -1400,6 +1407,26 @@ impl Interpreter {
         debug!("→ enum::{}", m.name);
         let mut env = Env::new(); env.push();
         env.declare("this".to_string(), Value::Enum(ed));
+        for (p, v) in m.params.iter().zip(args) { env.declare(p.name.clone(), v); }
+        match self.exec_body(&m.body.clone(), &mut env, None)? {
+            Flow::Return(v) => Ok(v),
+            _               => Ok(Value::Void),
+        }
+    }
+
+    // ── Appel de méthode minilang sur un type primitif ────────────────────────
+    // `this` = valeur primitive (Value::Str, Value::Int, …) stockée dans l'env.
+    // Permet d'écrire des méthodes String / Integer / … en minilang pur.
+
+    fn call_primitive_method(
+        &mut self, m: &Method, args: Vec<Value>, this_val: Value,
+    ) -> Result<Value, RuntimeError> {
+        if args.len() != m.params.len() {
+            return err!("{}() : {} arg(s) attendus", m.name, m.params.len());
+        }
+        debug!("→ primitive::{}", m.name);
+        let mut env = Env::new(); env.push();
+        env.declare("this".to_string(), this_val);
         for (p, v) in m.params.iter().zip(args) { env.declare(p.name.clone(), v); }
         match self.exec_body(&m.body.clone(), &mut env, None)? {
             Flow::Return(v) => Ok(v),
