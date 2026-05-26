@@ -2,6 +2,13 @@
 //  Méthodes sur le type primitif string.
 //  Appel : s.length(), s.toUpperCase(), etc.
 //  Accessible sans import dans tout fichier minilang.
+//
+//  Builtins irréductibles (accès à la représentation interne Rust) :
+//    length, charAt, substring, indexOf, equals, split, hashCode
+//
+//  Méthodes écrites en minilang pur (construites sur les builtins) :
+//    isEmpty, contains, startsWith, endsWith,
+//    toUpperCase, toLowerCase, trim, replace
 
 package minilang.lang;
 
@@ -9,41 +16,19 @@ import minilang.lang.HashCode;
 
 class String implements HashCode {
 
+    // ── Builtins irréductibles ────────────────────────────────────────────────
+
     // Retourne le nombre de caractères.
     int length() builtin;
-
-    // Retourne true si la chaîne est vide.
-    bool isEmpty() builtin;
 
     // Retourne Some(caractère) à l'index donné (0-based), ou None si hors bornes.
     Option<char> charAt(int index) builtin;
 
-    // Retourne true si la chaîne contient la sous-chaîne donnée.
-    bool contains(string s) builtin;
-
     // Retourne la sous-chaîne de [start, end[ (end exclusif).
     string substring(int start, int end) builtin;
 
-    // Retourne la chaîne en majuscules.
-    string toUpperCase() builtin;
-
-    // Retourne la chaîne en minuscules.
-    string toLowerCase() builtin;
-
-    // Retourne true si la chaîne commence par le préfixe donné.
-    bool startsWith(string prefix) builtin;
-
-    // Retourne true si la chaîne se termine par le suffixe donné.
-    bool endsWith(string suffix) builtin;
-
     // Retourne Some(index) de la première occurrence de s, ou None si absent.
     Option<int> indexOf(string s) builtin;
-
-    // Retourne la chaîne sans espaces en début et fin.
-    string trim() builtin;
-
-    // Remplace toutes les occurrences de old par replacement.
-    string replace(string old, string replacement) builtin;
 
     // Retourne true si les deux chaînes sont égales.
     bool equals(Object other) builtin;
@@ -53,4 +38,111 @@ class String implements HashCode {
 
     // Retourne le code de hachage de la chaîne (hachage polynomial).
     int hashCode() builtin;
+
+    // ── Méthodes minilang pures ───────────────────────────────────────────────
+
+    // Retourne true si la chaîne est vide.
+    bool isEmpty() {
+        return this.length() == 0;
+    }
+
+    // Retourne true si la chaîne contient la sous-chaîne donnée.
+    bool contains(string s) {
+        match this.indexOf(s) {
+            Option::Some(i) => { return true; }
+            Option::None    => { return false; }
+        }
+    }
+
+    // Retourne true si la chaîne commence par le préfixe donné.
+    bool startsWith(string prefix) {
+        int plen = prefix.length();
+        if (plen > this.length()) { return false; }
+        return this.substring(0, plen).equals(prefix);
+    }
+
+    // Retourne true si la chaîne se termine par le suffixe donné.
+    bool endsWith(string suffix) {
+        int slen = suffix.length();
+        int tlen = this.length();
+        if (slen > tlen) { return false; }
+        return this.substring(tlen - slen, tlen).equals(suffix);
+    }
+
+    // Retourne la chaîne en majuscules.
+    string toUpperCase() {
+        string result = "";
+        int i = 0;
+        while (i < this.length()) {
+            match this.charAt(i) {
+                Option::Some(c) => { result = result + c.toUpperCase().toString(); }
+                Option::None    => { }
+            }
+            i = i + 1;
+        }
+        return result;
+    }
+
+    // Retourne la chaîne en minuscules.
+    string toLowerCase() {
+        string result = "";
+        int i = 0;
+        while (i < this.length()) {
+            match this.charAt(i) {
+                Option::Some(c) => { result = result + c.toLowerCase().toString(); }
+                Option::None    => { }
+            }
+            i = i + 1;
+        }
+        return result;
+    }
+
+    // Retourne la chaîne sans espaces en début et fin.
+    string trim() {
+        int start = 0;
+        int end = this.length();
+        bool done = false;
+        while (!done && start < end) {
+            match this.charAt(start) {
+                Option::Some(c) => {
+                    if (c.isWhitespace()) { start = start + 1; }
+                    else { done = true; }
+                }
+                Option::None => { done = true; }
+            }
+        }
+        done = false;
+        while (!done && end > start) {
+            match this.charAt(end - 1) {
+                Option::Some(c) => {
+                    if (c.isWhitespace()) { end = end - 1; }
+                    else { done = true; }
+                }
+                Option::None => { done = true; }
+            }
+        }
+        return this.substring(start, end);
+    }
+
+    // Remplace toutes les occurrences de old par replacement.
+    string replace(string old, string replacement) {
+        if (old.length() == 0) { return this; }
+        string result = "";
+        string remaining = this;
+        int olen = old.length();
+        bool done = false;
+        while (!done) {
+            match remaining.indexOf(old) {
+                Option::Some(idx) => {
+                    result = result + remaining.substring(0, idx) + replacement;
+                    remaining = remaining.substring(idx + olen, remaining.length());
+                }
+                Option::None => {
+                    result = result + remaining;
+                    done = true;
+                }
+            }
+        }
+        return result;
+    }
 }
