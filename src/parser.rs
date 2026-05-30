@@ -420,11 +420,11 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             kw_type.clone()
                 .then(text::ident().padded_by(ws()))
                 .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
-                .map(|((ty, name), init)| Box::new(Stmt::VarDecl { ty, name, init })),
+                .map(|((ty, name), init)| Box::new(Stmt::VarDecl { qualifier: Qualifier::Mutable, ty, name, init })),
             type_parser()
                 .then(text::ident().padded_by(ws()))
                 .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
-                .map(|((ty, name), init)| Box::new(Stmt::VarDecl { ty, name, init })),
+                .map(|((ty, name), init)| Box::new(Stmt::VarDecl { qualifier: Qualifier::Mutable, ty, name, init })),
             text::ident().padded_by(ws())
                 .then_ignore(just('=').padded_by(ws()))
                 .then(expr.clone())
@@ -503,18 +503,26 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then_ignore(just(';').padded_by(ws()))
             .to(Stmt::Builtin);
 
-        let kw_var_decl = kw_type.clone()
+        // Qualificateur optionnel : readonly | immutable (défaut = Mutable)
+        let qualifier = choice((
+            kw("readonly") .to(Qualifier::Readonly),
+            kw("immutable").to(Qualifier::Immutable),
+        )).or_not().map(|q| q.unwrap_or(Qualifier::Mutable));
+
+        let kw_var_decl = qualifier.clone()
+            .then(kw_type.clone())
             .then(text::ident().padded_by(ws()))
             .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
             .then_ignore(just(';').padded_by(ws()))
-            .map(|((ty, name), init)| Stmt::VarDecl { ty, name, init });
+            .map(|(((qualifier, ty), name), init)| Stmt::VarDecl { qualifier, ty, name, init });
 
         // type_parser() capte fn(T)->T, les types génériques, etc.
-        let generic_var_decl = type_parser()
+        let generic_var_decl = qualifier.clone()
+            .then(type_parser())
             .then(text::ident().padded_by(ws()))
             .then(just('=').padded_by(ws()).ignore_then(expr.clone()).or_not())
             .then_ignore(just(';').padded_by(ws()))
-            .map(|((ty, name), init)| Stmt::VarDecl { ty, name, init });
+            .map(|(((qualifier, ty), name), init)| Stmt::VarDecl { qualifier, ty, name, init });
 
         let field_assign = text::ident().padded_by(ws())
             .then_ignore(just('.').padded_by(ws()))
@@ -564,11 +572,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(body.clone())
             .map(|((_n, p), b)| CM::C(Constructor { params: p, body: b }));
 
-        let method = ty.clone()
+        let method = kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false))
+            .then(ty.clone())
             .then(text::ident().padded_by(ws()))
             .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
             .then(method_body.clone())
-            .map(|(((rt, n), p), b)| CM::M(Method { return_type: rt, name: n, params: p, body: b }));
+            .map(|((((is_mutable, rt), n), p), b)| CM::M(Method { is_mutable, return_type: rt, name: n, params: p, body: b }));
 
         let field = ty.clone()
             .then(text::ident().padded_by(ws()))
@@ -588,11 +597,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         )
         .map(|(name, fields)| EnumVariant { name, fields });
 
-    let enum_method = ty.clone()
+    let enum_method = kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false))
+        .then(ty.clone())
         .then(text::ident().padded_by(ws()))
         .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
         .then(method_body.clone())
-        .map(|(((rt, n), p), b)| Method { return_type: rt, name: n, params: p, body: b });
+        .map(|((((is_mutable, rt), n), p), b)| Method { is_mutable, return_type: rt, name: n, params: p, body: b });
 
     let enum_type_params = text::ident().padded_by(ws())
         .separated_by(just(',').padded_by(ws())).at_least(1)
@@ -627,11 +637,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     // ── Interface ─────────────────────────────────────────────────────────────
 
-    let method_sig = ty.clone()
+    let method_sig = kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false))
+        .then(ty.clone())
         .then(text::ident().padded_by(ws()))
         .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
         .then_ignore(just(';').padded_by(ws()))
-        .map(|((rt, n), p)| MethodSig { return_type: rt, name: n, params: p });
+        .map(|(((is_mutable, rt), n), p)| MethodSig { is_mutable, return_type: rt, name: n, params: p });
 
     // ── Classe ────────────────────────────────────────────────────────────────
 
