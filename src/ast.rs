@@ -201,6 +201,9 @@ pub struct MethodSig { pub is_mutable: bool, pub return_type: Type, pub name: St
 pub struct ClassDef {
     pub is_mut:   bool,
     pub name: String, pub type_params: Vec<String>,
+    /// Contraintes de qualificateur sur les paramètres de type.
+    /// Ex. : `mut class Map<immutable K, V>` → `[("K", Immutable)]`
+    pub type_param_constraints: Vec<(String, Qualifier)>,
     pub parent: Option<String>, pub implements: Vec<String>,
     pub fields: Vec<Field>, pub constructors: Vec<Constructor>, pub methods: Vec<Method>,
 }
@@ -208,7 +211,12 @@ pub struct ClassDef {
 // ── Interface ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct InterfaceDef { pub is_mut: bool, pub name: String, pub type_params: Vec<String>, pub methods: Vec<MethodSig> }
+pub struct InterfaceDef {
+    pub is_mut: bool,
+    pub name: String, pub type_params: Vec<String>,
+    pub type_param_constraints: Vec<(String, Qualifier)>,
+    pub methods: Vec<MethodSig>,
+}
 
 // ── Enum ──────────────────────────────────────────────────────────────────────
 
@@ -218,6 +226,7 @@ pub struct EnumVariant { pub name: String, pub fields: Vec<Param> }
 #[derive(Debug, Clone)]
 pub struct EnumDef {
     pub name: String, pub type_params: Vec<String>,
+    pub type_param_constraints: Vec<(String, Qualifier)>,
     pub implements: Vec<String>,
     pub variants: Vec<EnumVariant>, pub methods: Vec<Method>,
 }

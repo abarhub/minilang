@@ -110,6 +110,7 @@ impl TypeChecker {
             is_mut: true,
             name: "Object".to_string(),
             type_params: vec![],
+            type_param_constraints: vec![],
             parent: None,
             implements: vec![],
             fields: vec![],
@@ -327,6 +328,11 @@ impl TypeChecker {
                 // Vérifier que le type est `mut` si le qualificateur l'exige
                 if *qualifier != Qualifier::Mutable {
                     self.check_type_is_mut(&resolved, name, qualifier);
+                }
+                // Vérifier les contraintes de type params sur le type déclaré
+                if let Type::Generic(gname, gargs) = &resolved {
+                    let (gname, gargs) = (gname.clone(), gargs.clone());
+                    self.check_generic_type_constraints(&gname, &gargs);
                 }
                 env.declare_qualified(name.clone(), resolved, qualifier.clone());
             }
@@ -734,6 +740,12 @@ impl TypeChecker {
                     }
                 } else if !args.is_empty() {
                     self.err(format!("'{}' n'a pas de constructeur", class_name));
+                }
+                // Vérifier les contraintes de type params à la construction
+                if !type_args.is_empty() {
+                    let cn = class_name.clone();
+                    let ta = type_args.clone();
+                    self.check_generic_type_constraints(&cn, &ta);
                 }
                 if type_args.is_empty() { Ok(Type::UserDefined(class_name.clone())) }
                 else { Ok(Type::Generic(class_name.clone(), type_args.clone())) }
@@ -1249,6 +1261,67 @@ impl TypeChecker {
             }
         }
         // Type inconnu → on laisse passer (erreur déjà remontée ailleurs)
+    }
+
+    // ── Vérification des contraintes de type params ────────────────────────────
+
+    /// Vérifie que les arguments de type satisfont les contraintes déclarées sur
+    /// les paramètres de type du générique `generic_name`.
+    ///
+    /// Ex. : `mut class Map<immutable K, V>` → K doit être un type `mut`
+    ///        quand on écrit `Map<Point, int>`, Point est vérifié.
+    fn check_generic_type_constraints(&mut self, generic_name: &str, type_args: &[Type]) {
+        // Récupérer les noms et les contraintes du générique
+        let (param_names, constraints): (Vec<String>, Vec<(String, Qualifier)>) = {
+            if let Some(c) = self.classes.get(generic_name) {
+                (c.type_params.clone(), c.type_param_constraints.clone())
+            } else if let Some(i) = self.interfaces.get(generic_name) {
+                (i.type_params.clone(), i.type_param_constraints.clone())
+            } else if let Some(e) = self.enums.get(generic_name) {
+                (e.type_params.clone(), e.type_param_constraints.clone())
+            } else {
+                return; // type inconnu, déjà traité ailleurs
+            }
+        };
+
+        if constraints.is_empty() { return; }
+
+        for (param_name, type_arg) in param_names.iter().zip(type_args.iter()) {
+            // Y a-t-il une contrainte sur ce paramètre ?
+            let constraint = constraints.iter()
+                .find(|(n, _)| n == param_name)
+                .map(|(_, q)| q.clone());
+            let Some(constraint) = constraint else { continue };
+            if constraint == Qualifier::Mutable { continue; }
+
+            // L'argument de type doit être `mut` (classe ou interface auditée)
+            let is_ok = match type_arg {
+                // Types valeur — toujours acceptés
+                Type::Int | Type::Bool | Type::Str | Type::Char
+                | Type::Float | Type::Double => true,
+                // Paramètre de type générique en cours de résolution — on fait confiance
+                Type::UserDefined(n) if self.type_params.contains(n.as_str()) => true,
+                Type::UserDefined(n) | Type::Generic(n, _) => {
+                    self.classes   .get(n).map(|c| c.is_mut).unwrap_or(false)
+                    || self.interfaces.get(n).map(|i| i.is_mut).unwrap_or(false)
+                    || self.enums  .contains_key(n.as_str()) // enums sont mut implicitement
+                }
+                _ => true, // autres types → permissif
+            };
+
+            if !is_ok {
+                let qual_str = match constraint {
+                    Qualifier::Immutable => "immutable",
+                    Qualifier::Readonly  => "readonly",
+                    Qualifier::Mutable   => "",
+                };
+                self.err(format!(
+                    "Argument de type '{}' pour le paramètre '{}' de '{}' : \
+                     la contrainte `{}` requiert une classe déclarée `mut`",
+                    type_arg, param_name, generic_name, qual_str
+                ));
+            }
+        }
     }
 
     /// Retourne le type de `this` dans le contexte courant :

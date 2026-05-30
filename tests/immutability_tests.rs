@@ -605,3 +605,159 @@ fn tc_err_chain_readonly_list_add() {
         }
     "#, "readonly");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Phase 4 — Contraintes de type params (`immutable K`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Parsing ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn parse_type_param_constraint_class() {
+    parses_ok(r#"
+        mut class Repository<immutable K, V> {
+            mutable void put(K key, V value) { }
+            V get(K key) { return value; }
+        }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn parse_type_param_constraint_interface() {
+    parses_ok(r#"
+        mut interface Cache<immutable K, V> {
+            mutable void store(K key, V value);
+            V load(K key);
+        }
+        int main() { return 0; }
+    "#);
+}
+
+#[test]
+fn parse_type_param_no_constraint() {
+    // Sans contrainte → comportement inchangé
+    parses_ok(r#"
+        mut class Box<T> {
+            T value;
+            T get() { return value; }
+        }
+        int main() { return 0; }
+    "#);
+}
+
+// ── Typecheck valide ──────────────────────────────────────────────────────────
+
+#[test]
+fn tc_type_param_constraint_primitive_ok() {
+    // int est un type valeur → toujours accepté comme argument contraint
+    assert_tc_ok(r#"
+        mut class Store<immutable K, V> {
+            mutable void put(K key, V value) { }
+        }
+        int main() {
+            Store<int, string> s = new Store<int, string>();
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_type_param_constraint_mut_class_ok() {
+    // Point est mut → OK comme argument immutable K
+    assert_tc_ok(r#"
+        mut class Point {
+            int x;
+            int getX() { return x; }
+        }
+        mut class Store<immutable K, V> {
+            mutable void put(K key, V value) { }
+        }
+        int main() {
+            Store<Point, int> s = new Store<Point, int>();
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_type_param_constraint_string_ok() {
+    // string est primitif → OK
+    assert_tc_ok(r#"
+        mut class Store<immutable K, V> {
+            mutable void put(K key, V value) { }
+        }
+        int main() {
+            Store<string, int> s = new Store<string, int>();
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_type_param_unconstrained_ok() {
+    // Paramètre sans contrainte → n'importe quel type
+    assert_tc_ok(r#"
+        mut class Wrapper<T> {
+            T value;
+            T get() { return value; }
+        }
+        class Helper {
+            int compute(int x) { return x * 2; }
+        }
+        int main() {
+            Wrapper<Helper> w = new Wrapper<Helper>();
+            return 0;
+        }
+    "#);
+}
+
+#[test]
+fn tc_type_param_constraint_enum_ok() {
+    // Les enums sont mut implicitement
+    assert_tc_ok(r#"
+        mut class Store<immutable K, V> {
+            mutable void put(K key, V value) { }
+        }
+        int main() {
+            Store<Option<int>, string> s = new Store<Option<int>, string>();
+            return 0;
+        }
+    "#);
+}
+
+// ── Typecheck erreurs ─────────────────────────────────────────────────────────
+
+#[test]
+fn tc_err_type_param_constraint_non_mut_class() {
+    // Helper n'est pas mut → interdit comme argument immutable K
+    assert_tc_err(r#"
+        class Helper {
+            int compute(int x) { return x * 2; }
+        }
+        mut class Store<immutable K, V> {
+            mutable void put(K key, V value) { }
+        }
+        int main() {
+            Store<Helper, int> s = new Store<Helper, int>();
+            return 0;
+        }
+    "#, "mut");
+}
+
+#[test]
+fn tc_err_type_param_constraint_var_decl() {
+    // La contrainte est vérifiée aussi sur la déclaration de variable
+    assert_tc_err(r#"
+        class NonMut {
+            int val;
+        }
+        mut class Store<immutable K, V> {
+            mutable void put(K key, V value) { }
+        }
+        int main() {
+            Store<NonMut, int> s = new Store<NonMut, int>();
+            return 0;
+        }
+    "#, "mut");
+}
