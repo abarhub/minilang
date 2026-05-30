@@ -1,6 +1,7 @@
-//! Tests des phases 1 et 2 du système d'immutabilité — minilang.
+//! Tests des phases 1, 2 et 3 du système d'immutabilité — minilang.
 //! Phase 1 : readonly / immutable sur les variables, mutable sur les méthodes.
 //! Phase 2 : mot-clé `mut` sur les classes/interfaces — audit du système.
+//! Phase 3 : propagation transitive du qualificateur dans les appels enchaînés.
 
 use mini_parser::typechecker::check_source;
 use chumsky::Parser;
@@ -419,4 +420,188 @@ fn tc_err_non_mut_class_immutable() {
             return 0;
         }
     "#, "mut");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Phase 3 — Propagation transitive (appels enchaînés)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Cas valides ───────────────────────────────────────────────────────────────
+
+#[test]
+fn tc_chain_readonly_non_mutable_ok() {
+    // Appel de méthode non-mutable enchaîné sur un récepteur readonly → OK
+    assert_tc_ok(r#"
+        mut class Inner {
+            int value;
+            int get() { return value; }
+        }
+        mut class Outer {
+            Inner inner;
+            Inner getInner() { return inner; }
+        }
+        int main() {
+            Outer o = new Outer();
+            readonly Outer ro = o;
+            return ro.getInner().get();
+        }
+    "#);
+}
+
+#[test]
+fn tc_chain_value_type_result_ok() {
+    // Si la méthode retourne un type valeur (int), le qualificateur ne se propage pas
+    assert_tc_ok(r#"
+        mut class Counter {
+            int value;
+            mutable void increment() { value = value + 1; }
+            int get() { return value; }
+        }
+        mut class Wrapper {
+            Counter c;
+            int getCount() { return c.get(); }
+        }
+        int main() {
+            Wrapper w = new Wrapper();
+            readonly Wrapper rw = w;
+            int n = rw.getCount();
+            return n;
+        }
+    "#);
+}
+
+#[test]
+fn tc_chain_immutable_non_mutable_ok() {
+    assert_tc_ok(r#"
+        mut class Node {
+            int val;
+            int getVal() { return val; }
+        }
+        mut class Tree {
+            Node root;
+            Node getRoot() { return root; }
+        }
+        int main() {
+            immutable Tree t = new Tree();
+            return t.getRoot().getVal();
+        }
+    "#);
+}
+
+#[test]
+fn tc_chain_stdlib_readonly_size_ok() {
+    // size() retourne int (type valeur) → pas de propagation
+    assert_tc_ok(r#"
+        int main() {
+            List<int> lst = new ArrayList<int>();
+            readonly List<int> rlst = lst;
+            return rlst.size();
+        }
+    "#);
+}
+
+#[test]
+fn tc_chain_two_levels_non_mutable_ok() {
+    // Deux niveaux d'enchaînement, méthodes non-mutables → OK
+    assert_tc_ok(r#"
+        mut class Inner {
+            int val;
+            int getVal() { return val; }
+        }
+        mut class Mid {
+            Inner inner;
+            Inner getInner() { return inner; }
+        }
+        mut class Outer {
+            Mid mid;
+            Mid getMid() { return mid; }
+        }
+        int main() {
+            Outer o = new Outer();
+            readonly Outer ro = o;
+            return ro.getMid().getInner().getVal();
+        }
+    "#);
+}
+
+// ── Erreurs attendues ─────────────────────────────────────────────────────────
+
+#[test]
+fn tc_err_chain_readonly_mutable_method() {
+    // ro.getInner() propage readonly → appel de mutable sur le résultat → erreur
+    assert_tc_err(r#"
+        mut class Inner {
+            int value;
+            mutable void reset() { value = 0; }
+            int get() { return value; }
+        }
+        mut class Outer {
+            Inner inner;
+            Inner getInner() { return inner; }
+        }
+        int main() {
+            Outer o = new Outer();
+            readonly Outer ro = o;
+            ro.getInner().reset();
+            return 0;
+        }
+    "#, "readonly");
+}
+
+#[test]
+fn tc_err_chain_immutable_mutable_method() {
+    assert_tc_err(r#"
+        mut class Inner {
+            int value;
+            mutable void set(int v) { value = v; }
+            int get() { return value; }
+        }
+        mut class Outer {
+            Inner inner;
+            Inner getInner() { return inner; }
+        }
+        int main() {
+            immutable Outer o = new Outer();
+            o.getInner().set(42);
+            return 0;
+        }
+    "#, "immutable");
+}
+
+#[test]
+fn tc_err_chain_three_levels() {
+    // Trois niveaux d'enchaînement : readonly se propage jusqu'au bout
+    assert_tc_err(r#"
+        mut class Leaf {
+            int val;
+            mutable void set(int v) { val = v; }
+        }
+        mut class Mid {
+            Leaf leaf;
+            Leaf getLeaf() { return leaf; }
+        }
+        mut class Root {
+            Mid mid;
+            Mid getMid() { return mid; }
+        }
+        int main() {
+            Root r = new Root();
+            readonly Root rr = r;
+            rr.getMid().getLeaf().set(1);
+            return 0;
+        }
+    "#, "readonly");
+}
+
+#[test]
+fn tc_err_chain_readonly_list_add() {
+    // readonly List → add() directement interdit (phase 1, toujours OK)
+    assert_tc_err(r#"
+        int main() {
+            List<int> lst = new ArrayList<int>();
+            readonly List<int> rlst = lst;
+            rlst.add(1);
+            return 0;
+        }
+    "#, "readonly");
 }

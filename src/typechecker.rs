@@ -1116,13 +1116,59 @@ impl TypeChecker {
     /// Retourne le qualificateur d'une expression.
     /// Pour Phase 1 : seuls les Ident simples ont un qualificateur trackable.
     /// `this` dans une méthode non-mutable est traité comme `readonly`.
-    fn qualifier_of_expr(&self, expr: &Expr, env: &TypeEnv) -> Qualifier {
+    /// Retourne true si le type est un type valeur (primitif).
+    /// Les types valeur ne propagent pas les qualificateurs :
+    /// appeler `.size()` sur un `readonly List` retourne un `int` mutable.
+    fn is_value_type(ty: &Type) -> bool {
+        matches!(ty, Type::Int | Type::Bool | Type::Str | Type::Char
+                   | Type::Float | Type::Double | Type::Void
+                   | Type::Fn | Type::FnType(_, _))
+    }
+
+    /// Retourne le qualificateur effectif d'une expression.
+    ///
+    /// Phase 3 — propagation transitive :
+    /// si `expr` est un appel de méthode non-mutable sur un récepteur qualifié,
+    /// et que le type de retour est un type référence (non primitif),
+    /// le qualificateur du récepteur est propagé au résultat.
+    ///
+    /// Exemple : `readonlyList.get(0)` → qualificateur Readonly
+    ///           `readonlyList.size()` → qualificateur Mutable (int est un type valeur)
+    fn qualifier_of_expr(&mut self, expr: &Expr, env: &TypeEnv) -> Qualifier {
         match expr {
             Expr::Ident(name) if name == "this" => {
                 if self.current_method_mutable { Qualifier::Mutable } else { Qualifier::Readonly }
             }
             Expr::Ident(name) => env.get_qualifier(name),
-            _ => Qualifier::Mutable, // expression complexe → permissif en Phase 1
+
+            Expr::MethodCall { object, method, .. } => {
+                // 1. Qualifier du récepteur (récursif)
+                let obj_qual = self.qualifier_of_expr(object, env);
+                if obj_qual == Qualifier::Mutable {
+                    return Qualifier::Mutable; // pas de propagation si le récepteur est mutable
+                }
+
+                // 2. Type du récepteur — on relance l'inférence sans générer de nouvelles erreurs
+                let saved = self.errors.len();
+                let obj_ty = self.infer(object, env).map(|t| self.resolve(&t));
+                self.errors.truncate(saved); // éviter les erreurs en double
+
+                if let Some(obj_ty) = obj_ty {
+                    // 3. La méthode est-elle non-mutable ?
+                    if !self.method_is_mutable(&obj_ty, method) {
+                        // 4. Type de retour — propagation seulement si type référence
+                        if let Ok((_, rty, subst)) = self.resolve_method(&obj_ty, method) {
+                            let ret = self.resolve(&substitute(&rty, &subst));
+                            if !Self::is_value_type(&ret) {
+                                return obj_qual; // propager le qualificateur
+                            }
+                        }
+                    }
+                }
+                Qualifier::Mutable
+            }
+
+            _ => Qualifier::Mutable,
         }
     }
 
