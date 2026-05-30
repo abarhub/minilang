@@ -604,7 +604,14 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then(method_body.clone())
         .map(|((((is_mutable, rt), n), p), b)| Method { is_mutable, return_type: rt, name: n, params: p, body: b });
 
-    let enum_type_params = text::ident().padded_by(ws())
+    // Paramètre de type avec contrainte optionnelle : [immutable|readonly] Ident
+    let type_param_entry = choice((
+        kw("immutable").to(Qualifier::Immutable),
+        kw("readonly") .to(Qualifier::Readonly),
+    )).or_not().map(|q| q.unwrap_or(Qualifier::Mutable))
+      .then(text::ident().padded_by(ws()));
+
+    let enum_type_params = type_param_entry.clone()
         .separated_by(just(',').padded_by(ws())).at_least(1)
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
@@ -633,7 +640,14 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                     .or_not().map(|v| v.unwrap_or_default()))
                 .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws()))
         )
-        .map(|(((name, type_params), implements), (variants, methods))| EnumDef { name, type_params, implements, variants, methods });
+        .map(|(((name, tp), implements), (variants, methods))| {
+            let type_param_constraints: Vec<(String, Qualifier)> = tp.iter()
+                .filter(|(q, _)| *q != Qualifier::Mutable)
+                .map(|(q, n)| (n.clone(), q.clone()))
+                .collect();
+            let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
+            EnumDef { name, type_params, type_param_constraints, implements, variants, methods }
+        });
 
     // ── Interface ─────────────────────────────────────────────────────────────
 
@@ -646,7 +660,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     // ── Classe ────────────────────────────────────────────────────────────────
 
-    let type_param_list = text::ident().padded_by(ws())
+    let type_param_list = type_param_entry.clone()
         .separated_by(just(',').padded_by(ws())).at_least(1)
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
@@ -657,7 +671,14 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then(type_param_list.clone())
         .then(method_sig.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|(((is_mut, name), tp), methods)| InterfaceDef { is_mut, name, type_params: tp, methods });
+        .map(|(((is_mut, name), tp), methods)| {
+            let type_param_constraints: Vec<(String, Qualifier)> = tp.iter()
+                .filter(|(q, _)| *q != Qualifier::Mutable)
+                .map(|(q, n)| (n.clone(), q.clone()))
+                .collect();
+            let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
+            InterfaceDef { is_mut, name, type_params, type_param_constraints, methods }
+        });
 
     let class_def = kw("mut").to(true).or_not().map(|m| m.unwrap_or(false))
         .then_ignore(kw("class"))
@@ -686,7 +707,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 CM::C(c) => ctors.push(c),
                 CM::M(m) => methods.push(m),
             }}
-            ClassDef { is_mut, name, type_params: tp, parent, implements: impls,
+            let type_param_constraints: Vec<(String, Qualifier)> = tp.iter()
+                .filter(|(q, _)| *q != Qualifier::Mutable)
+                .map(|(q, n)| (n.clone(), q.clone()))
+                .collect();
+            let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
+            ClassDef { is_mut, name, type_params, type_param_constraints, parent, implements: impls,
                        fields, constructors: ctors, methods }
         });
 
