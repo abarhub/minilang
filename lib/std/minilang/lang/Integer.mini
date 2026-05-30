@@ -7,7 +7,7 @@ package minilang.lang;
 
 import minilang.lang.HashCode;
 
-class Integer implements HashCode {
+mut class Integer implements HashCode {
 
     // Retourne la représentation décimale.
     string toString() builtin;

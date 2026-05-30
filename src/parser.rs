@@ -651,15 +651,17 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
 
-    let interface_def = kw("interface")
-        .ignore_then(text::ident().padded_by(ws()))
+    let interface_def = kw("mut").to(true).or_not().map(|m| m.unwrap_or(false))
+        .then_ignore(kw("interface"))
+        .then(text::ident().padded_by(ws()))
         .then(type_param_list.clone())
         .then(method_sig.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|((name, tp), methods)| InterfaceDef { name, type_params: tp, methods });
+        .map(|(((is_mut, name), tp), methods)| InterfaceDef { is_mut, name, type_params: tp, methods });
 
-    let class_def = kw("class")
-        .ignore_then(text::ident().padded_by(ws()))
+    let class_def = kw("mut").to(true).or_not().map(|m| m.unwrap_or(false))
+        .then_ignore(kw("class"))
+        .then(text::ident().padded_by(ws()))
         .then(type_param_list.clone())
         .then(kw("extends").ignore_then(text::ident().padded_by(ws())).or_not())
         .then(kw("implements")
@@ -677,14 +679,14 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .or_not().map(|v| v.unwrap_or_default()))
         .then(class_member.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|((((name, tp), parent), impls), members)| {
+        .map(|(((((is_mut, name), tp), parent), impls), members)| {
             let mut fields = vec![]; let mut ctors = vec![]; let mut methods = vec![];
             for m in members { match m {
                 CM::F(f) => fields.push(f),
                 CM::C(c) => ctors.push(c),
                 CM::M(m) => methods.push(m),
             }}
-            ClassDef { name, type_params: tp, parent, implements: impls,
+            ClassDef { is_mut, name, type_params: tp, parent, implements: impls,
                        fields, constructors: ctors, methods }
         });
 

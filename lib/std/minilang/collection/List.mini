@@ -6,7 +6,7 @@ package minilang.collection;
 import minilang.lang.Option;
 import minilang.collection.Iterator;
 
-interface List<T> {
+mut interface List<T> {
     mutable void add(T element);
     Option<T> get(int index);
     mutable bool set(int index, fn() -> T producer);

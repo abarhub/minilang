@@ -7,7 +7,7 @@ import minilang.lang.Option;
 import minilang.collection.Iterator;
 import minilang.collection.ArrayList;
 
-class ArrayListIterator<T> implements Iterator<T> {
+mut class ArrayListIterator<T> implements Iterator<T> {
 
     ArrayList<T> list;
     int index;

@@ -6,7 +6,7 @@ package minilang.collection;
 
 import minilang.collection.Iterator;
 
-interface Iterable<T> {
+mut interface Iterable<T> {
     // Retourne un nouvel itérateur positionné au début de la collection.
     Iterator<T> iterator();
 }

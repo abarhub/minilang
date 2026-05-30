@@ -4,7 +4,7 @@
 
 package minilang.lang;
 
-class Object {
+mut class Object {
 
     // Retourne true si les deux objets sont identiques (même référence).
     // Les sous-classes peuvent redéfinir cette méthode pour une égalité sémantique.

@@ -5,7 +5,7 @@ package minilang.collection;
 
 import minilang.collection.Iterator;
 
-interface Set<T> {
+mut interface Set<T> {
     mutable bool add(T element);
     bool contains(T element);
     int size();
