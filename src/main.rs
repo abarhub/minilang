@@ -125,9 +125,9 @@ fn print_method(m: &Method, depth: usize) {
 
 fn print_stmt(s: &Stmt, d: usize) {
     match s {
-        Stmt::VarDecl { ty, name, init } => {
+        Stmt::VarDecl { qualifier, ty, name, init } => {
             let rhs = init.as_ref().map(|e| format!(" = {}", fmt_expr(e))).unwrap_or_default();
-            println!("{}{} {}{};", pad(d), ty, name, rhs);
+            println!("{}{}{} {}{};", pad(d), qualifier, ty, name, rhs);
         }
         Stmt::Assign { target, value }             => println!("{}{} = {};",    pad(d), target, fmt_expr(value)),
         Stmt::FieldAssign { object, field, value } => println!("{}{}.{} = {};", pad(d), object, field, fmt_expr(value)),
@@ -194,9 +194,9 @@ fn print_stmt(s: &Stmt, d: usize) {
 
 fn fmt_stmt_inline(s: &Stmt) -> String {
     match s {
-        Stmt::VarDecl { ty, name, init } => {
-            if let Some(e) = init { format!("{} {} = {}", ty, name, fmt_expr(e)) }
-            else { format!("{} {}", ty, name) }
+        Stmt::VarDecl { qualifier, ty, name, init } => {
+            if let Some(e) = init { format!("{}{} {} = {}", qualifier, ty, name, fmt_expr(e)) }
+            else { format!("{}{} {}", qualifier, ty, name) }
         }
         Stmt::Assign { target, value } => format!("{} = {}", target, fmt_expr(value)),
         Stmt::ExprStmt(e)              => fmt_expr(e),

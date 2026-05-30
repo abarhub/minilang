@@ -7,16 +7,16 @@ import minilang.lang.Option;
 import minilang.collection.Iterator;
 
 interface List<T> {
-    void add(T element);
+    mutable void add(T element);
     Option<T> get(int index);
-    bool set(int index, fn() -> T producer);
+    mutable bool set(int index, fn() -> T producer);
     int size();
     bool isEmpty();
     bool contains(T element);
     Option<int> indexOf(T element);
     Option<T> find(T element);
-    void remove(int index);
-    void clear();
+    mutable void remove(int index);
+    mutable void clear();
     string toString();
     void forEach(fn(T) -> void consumer);
     Iterator<T> iterator();

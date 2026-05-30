@@ -8,13 +8,13 @@ import minilang.lang.Pair;
 import minilang.collection.List;
 
 interface Map<K, V> {
-    void put(K key, V value);
+    mutable void put(K key, V value);
     Option<V> get(K key);
     bool containsKey(K key);
     int size();
     bool isEmpty();
-    bool remove(K key);
-    void clear();
+    mutable bool remove(K key);
+    mutable void clear();
     List<K> keys();
     List<Pair<K, V>> entries();
     void forEach(fn(K, V) -> void consumer);

@@ -222,7 +222,7 @@ impl Interpreter {
         this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Flow, RuntimeError> {
         match stmt {
-            Stmt::VarDecl { ty, name, init } => {
+            Stmt::VarDecl { qualifier: _, ty, name, init } => {
                 let val = if let Some(e) = init {
                     self.eval(e, env, this)?
                 } else if let Type::UserDefined(cn) = ty {

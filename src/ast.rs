@@ -1,3 +1,27 @@
+// ── Qualificateurs d'immutabilité ─────────────────────────────────────────────
+
+/// Qualificateur d'une variable ou d'un paramètre.
+/// - `Mutable`   (défaut) : peut appeler des méthodes `mutable`.
+/// - `Readonly`  : vue en lecture seule ; ne peut pas appeler de méthodes `mutable`.
+/// - `Immutable` : immuable en profondeur ; peut être passé là où `readonly` est attendu.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Qualifier {
+    #[default]
+    Mutable,
+    Readonly,
+    Immutable,
+}
+
+impl std::fmt::Display for Qualifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Qualifier::Mutable   => write!(f, ""),
+            Qualifier::Readonly  => write!(f, "readonly "),
+            Qualifier::Immutable => write!(f, "immutable "),
+        }
+    }
+}
+
 // ── Package & imports ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -134,7 +158,7 @@ pub struct MatchArm { pub pattern: Pattern, pub body: Vec<Stmt> }
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    VarDecl     { ty: Type, name: String, init: Option<Expr> },
+    VarDecl     { qualifier: Qualifier, ty: Type, name: String, init: Option<Expr> },
     Assign      { target: String, value: Expr },
     FieldAssign { object: String, field: String, value: Expr },
     Print(Vec<Expr>),
@@ -160,6 +184,7 @@ pub struct Field  { pub ty: Type, pub name: String }
 
 #[derive(Debug, Clone)]
 pub struct Method {
+    pub is_mutable:  bool,
     pub return_type: Type, pub name: String,
     pub params: Vec<Param>, pub body: Vec<Stmt>,
 }
@@ -168,7 +193,7 @@ pub struct Method {
 pub struct Constructor { pub params: Vec<Param>, pub body: Vec<Stmt> }
 
 #[derive(Debug, Clone)]
-pub struct MethodSig { pub return_type: Type, pub name: String, pub params: Vec<Param> }
+pub struct MethodSig { pub is_mutable: bool, pub return_type: Type, pub name: String, pub params: Vec<Param> }
 
 // ── Classe ────────────────────────────────────────────────────────────────────
 

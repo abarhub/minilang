@@ -22,19 +22,33 @@ macro_rules! type_err { ($($a:tt)*) => { Err(TypeError(format!($($a)*))) }; }
 // ── Environnement de types ────────────────────────────────────────────────────
 
 struct TypeEnv {
-    scopes: Vec<HashMap<String, Type>>,
+    scopes:      Vec<HashMap<String, Type>>,
+    qual_scopes: Vec<HashMap<String, Qualifier>>,
 }
 
 impl TypeEnv {
-    fn new() -> Self { Self { scopes: vec![HashMap::new()] } }
-    fn push(&mut self) { self.scopes.push(HashMap::new()); }
-    fn pop(&mut self)  { if self.scopes.len() > 1 { self.scopes.pop(); } }
+    fn new() -> Self { Self { scopes: vec![HashMap::new()], qual_scopes: vec![HashMap::new()] } }
+    fn push(&mut self) { self.scopes.push(HashMap::new()); self.qual_scopes.push(HashMap::new()); }
+    fn pop(&mut self)  {
+        if self.scopes.len() > 1 { self.scopes.pop(); self.qual_scopes.pop(); }
+    }
 
     fn declare(&mut self, name: String, ty: Type) {
-        self.scopes.last_mut().unwrap().insert(name, ty);
+        self.scopes.last_mut().unwrap().insert(name.clone(), ty);
+        self.qual_scopes.last_mut().unwrap().insert(name, Qualifier::Mutable);
+    }
+    fn declare_qualified(&mut self, name: String, ty: Type, qual: Qualifier) {
+        self.scopes.last_mut().unwrap().insert(name.clone(), ty);
+        self.qual_scopes.last_mut().unwrap().insert(name, qual);
     }
     fn get(&self, name: &str) -> Option<&Type> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
+    }
+    fn get_qualifier(&self, name: &str) -> Qualifier {
+        self.qual_scopes.iter().rev()
+            .find_map(|s| s.get(name))
+            .cloned()
+            .unwrap_or(Qualifier::Mutable)
     }
     fn set(&mut self, name: &str, ty: Type) {
         for s in self.scopes.iter_mut().rev() {
@@ -77,13 +91,15 @@ pub struct TypeChecker {
     classes:         HashMap<String, ClassDef>,
     interfaces:      HashMap<String, InterfaceDef>,
     enums:           HashMap<String, EnumDef>,
-    aliases:         HashMap<String, Type>,
-    funcs:           HashMap<String, FuncDef>,
-    type_params:     HashSet<String>,
-    current_class:   Option<String>,
-    current_enum:    Option<String>,
-    expected_return: Type,
-    errors:          Vec<TypeError>,
+    aliases:                HashMap<String, Type>,
+    funcs:                  HashMap<String, FuncDef>,
+    type_params:            HashSet<String>,
+    current_class:          Option<String>,
+    current_enum:           Option<String>,
+    expected_return:        Type,
+    /// true si la méthode courante est déclarée `mutable`
+    current_method_mutable: bool,
+    errors:                 Vec<TypeError>,
 }
 
 impl TypeChecker {
@@ -98,6 +114,7 @@ impl TypeChecker {
             fields: vec![],
             constructors: vec![],
             methods: vec![Method {
+                is_mutable:  false,
                 return_type: Type::Bool,
                 name: "equals".to_string(),
                 params: vec![Param { name: "other".to_string(), ty: Type::UserDefined("Object".to_string()) }],
@@ -110,11 +127,12 @@ impl TypeChecker {
             enums:           program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
             aliases:         program.type_aliases.iter().map(|a| (a.name.clone(), a.ty.clone())).collect(),
             funcs:           program.funcs.iter().map(|f| (f.name.clone(), f.clone())).collect(),
-            type_params:     HashSet::new(),
-            current_class:   None,
-            current_enum:    None,
-            expected_return: Type::Void,
-            errors:          vec![],
+            type_params:            HashSet::new(),
+            current_class:          None,
+            current_enum:           None,
+            expected_return:        Type::Void,
+            current_method_mutable: true,
+            errors:                 vec![],
         }
     }
 
@@ -269,11 +287,13 @@ impl TypeChecker {
         for m in &class.methods.clone() {
             let mut env = TypeEnv::new(); env.push();
             for p in &m.params { env.declare(p.name.clone(), self.resolve(&p.ty)); }
-            self.expected_return = self.resolve(&m.return_type);
+            self.expected_return        = self.resolve(&m.return_type);
+            self.current_method_mutable = m.is_mutable;
             for s in &m.body.clone() { self.check_stmt(s, &mut env); }
         }
-        self.current_class = None;
-        self.type_params   = HashSet::new();
+        self.current_class          = None;
+        self.current_method_mutable = true;
+        self.type_params            = HashSet::new();
     }
 
     // ── Instructions ──────────────────────────────────────────────────────────
@@ -281,7 +301,7 @@ impl TypeChecker {
     fn check_stmt(&mut self, stmt: &Stmt, env: &mut TypeEnv) {
         match stmt {
 
-            Stmt::VarDecl { ty, name, init } => {
+            Stmt::VarDecl { qualifier, ty, name, init } => {
                 let resolved = self.resolve(ty);
 
                 if let Some(init_expr) = init {
@@ -303,7 +323,7 @@ impl TypeChecker {
                         }
                     }
                 }
-                env.declare(name.clone(), resolved);
+                env.declare_qualified(name.clone(), resolved, qualifier.clone());
             }
 
             Stmt::Assign { target, value } => {
@@ -569,6 +589,31 @@ impl TypeChecker {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
                 let (ptys, rty, subst) = self.resolve_method(&ot, method)?;
+
+                // ── Vérification d'immutabilité ───────────────────────────────
+                if self.method_is_mutable(&ot, method) {
+                    let qual = self.qualifier_of_expr(object, env);
+                    match qual {
+                        Qualifier::Readonly  =>
+                            self.err(format!(
+                                "Appel de méthode mutable '{}()' sur une variable readonly",
+                                method)),
+                        Qualifier::Immutable =>
+                            self.err(format!(
+                                "Appel de méthode mutable '{}()' sur une variable immutable",
+                                method)),
+                        Qualifier::Mutable => {}
+                    }
+                    // this dans une méthode non-mutable est readonly
+                    if matches!(object.as_ref(), Expr::Ident(n) if n == "this")
+                        && !self.current_method_mutable
+                    {
+                        self.err(format!(
+                            "Méthode non-mutable : impossible d'appeler '{}()' (mutable) sur this",
+                            method));
+                    }
+                }
+
                 if args.len() != ptys.len() {
                     return type_err!("{}() : {} arg(s) attendus, {} fournis",
                         method, ptys.len(), args.len());
@@ -1032,6 +1077,48 @@ impl TypeChecker {
         if let Some(p) = &c.parent { return self.find_method_def(p, mn); }
         if cn != "Object" { return self.find_method_def("Object", mn); }
         None
+    }
+
+    // ── Vérifications d'immutabilité ──────────────────────────────────────────
+
+    /// Retourne true si la méthode `method` sur le type `obj_ty` est déclarée `mutable`.
+    /// Vérifie dans cet ordre : classe → interface → enum. Builtins → false par défaut.
+    fn method_is_mutable(&self, obj_ty: &Type, method: &str) -> bool {
+        let cn = match obj_ty {
+            Type::UserDefined(n) | Type::Generic(n, _) => n.as_str(),
+            Type::Str    => "String",
+            Type::Int    => "Integer",
+            Type::Bool   => "Boolean",
+            Type::Char   => "Character",
+            Type::Float  => "Float",
+            Type::Double => "Double",
+            _ => return false,
+        };
+        // Classe
+        if let Some(m) = self.find_method_def(cn, method) {
+            return m.is_mutable;
+        }
+        // Interface
+        if let Some(iface) = self.interfaces.get(cn) {
+            if let Some(sig) = iface.methods.iter().find(|s| s.name == method) {
+                return sig.is_mutable;
+            }
+        }
+        // Enum (jamais mutable)
+        false
+    }
+
+    /// Retourne le qualificateur d'une expression.
+    /// Pour Phase 1 : seuls les Ident simples ont un qualificateur trackable.
+    /// `this` dans une méthode non-mutable est traité comme `readonly`.
+    fn qualifier_of_expr(&self, expr: &Expr, env: &TypeEnv) -> Qualifier {
+        match expr {
+            Expr::Ident(name) if name == "this" => {
+                if self.current_method_mutable { Qualifier::Mutable } else { Qualifier::Readonly }
+            }
+            Expr::Ident(name) => env.get_qualifier(name),
+            _ => Qualifier::Mutable, // expression complexe → permissif en Phase 1
+        }
     }
 
     fn find_field_type(&self, obj_ty: &Type, field: &str) -> Option<Type> {
