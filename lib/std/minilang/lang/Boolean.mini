@@ -7,7 +7,7 @@ package minilang.lang;
 
 import minilang.lang.HashCode;
 
-class Boolean implements HashCode {
+mut class Boolean implements HashCode {
 
     // Retourne "true" ou "false".
     string toString() builtin;

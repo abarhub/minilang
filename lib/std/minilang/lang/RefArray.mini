@@ -12,7 +12,7 @@
 
 package minilang.lang;
 
-class RefArray<T> {
+mut class RefArray<T> {
 
     // Affecte une valeur à la case référencée.
     void set(T value) builtin;

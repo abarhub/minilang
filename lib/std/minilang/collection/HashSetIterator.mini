@@ -7,7 +7,7 @@ import minilang.lang.Option;
 import minilang.collection.Iterator;
 import minilang.collection.List;
 
-class HashSetIterator<T> implements Iterator<T> {
+mut class HashSetIterator<T> implements Iterator<T> {
 
     List<T> keys;
     int index;

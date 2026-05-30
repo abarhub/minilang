@@ -9,7 +9,7 @@ import minilang.collection.List;
 import minilang.collection.Iterator;
 import minilang.collection.ArrayListIterator;
 
-class ArrayList<T> implements List<T> {
+mut class ArrayList<T> implements List<T> {
 
     T[] data;
     int count;

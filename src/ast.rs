@@ -199,6 +199,7 @@ pub struct MethodSig { pub is_mutable: bool, pub return_type: Type, pub name: St
 
 #[derive(Debug, Clone)]
 pub struct ClassDef {
+    pub is_mut:   bool,
     pub name: String, pub type_params: Vec<String>,
     pub parent: Option<String>, pub implements: Vec<String>,
     pub fields: Vec<Field>, pub constructors: Vec<Constructor>, pub methods: Vec<Method>,
@@ -207,7 +208,7 @@ pub struct ClassDef {
 // ── Interface ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct InterfaceDef { pub name: String, pub type_params: Vec<String>, pub methods: Vec<MethodSig> }
+pub struct InterfaceDef { pub is_mut: bool, pub name: String, pub type_params: Vec<String>, pub methods: Vec<MethodSig> }
 
 // ── Enum ──────────────────────────────────────────────────────────────────────
 

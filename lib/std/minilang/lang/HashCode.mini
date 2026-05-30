@@ -12,7 +12,7 @@
 
 package minilang.lang;
 
-interface HashCode {
+mut interface HashCode {
 
     // Retourne un entier représentant le code de hachage de cet objet.
     // Contrat : si a.equals(b) alors a.hashCode() == b.hashCode().

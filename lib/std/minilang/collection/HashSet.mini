@@ -10,7 +10,7 @@ import minilang.collection.Iterator;
 import minilang.collection.HashSetIterator;
 import minilang.collection.List;
 
-class HashSet<T> implements Set<T> {
+mut class HashSet<T> implements Set<T> {
 
     HashMap<T, bool> map;
 

@@ -8,7 +8,7 @@ import minilang.lang.Pair;
 import minilang.collection.List;
 import minilang.collection.Map;
 
-class HashMap<K, V> implements Map<K, V> {
+mut class HashMap<K, V> implements Map<K, V> {
     void put(K key, V value) builtin;
     Option<V> get(K key) builtin;
     bool containsKey(K key) builtin;

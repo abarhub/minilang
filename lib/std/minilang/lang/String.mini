@@ -14,7 +14,7 @@ package minilang.lang;
 
 import minilang.lang.HashCode;
 
-class String implements HashCode {
+mut class String implements HashCode {
 
     // ── Builtins irréductibles ────────────────────────────────────────────────
 

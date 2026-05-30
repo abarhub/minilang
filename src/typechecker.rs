@@ -107,6 +107,7 @@ impl TypeChecker {
         let mut classes: HashMap<String, ClassDef> =
             program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
         classes.entry("Object".to_string()).or_insert_with(|| ClassDef {
+            is_mut: true,
             name: "Object".to_string(),
             type_params: vec![],
             parent: None,
@@ -322,6 +323,10 @@ impl TypeChecker {
                             }
                         }
                     }
+                }
+                // Vérifier que le type est `mut` si le qualificateur l'exige
+                if *qualifier != Qualifier::Mutable {
+                    self.check_type_is_mut(&resolved, name, qualifier);
                 }
                 env.declare_qualified(name.clone(), resolved, qualifier.clone());
             }
@@ -1155,6 +1160,49 @@ impl TypeChecker {
             "Double"    => Some(Type::Double),
             _           => None,
         }
+    }
+
+    /// Vérifie que le type `ty` est déclaré `mut` (ou est un enum / un primitif),
+    /// ce qui est requis quand le qualificateur est `readonly` ou `immutable`.
+    fn check_type_is_mut(&mut self, ty: &Type, var_name: &str, qualifier: &Qualifier) {
+        let cn = match ty {
+            // Les primitifs sont des types valeur — toujours OK
+            Type::Int | Type::Bool | Type::Str | Type::Char
+            | Type::Float | Type::Double | Type::Void => return,
+            // Arrays et lambdas → on laisse passer pour l'instant
+            Type::Array(_) | Type::Fn | Type::FnType(_, _) => return,
+            Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
+        };
+        // Les enums sont toujours `mut` implicitement
+        if self.enums.contains_key(&cn) { return; }
+        // Vérifier dans les classes
+        if let Some(c) = self.classes.get(&cn) {
+            if !c.is_mut {
+                self.err(format!(
+                    "Variable '{}' ({}) : la classe '{}' doit être déclarée `mut` \
+                     pour être utilisée avec le qualificateur `{}`",
+                    var_name, qualifier, cn,
+                    match qualifier { Qualifier::Readonly => "readonly",
+                                      Qualifier::Immutable => "immutable",
+                                      Qualifier::Mutable => "" }
+                ));
+            }
+            return;
+        }
+        // Vérifier dans les interfaces
+        if let Some(i) = self.interfaces.get(&cn) {
+            if !i.is_mut {
+                self.err(format!(
+                    "Variable '{}' ({}) : l'interface '{}' doit être déclarée `mut` \
+                     pour être utilisée avec le qualificateur `{}`",
+                    var_name, qualifier, cn,
+                    match qualifier { Qualifier::Readonly => "readonly",
+                                      Qualifier::Immutable => "immutable",
+                                      Qualifier::Mutable => "" }
+                ));
+            }
+        }
+        // Type inconnu → on laisse passer (erreur déjà remontée ailleurs)
     }
 
     /// Retourne le type de `this` dans le contexte courant :

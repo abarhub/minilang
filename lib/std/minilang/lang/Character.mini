@@ -7,7 +7,7 @@ package minilang.lang;
 
 import minilang.lang.HashCode;
 
-class Character implements HashCode {
+mut class Character implements HashCode {
 
     // Retourne true si le caractère est une lettre.
     bool isLetter() builtin;
