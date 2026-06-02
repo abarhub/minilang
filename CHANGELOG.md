@@ -4,82 +4,27 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
-## [02/06/2026] — Système de visibilité
+## [02/06/2026] — Visibilité des membres + type `record`
 
-Ajout d'un système de contrôle d'accès aux membres des classes, vérifié statiquement par le typechecker.
+Les champs de classe sont désormais **toujours privés** (accès autorisé depuis la même classe, interdit depuis l'extérieur). Les méthodes sont **publiques par défaut** ; `private` et `protected` permettent de restreindre l'accès.
 
-### Champs — toujours privés
-
-Les champs d'une classe sont **toujours privés** : aucun mot-clé à écrire, c'est la règle implicite.
-L'accès est autorisé depuis n'importe quelle méthode de la **même classe** (y compris via une autre instance), mais interdit depuis l'extérieur.
+Ajout du type **`record`** : agrégat immuable à champs positionnels avec getters, `copy`, `equals`, `toString` et `hashCode` générés automatiquement. Hérite de la classe `Record`. `Pair<A,B>` migré de enum à record.
 
 ```java
-mut class Counter {
-    int value;                        // implicitement privé
-    int getValue() { return value; }  // OK — même classe
-    bool equals(Counter other) {
-        return this.value == other.value;  // OK — même classe
-    }
-}
+record Point(int x, int y) {}
 
-Counter c = new Counter();
-c.value;       // ERREUR : champ privé
-c.value = 5;   // ERREUR : champ privé
-```
-
-### Méthodes — publiques par défaut, `private` ou `protected` optionnels
-
-Sans modificateur, une méthode est **publique**. Deux mots-clés permettent de restreindre l'accès :
-
-| Modificateur | Accessible depuis |
-|---|---|
-| _(aucun)_ | Partout |
-| `protected` | La classe déclarante et ses sous-classes |
-| `private` | La classe déclarante uniquement |
-
-```java
-mut class Animal {
-    string name;
-
-    string getName() { return name; }           // public (défaut)
-    protected string buildLabel() { return name; } // sous-classes uniquement
-    private bool validate() { return true; }    // cette classe uniquement
-}
-
-mut class Dog extends Animal {
-    string describe() { return this.buildLabel(); } // OK — sous-classe
-    void test()       { this.validate(); }          // ERREUR — private
-}
-
-Animal a = new Animal();
-a.buildLabel();  // ERREUR — protected
-a.validate();    // ERREUR — private
-a.getName();     // OK — public
-```
-
-Les modificateurs `private` et `protected` se placent avant `mutable` :
-
-```java
-mut class Counter {
-    int value;
-    private mutable void reset() { value = 0; }  // private + mutable : compatibles
-    mutable void increment()     { value = value + 1; }
-}
+Point p  = new Point(1, 2);
+Point p2 = p.copy(Option<int>::None, Option<int>::Some(10)); // x inchangé, y=10
+p.getX();        // 1
+p.toString();    // "Point(x=1, y=2)"
+p.x;             // ERREUR : champ privé
 ```
 
 ---
 
-## [30/05/2026] — Système d'immutabilité
+## [30/05/2026] — Système d'immutabilité en quatre phases
 
-Ajout d'un système d'immutabilité en quatre phases, vérifié statiquement par le typechecker.
-
-### Phase 1 — Qualificateurs de variables et méthodes mutables
-
-- Nouveau qualificateur **`readonly`** sur les variables : vue en lecture seule, ne peut pas appeler de méthode `mutable`.
-- Nouveau qualificateur **`immutable`** sur les variables : immuable, ne peut pas appeler de méthode `mutable`.
-- Nouveau mot-clé **`mutable`** sur les méthodes de classe : signale qu'une méthode modifie l'état de l'objet.
-- Règle : dans une méthode non-`mutable`, `this` est traité comme `readonly` — impossible d'y appeler une méthode `mutable`.
-- Annotation de la stdlib : `List.add/set/remove/clear`, `Set.add/remove/clear`, `Map.put/remove/clear` marquées `mutable`.
+Qualificateurs `readonly` / `immutable` sur les variables, mot-clé `mutable` sur les méthodes de classe, marqueur `mut` sur les types, propagation transitive du qualificateur dans les appels enchaînés, et contraintes `immutable K` sur les paramètres de type génériques.
 
 ```java
 mut class Counter {
@@ -87,64 +32,9 @@ mut class Counter {
     mutable void increment() { value = value + 1; }
     int get() { return value; }
 }
-
-Counter c = new Counter();
-readonly Counter rc = c;
-rc.increment();   // ERREUR : méthode mutable sur readonly
-rc.get();         // OK
-```
-
-### Phase 2 — Audit des classes avec `mut`
-
-- Nouveau mot-clé **`mut`** devant `class` et `interface` : marque le type comme participant au système d'immutabilité.
-- Règle : une variable `readonly X` ou `immutable X` n'est autorisée que si `X` est déclaré `mut`.
-- Les **enums** sont `mut` implicitement (ils sont immuables par nature).
-- Les **primitifs** (`int`, `bool`, `char`, `string`, `float`, `double`) sont des types valeur, toujours autorisés.
-- Annotation de la stdlib : toutes les classes et interfaces portent maintenant `mut` (`Object`, `String`, `Integer`, `Boolean`, `Character`, `Float`, `Double`, `RefArray`, `ArrayList`, `HashMap`, `HashSet`, etc.).
-
-```java
-mut class Point { int x; int getX() { return x; } }
-class Helper    { int compute(int x) { return x * 2; } }
-
-immutable Point p  = new Point();   // OK — Point est mut
-readonly  Helper h = new Helper();  // ERREUR — Helper n'est pas mut
-```
-
-### Phase 3 — Propagation transitive dans les appels enchaînés
-
-- Le qualificateur d'un récepteur se propage automatiquement au résultat d'un appel de méthode non-mutable, si le type de retour est un type référence.
-- Les **types valeur** (primitifs) stoppent la propagation.
-
-```java
-readonly Outer ro = ...;
-ro.getInner().reset();          // ERREUR : reset() est mutable,
-                                //          Inner hérite readonly de ro
-
-ro.getInner().get();            // OK : get() n'est pas mutable
-int n = ro.getCount();          // OK : getCount() retourne int (type valeur)
-
-// Propagation sur trois niveaux :
-readonly Root rr = ...;
-rr.getMid().getLeaf().set(1);   // ERREUR
-```
-
-### Phase 4 — Contraintes de type params
-
-- Les paramètres de type peuvent être annotés **`immutable K`** (ou `readonly K`) dans les déclarations de classe, interface ou enum.
-- Cela impose que le type fourni pour ce paramètre soit déclaré `mut` (ou soit un primitif/enum).
-
-```java
-mut class Map<immutable K, V> {
-    mutable void put(K key, V value) { ... }
-}
-
-mut class Point { ... }
-class Helper    { ... }
-
-Map<Point,  int> m1 = ...;   // OK — Point est mut
-Map<Helper, int> m2 = ...;   // ERREUR — Helper n'est pas mut
-Map<string, int> m3 = ...;   // OK — string est un primitif
-Map<Option<int>, string> m4; // OK — les enums sont toujours mut
+readonly Counter rc = new Counter();
+rc.increment();  // ERREUR : méthode mutable sur readonly
+rc.get();        // OK
 ```
 
 ---
