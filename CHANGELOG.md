@@ -4,6 +4,71 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [02/06/2026] — Système de visibilité
+
+Ajout d'un système de contrôle d'accès aux membres des classes, vérifié statiquement par le typechecker.
+
+### Champs — toujours privés
+
+Les champs d'une classe sont **toujours privés** : aucun mot-clé à écrire, c'est la règle implicite.
+L'accès est autorisé depuis n'importe quelle méthode de la **même classe** (y compris via une autre instance), mais interdit depuis l'extérieur.
+
+```java
+mut class Counter {
+    int value;                        // implicitement privé
+    int getValue() { return value; }  // OK — même classe
+    bool equals(Counter other) {
+        return this.value == other.value;  // OK — même classe
+    }
+}
+
+Counter c = new Counter();
+c.value;       // ERREUR : champ privé
+c.value = 5;   // ERREUR : champ privé
+```
+
+### Méthodes — publiques par défaut, `private` ou `protected` optionnels
+
+Sans modificateur, une méthode est **publique**. Deux mots-clés permettent de restreindre l'accès :
+
+| Modificateur | Accessible depuis |
+|---|---|
+| _(aucun)_ | Partout |
+| `protected` | La classe déclarante et ses sous-classes |
+| `private` | La classe déclarante uniquement |
+
+```java
+mut class Animal {
+    string name;
+
+    string getName() { return name; }           // public (défaut)
+    protected string buildLabel() { return name; } // sous-classes uniquement
+    private bool validate() { return true; }    // cette classe uniquement
+}
+
+mut class Dog extends Animal {
+    string describe() { return this.buildLabel(); } // OK — sous-classe
+    void test()       { this.validate(); }          // ERREUR — private
+}
+
+Animal a = new Animal();
+a.buildLabel();  // ERREUR — protected
+a.validate();    // ERREUR — private
+a.getName();     // OK — public
+```
+
+Les modificateurs `private` et `protected` se placent avant `mutable` :
+
+```java
+mut class Counter {
+    int value;
+    private mutable void reset() { value = 0; }  // private + mutable : compatibles
+    mutable void increment()     { value = value + 1; }
+}
+```
+
+---
+
 ## [30/05/2026] — Système d'immutabilité
 
 Ajout d'un système d'immutabilité en quatre phases, vérifié statiquement par le typechecker.
