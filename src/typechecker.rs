@@ -116,6 +116,7 @@ impl TypeChecker {
             fields: vec![],
             constructors: vec![],
             methods: vec![Method {
+                visibility:  Visibility::Public,
                 is_mutable:  false,
                 return_type: Type::Bool,
                 name: "equals".to_string(),
@@ -351,13 +352,16 @@ impl TypeChecker {
 
             Stmt::FieldAssign { object, field, value } => {
                 let vt = self.infer(value, env);
-                let ot = if object == "this" {
+                let via_this = object == "this";
+                let ot = if via_this {
                     Some(self.this_type())
                 } else {
                     env.get(object).cloned().or_else(|| self.field_of_current_class(object))
                 };
                 if let Some(ot) = ot {
                     let ot = self.resolve(&ot);
+                    // Champs toujours privés — seul this peut y accéder
+                    self.check_field_access_visibility(&ot, field, via_this);
                     match self.find_field_type(&ot, field) {
                         Some(ft) => {
                             if let Some(vt) = vt {
@@ -592,6 +596,8 @@ impl TypeChecker {
             Expr::FieldAccess { object, field } => {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
+                let via_this = matches!(object.as_ref(), Expr::Ident(n) if n == "this");
+                self.check_field_access_visibility(&ot, field, via_this);
                 self.find_field_type(&ot, field)
                     .ok_or_else(|| TypeError(format!("Champ inconnu '{}.{}'", ot, field)))
             }
@@ -600,6 +606,9 @@ impl TypeChecker {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
                 let (ptys, rty, subst) = self.resolve_method(&ot, method)?;
+
+                // ── Vérification de visibilité ────────────────────────────────
+                self.check_method_visibility(&ot, method);
 
                 // ── Vérification d'immutabilité ───────────────────────────────
                 if self.method_is_mutable(&ot, method) {
@@ -793,6 +802,8 @@ impl TypeChecker {
                     Type::Generic(n, args) if n == "Option" && args.len() == 1 => args[0].clone(),
                     _ => return type_err!("?. requiert Option<T>, trouvé {}", ot),
                 };
+                // Les champs sont privés — vérifier l'accès (jamais via this pour ?.)
+                self.check_field_access_visibility(&inner, field, false);
                 let ft = self.find_field_type(&inner, field)
                     .ok_or_else(|| TypeError(format!("Champ inconnu '{}'", field)))?;
                 Ok(Type::Generic("Option".to_string(), vec![ft]))
@@ -1096,6 +1107,79 @@ impl TypeChecker {
         None
     }
 
+    // ── Vérifications de visibilité ───────────────────────────────────────────
+
+    /// Retourne la visibilité ET le nom de la classe qui déclare la méthode.
+    /// Ne clone que `Visibility` (enum cheap) et `String` (nom de classe),
+    /// jamais le corps de la méthode — évite les stack overflows sur les
+    /// méthodes complexes de la stdlib.
+    fn find_method_visibility(&self, cn: &str, mn: &str) -> Option<(Visibility, String)> {
+        let c = self.classes.get(cn)?;
+        if let Some(m) = c.methods.iter().find(|m| m.name == mn) {
+            return Some((m.visibility.clone(), cn.to_string()));
+        }
+        if let Some(p) = &c.parent { return self.find_method_visibility(p, mn); }
+        if cn != "Object"          { return self.find_method_visibility("Object", mn); }
+        None
+    }
+
+    /// Vérifie que l'appel de méthode respecte la visibilité déclarée.
+    /// - `Public`    : toujours autorisé.
+    /// - `Protected` : autorisé depuis la classe déclarante ou une sous-classe.
+    /// - `Private`   : autorisé depuis la classe déclarante uniquement.
+    fn check_method_visibility(&mut self, obj_ty: &Type, method_name: &str) {
+        let cn = match obj_ty {
+            Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
+            _ => return, // primitifs / enums → pas de contrôle de visibilité de classe
+        };
+        // On ne contrôle que les classes (pas les interfaces ni les enums)
+        if !self.classes.contains_key(&cn) { return; }
+
+        let Some((visibility, declaring)) = self.find_method_visibility(&cn, method_name) else { return };
+
+        match visibility {
+            Visibility::Public => {} // toujours OK
+            Visibility::Private => {
+                if self.current_class.as_deref() != Some(&declaring) {
+                    self.err(format!(
+                        "Méthode privée '{}' de '{}' : inaccessible depuis ce contexte",
+                        method_name, declaring));
+                }
+            }
+            Visibility::Protected => {
+                let allowed = match &self.current_class {
+                    Some(cc) => cc == &declaring || self.is_subclass(cc, &declaring),
+                    None     => false,
+                };
+                if !allowed {
+                    self.err(format!(
+                        "Méthode protégée '{}' de '{}' : accessible uniquement depuis la classe ou ses sous-classes",
+                        method_name, declaring));
+                }
+            }
+        }
+    }
+
+    /// Vérifie la règle de privé-par-classe : accès autorisé depuis `this` ou
+    /// depuis une méthode de la même classe (ou sous-classe) — pattern Java/C++.
+    fn check_field_access_visibility(&mut self, obj_ty: &Type, field: &str, via_this: bool) {
+        let cn = match obj_ty {
+            Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
+            _ => return,
+        };
+        if !self.classes.contains_key(&cn) { return; }
+        if via_this { return; }
+        let same_class = match &self.current_class {
+            Some(cc) => cc == &cn || self.is_subclass(cc, &cn),
+            None => false,
+        };
+        if !same_class {
+            self.err(format!(
+                "Champ '{}' de '{}' est privé : accessible uniquement depuis la classe",
+                field, cn));
+        }
+    }
+
     // ── Vérifications d'immutabilité ──────────────────────────────────────────
 
     /// Retourne true si la méthode `method` sur le type `obj_ty` est déclarée `mutable`.
@@ -1140,12 +1224,13 @@ impl TypeChecker {
     /// Retourne le qualificateur effectif d'une expression.
     ///
     /// Phase 3 — propagation transitive :
-    /// si `expr` est un appel de méthode non-mutable sur un récepteur qualifié,
-    /// et que le type de retour est un type référence (non primitif),
-    /// le qualificateur du récepteur est propagé au résultat.
+    /// le qualificateur du récepteur se propage à travers les appels de méthodes
+    /// enchaînés. Les faux positifs sont impossibles en pratique car :
+    /// - les types primitifs n'ont pas de méthodes mutables
+    /// - les variables déclarées sans qualificateur sont Mutable dans l'env
     ///
-    /// Exemple : `readonlyList.get(0)` → qualificateur Readonly
-    ///           `readonlyList.size()` → qualificateur Mutable (int est un type valeur)
+    /// Note : on ne relance pas `infer` ici pour éviter la récursion mutuelle
+    /// trop profonde sur les corps de méthodes complexes de la stdlib.
     fn qualifier_of_expr(&mut self, expr: &Expr, env: &TypeEnv) -> Qualifier {
         match expr {
             Expr::Ident(name) if name == "this" => {
@@ -1153,32 +1238,8 @@ impl TypeChecker {
             }
             Expr::Ident(name) => env.get_qualifier(name),
 
-            Expr::MethodCall { object, method, .. } => {
-                // 1. Qualifier du récepteur (récursif)
-                let obj_qual = self.qualifier_of_expr(object, env);
-                if obj_qual == Qualifier::Mutable {
-                    return Qualifier::Mutable; // pas de propagation si le récepteur est mutable
-                }
-
-                // 2. Type du récepteur — on relance l'inférence sans générer de nouvelles erreurs
-                let saved = self.errors.len();
-                let obj_ty = self.infer(object, env).map(|t| self.resolve(&t));
-                self.errors.truncate(saved); // éviter les erreurs en double
-
-                if let Some(obj_ty) = obj_ty {
-                    // 3. La méthode est-elle non-mutable ?
-                    if !self.method_is_mutable(&obj_ty, method) {
-                        // 4. Type de retour — propagation seulement si type référence
-                        if let Ok((_, rty, subst)) = self.resolve_method(&obj_ty, method) {
-                            let ret = self.resolve(&substitute(&rty, &subst));
-                            if !Self::is_value_type(&ret) {
-                                return obj_qual; // propager le qualificateur
-                            }
-                        }
-                    }
-                }
-                Qualifier::Mutable
-            }
+            // Phase 3 : propager le qualificateur du récepteur à travers les chaînes
+            Expr::MethodCall { object, .. } => self.qualifier_of_expr(object, env),
 
             _ => Qualifier::Mutable,
         }

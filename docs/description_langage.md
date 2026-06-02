@@ -84,6 +84,80 @@ int y;
 }
 ```
 
+### Visibilité des membres d'une classe
+
+#### Champs — toujours privés
+
+Les champs d'une classe sont **toujours privés** : aucun mot-clé n'est nécessaire ni autorisé.
+L'accès est permis depuis n'importe quelle méthode de la même classe (y compris sur une autre instance du même type), mais interdit depuis l'extérieur.
+
+```java
+mut class Counter {
+    int value;                         // privé implicitement
+
+    int getValue() { return value; }   // OK — même classe, via this
+    bool equals(Counter other) {
+        return this.value == other.value;  // OK — même classe, autre instance
+    }
+}
+
+int main() {
+    Counter c = new Counter();
+    int v = c.value;   // ERREUR : champ privé, inaccessible depuis l'extérieur
+    return 0;
+}
+```
+
+#### Méthodes — publiques par défaut
+
+Sans modificateur, une méthode est **publique** (accessible de partout).
+Deux mots-clés optionnels permettent de restreindre l'accès :
+
+| Modificateur | Placement | Accessible depuis |
+|---|---|---|
+| _(aucun)_ | — | Partout |
+| `protected` | avant le type de retour | La classe déclarante et ses sous-classes |
+| `private` | avant le type de retour | La classe déclarante uniquement |
+
+```java
+mut class Animal {
+    string name;
+
+    // public (défaut) — accessible partout
+    string getName() { return name; }
+
+    // protected — accessible depuis Animal et ses sous-classes
+    protected string buildLabel() { return name; }
+
+    // private — accessible uniquement dans Animal
+    private bool validate() { return true; }
+}
+
+mut class Dog extends Animal {
+    string describe() { return this.buildLabel(); } // OK — sous-classe
+    void test()       { this.validate(); }          // ERREUR — private
+}
+
+int main() {
+    Animal a = new Animal();
+    a.getName();     // OK — public
+    a.buildLabel();  // ERREUR — protected
+    a.validate();    // ERREUR — private
+    return 0;
+}
+```
+
+Les modificateurs se placent avant `mutable` lorsque les deux sont combinés :
+
+```java
+mut class Counter {
+    int value;
+    private mutable void reset()  { value = 0; }       // private + mutable
+    mutable void increment()      { value = value + 1; }
+    int getValue()                { return value; }
+}
+```
+
 ### Classe générique
 
 Exemple :

@@ -117,7 +117,8 @@ fn print_class(c: &ClassDef) {
 
 fn print_method(m: &Method, depth: usize) {
     let ps: Vec<String> = m.params.iter().map(|p| format!("{} {}", p.ty, p.name)).collect();
-    println!("{}{} {}({})", pad(depth), m.return_type, m.name, ps.join(", "));
+    let mutable = if m.is_mutable { "mutable " } else { "" };
+    println!("{}{}{}{} {}({})", pad(depth), m.visibility, mutable, m.return_type, m.name, ps.join(", "));
     println!("{}{{", pad(depth));
     for s in &m.body { print_stmt(s, depth + 1); }
     println!("{}}}", pad(depth));

@@ -1,5 +1,34 @@
 // ── Qualificateurs d'immutabilité ─────────────────────────────────────────────
 
+// ── Visibilité des membres ────────────────────────────────────────────────────
+
+/// Visibilité d'une méthode de classe ou d'enum.
+/// - `Public`    (défaut) : accessible de partout.
+/// - `Protected`          : accessible depuis la classe et ses sous-classes.
+/// - `Private`            : accessible depuis la classe déclarante uniquement.
+///
+/// Les champs sont toujours privés — pas de modificateur possible.
+/// Les méthodes d'interface sont toujours publiques.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Visibility {
+    #[default]
+    Public,
+    Protected,
+    Private,
+}
+
+impl std::fmt::Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Visibility::Public    => write!(f, ""),
+            Visibility::Protected => write!(f, "protected "),
+            Visibility::Private   => write!(f, "private "),
+        }
+    }
+}
+
+// ── Qualificateurs d'immutabilité ─────────────────────────────────────────────
+
 /// Qualificateur d'une variable ou d'un paramètre.
 /// - `Mutable`   (défaut) : peut appeler des méthodes `mutable`.
 /// - `Readonly`  : vue en lecture seule ; ne peut pas appeler de méthodes `mutable`.
@@ -184,6 +213,7 @@ pub struct Field  { pub ty: Type, pub name: String }
 
 #[derive(Debug, Clone)]
 pub struct Method {
+    pub visibility:  Visibility,
     pub is_mutable:  bool,
     pub return_type: Type, pub name: String,
     pub params: Vec<Param>, pub body: Vec<Stmt>,
