@@ -572,12 +572,20 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then(body.clone())
             .map(|((_n, p), b)| CM::C(Constructor { params: p, body: b }));
 
-        let method = kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false))
+        // Préfixe visibility+mutable boxé pour limiter la profondeur de type
+        let vis_mut: chumsky::BoxedParser<char, (Visibility, bool), Simple<char>> = choice((
+                kw("private")  .to(Visibility::Private),
+                kw("protected").to(Visibility::Protected),
+            )).or_not().map(|v| v.unwrap_or(Visibility::Public))
+            .then(kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false)))
+            .boxed();
+
+        let method = vis_mut
             .then(ty.clone())
             .then(text::ident().padded_by(ws()))
             .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
             .then(method_body.clone())
-            .map(|((((is_mutable, rt), n), p), b)| CM::M(Method { is_mutable, return_type: rt, name: n, params: p, body: b }));
+            .map(|(((((visibility, is_mutable), rt), n), p), b)| CM::M(Method { visibility, is_mutable, return_type: rt, name: n, params: p, body: b }));
 
         let field = ty.clone()
             .then(text::ident().padded_by(ws()))
@@ -597,12 +605,19 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         )
         .map(|(name, fields)| EnumVariant { name, fields });
 
-    let enum_method = kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false))
+    let vis_mut_enum: chumsky::BoxedParser<char, (Visibility, bool), Simple<char>> = choice((
+            kw("private")  .to(Visibility::Private),
+            kw("protected").to(Visibility::Protected),
+        )).or_not().map(|v| v.unwrap_or(Visibility::Public))
+        .then(kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false)))
+        .boxed();
+
+    let enum_method = vis_mut_enum
         .then(ty.clone())
         .then(text::ident().padded_by(ws()))
         .then(params.clone().delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
         .then(method_body.clone())
-        .map(|((((is_mutable, rt), n), p), b)| Method { is_mutable, return_type: rt, name: n, params: p, body: b });
+        .map(|(((((visibility, is_mutable), rt), n), p), b)| Method { visibility, is_mutable, return_type: rt, name: n, params: p, body: b });
 
     // Paramètre de type avec contrainte optionnelle : [immutable|readonly] Ident
     let type_param_entry = choice((
