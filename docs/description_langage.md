@@ -158,6 +158,30 @@ mut class Counter {
 }
 ```
 
+### Record
+
+Un record est un agrégat de données immuable. Les champs sont déclarés dans les parenthèses ; getters, `copy`, `equals`, `toString` et `hashCode` sont générés automatiquement. Les méthodes `mutable` sont interdites. Un record hérite implicitement de `Record` et peut implémenter des interfaces.
+
+```java
+record Point(int x, int y) {}
+
+Point p  = new Point(3, 4);
+int   vx = p.getX();          // getter généré
+Point p2 = p.copy(Option<int>::None, Option<int>::Some(10));  // y remplacé, x inchangé
+string s = p.toString();      // "Point(x=3, y=4)"
+bool  eq = p.equals(p2);
+int   h  = p.hashCode();
+```
+
+Record générique :
+```java
+record Pair<A, B>(A first, B second) {}
+
+Pair<int, string> p = new Pair<int, string>(1, "hello");
+int    f = p.getFirst();
+string s = p.getSecond();
+```
+
 ### Classe générique
 
 Exemple :

@@ -103,6 +103,125 @@ pub struct TypeChecker {
 }
 
 impl TypeChecker {
+    // ── Conversions record → ClassDef ─────────────────────────────────────────
+
+    /// Capitalise la première lettre d'un identifiant : `"x"` → `"X"`.
+    fn capitalize(s: &str) -> String {
+        let mut c = s.chars();
+        match c.next() {
+            None    => String::new(),
+            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        }
+    }
+
+    /// Convertit un `RecordDef` en `ClassDef` en synthétisant les méthodes
+    /// générées automatiquement (getters, copy, equals, toString, hashCode).
+    /// Version publique pour que l'interpréteur puisse aussi l'utiliser.
+    pub fn record_to_class_pub(rd: &RecordDef) -> ClassDef { Self::record_to_class(rd) }
+
+    fn record_to_class(rd: &RecordDef) -> ClassDef {
+        let mut methods: Vec<Method> = vec![];
+
+        // ── Getters — corps réel pour que l'interpréteur puisse les exécuter
+        for field in &rd.fields {
+            methods.push(Method {
+                visibility:  Visibility::Public,
+                is_mutable:  false,
+                return_type: field.ty.clone(),
+                name:        format!("get{}", Self::capitalize(&field.name)),
+                params:      vec![],
+                // `return fieldName;` — le champ est accessible via this dans l'interpréteur
+                body:        vec![Stmt::Return(Some(Expr::FieldAccess {
+                    object: Box::new(Expr::Ident("this".to_string())),
+                    field:  field.name.clone(),
+                }))],
+            });
+        }
+
+        // ── copy(Option<T1> f1, Option<T2> f2, ...) ───────────────────────
+        let copy_params: Vec<Param> = rd.fields.iter().map(|f| Param {
+            name: f.name.clone(),
+            ty:   Type::Generic("Option".to_string(), vec![f.ty.clone()]),
+        }).collect();
+        let copy_return = if rd.type_params.is_empty() {
+            Type::UserDefined(rd.name.clone())
+        } else {
+            Type::Generic(
+                rd.name.clone(),
+                rd.type_params.iter().map(|p| Type::UserDefined(p.clone())).collect(),
+            )
+        };
+        methods.push(Method {
+            visibility:  Visibility::Public,
+            is_mutable:  false,
+            return_type: copy_return,
+            name:        "copy".to_string(),
+            params:      copy_params,
+            body:        vec![Stmt::Builtin],
+        });
+
+        // ── toString() ────────────────────────────────────────────────────
+        methods.push(Method {
+            visibility:  Visibility::Public,
+            is_mutable:  false,
+            return_type: Type::Str,
+            name:        "toString".to_string(),
+            params:      vec![],
+            body:        vec![Stmt::Builtin],
+        });
+
+        // ── equals(Object) ────────────────────────────────────────────────
+        methods.push(Method {
+            visibility:  Visibility::Public,
+            is_mutable:  false,
+            return_type: Type::Bool,
+            name:        "equals".to_string(),
+            params:      vec![Param { name: "other".to_string(),
+                                      ty:   Type::UserDefined("Object".to_string()) }],
+            body:        vec![Stmt::Builtin],
+        });
+
+        // ── hashCode() ────────────────────────────────────────────────────
+        methods.push(Method {
+            visibility:  Visibility::Public,
+            is_mutable:  false,
+            return_type: Type::Int,
+            name:        "hashCode".to_string(),
+            params:      vec![],
+            body:        vec![Stmt::Builtin],
+        });
+
+        // ── Méthodes custom de l'utilisateur ──────────────────────────────
+        methods.extend(rd.methods.clone());
+
+        // ── Constructeur implicite : `this.fieldN = fieldN;` pour chaque champ
+        let ctor_body: Vec<Stmt> = rd.fields.iter()
+            .map(|f| Stmt::FieldAssign {
+                object: "this".to_string(),
+                field:  f.name.clone(),
+                value:  Expr::Ident(f.name.clone()),
+            })
+            .collect();
+        let constructor = Constructor {
+            params: rd.fields.iter()
+                .map(|f| Param { name: f.name.clone(), ty: f.ty.clone() })
+                .collect(),
+            body: ctor_body,
+        };
+
+        ClassDef {
+            is_mut:                 true,
+            name:                   rd.name.clone(),
+            type_params:            rd.type_params.clone(),
+            type_param_constraints: rd.type_param_constraints.clone(),
+            parent:                 Some("Record".to_string()),
+            implements:             rd.implements.clone(),
+            fields:                 rd.fields.clone(),
+            constructors:           vec![constructor],
+            methods,
+        }
+    }
+
     pub fn new(program: &Program) -> Self {
         let mut classes: HashMap<String, ClassDef> =
             program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
@@ -124,6 +243,39 @@ impl TypeChecker {
                 body: vec![Stmt::Builtin],
             }],
         });
+        // ── Classe abstraite Record — ancêtre de tous les records ─────────
+        classes.entry("Record".to_string()).or_insert_with(|| ClassDef {
+            is_mut: true,
+            name: "Record".to_string(),
+            type_params: vec![],
+            type_param_constraints: vec![],
+            parent: Some("Object".to_string()),
+            implements: vec![],
+            fields: vec![],
+            constructors: vec![],
+            methods: vec![
+                Method {
+                    visibility: Visibility::Public, is_mutable: false,
+                    return_type: Type::Bool, name: "equals".to_string(),
+                    params: vec![Param { name: "other".to_string(), ty: Type::UserDefined("Object".to_string()) }],
+                    body: vec![Stmt::Builtin],
+                },
+                Method {
+                    visibility: Visibility::Public, is_mutable: false,
+                    return_type: Type::Str, name: "toString".to_string(),
+                    params: vec![], body: vec![Stmt::Builtin],
+                },
+                Method {
+                    visibility: Visibility::Public, is_mutable: false,
+                    return_type: Type::Int, name: "hashCode".to_string(),
+                    params: vec![], body: vec![Stmt::Builtin],
+                },
+            ],
+        });
+        // ── Convertit chaque record en ClassDef ───────────────────────────
+        for rd in &program.records {
+            classes.insert(rd.name.clone(), Self::record_to_class(rd));
+        }
         Self {
             classes,
             interfaces:      program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),
@@ -187,11 +339,52 @@ impl TypeChecker {
         self.check_class_hierarchy();
         self.check_interface_impls();
         self.check_enums(program);
+        self.check_records(program);
         for class in &program.classes.clone() { self.check_class(class); }
         for func in &program.funcs.clone() { self.check_func(func); }
         let mut env = TypeEnv::new();
         self.expected_return = Type::Int;
         for stmt in &program.main.body.clone() { self.check_stmt(stmt, &mut env); }
+    }
+
+    // ── Records ───────────────────────────────────────────────────────────────
+
+    fn check_records(&mut self, program: &Program) {
+        for rd in &program.records.clone() {
+            // Interdire les méthodes mutable dans un record
+            for m in &rd.methods {
+                if m.is_mutable {
+                    self.err(format!(
+                        "Record '{}' : la méthode '{}' ne peut pas être mutable \
+                         (les records sont immuables)",
+                        rd.name, m.name));
+                }
+                if m.visibility != Visibility::Public {
+                    self.err(format!(
+                        "Record '{}' : la méthode '{}' doit être publique \
+                         (les méthodes privées/protected ne sont pas autorisées dans un record)",
+                        rd.name, m.name));
+                }
+            }
+            // Vérifier les interfaces implémentées
+            for iname in &rd.implements.clone() {
+                if !self.interfaces.contains_key(iname) {
+                    self.err(format!("Record '{}' implements '{}' inconnu", rd.name, iname));
+                } else if let Some(iface) = self.interfaces.get(iname).cloned() {
+                    for sig in &iface.methods {
+                        let synth = Self::record_to_class(rd);
+                        if synth.methods.iter().find(|m| m.name == sig.name).is_none() {
+                            self.err(format!(
+                                "Record '{}' n'implémente pas '{}.{}()'",
+                                rd.name, iname, sig.name));
+                        }
+                    }
+                }
+            }
+            // Typecheck des corps de méthodes custom via check_class
+            let class_def = Self::record_to_class(rd);
+            self.check_class(&class_def);
+        }
     }
 
     fn check_func(&mut self, func: &FuncDef) {
