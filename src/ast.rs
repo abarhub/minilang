@@ -261,6 +261,26 @@ pub struct EnumDef {
     pub variants: Vec<EnumVariant>, pub methods: Vec<Method>,
 }
 
+// ── Record ────────────────────────────────────────────────────────────────────
+
+/// Agrégat de données immuable.
+///
+/// `record Point(int x, int y) {}`
+///
+/// - Champs toujours privés et immuables (pas de méthode `mutable` autorisée).
+/// - Hérite implicitement de la classe abstraite `Record`.
+/// - Peut implémenter des interfaces.
+/// - Génère automatiquement : getters, `equals`, `toString`, `hashCode`, `copy`.
+#[derive(Debug, Clone)]
+pub struct RecordDef {
+    pub name:                   String,
+    pub type_params:            Vec<String>,
+    pub type_param_constraints: Vec<(String, Qualifier)>,
+    pub fields:                 Vec<Field>,   // ordonnés — champs du record
+    pub methods:                Vec<Method>,  // méthodes custom non-mutable
+    pub implements:             Vec<String>,
+}
+
 // ── Fonction de haut niveau ───────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -285,6 +305,7 @@ pub struct Program {
     pub type_aliases: Vec<TypeAlias>,
     pub interfaces:   Vec<InterfaceDef>,
     pub enums:        Vec<EnumDef>,
+    pub records:      Vec<RecordDef>,
     pub classes:      Vec<ClassDef>,
     pub funcs:        Vec<FuncDef>,
     pub main:         MainFunc,

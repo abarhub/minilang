@@ -135,8 +135,17 @@ impl Interpreter {
 
     /// Crée un interpréteur avec une fonction d'affichage personnalisée.
     pub fn new_with_print(program: &Program, print_fn: Box<dyn FnMut(&str)>) -> Self {
+        // Records en premier, puis classes — les classes utilisateur ont priorité
+        // (permet à un fichier de redéfinir une classe stdlib même si la stdlib
+        // expose un record du même nom, comme Pair).
+        let mut classes: HashMap<String, ClassDef> = program.records.iter()
+            .map(|rd| (rd.name.clone(), crate::typechecker::TypeChecker::record_to_class_pub(rd)))
+            .collect();
+        for c in &program.classes {
+            classes.insert(c.name.clone(), c.clone());
+        }
         Self {
-            classes:  program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect(),
+            classes,
             enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
             funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
             print_fn,

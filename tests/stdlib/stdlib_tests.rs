@@ -306,10 +306,11 @@ fn interp_either_match() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn parse_pair_of() {
+fn parse_pair_new() {
+    // Pair est maintenant un record — new Pair(a, b) remplace Pair::Of(a, b)
     parses_ok(r#"
         int main() {
-            Pair<int, bool> p = Pair<int, bool>::Of(1, true);
+            Pair<int, bool> p = new Pair<int, bool>(1, true);
             return 0;
         }
     "#);
@@ -319,7 +320,7 @@ fn parse_pair_of() {
 fn tc_pair_ok() {
     assert_tc_ok(r#"
         int main() {
-            Pair<int, string> p = Pair<int, string>::Of(3, "hello");
+            Pair<int, string> p = new Pair<int, string>(3, "hello");
             return 0;
         }
     "#);
@@ -329,7 +330,7 @@ fn tc_pair_ok() {
 fn tc_pair_wrong_first_type() {
     assert_tc_err(r#"
         int main() {
-            Pair<int, string> p = Pair<int, string>::Of(true, "hello");
+            Pair<int, string> p = new Pair<int, string>(true, "hello");
             return 0;
         }
     "#, "incompatible");
@@ -339,7 +340,7 @@ fn tc_pair_wrong_first_type() {
 fn tc_pair_wrong_second_type() {
     assert_tc_err(r#"
         int main() {
-            Pair<int, string> p = Pair<int, string>::Of(1, 42);
+            Pair<int, string> p = new Pair<int, string>(1, 42);
             return 0;
         }
     "#, "incompatible");
@@ -349,21 +350,19 @@ fn tc_pair_wrong_second_type() {
 fn interp_pair_get_first() {
     assert_eq!(run_ok(r#"
         int main() {
-            Pair<int, string> p = Pair<int, string>::Of(7, "x");
+            Pair<int, string> p = new Pair<int, string>(7, "x");
             return p.getFirst();
         }
     "#), 7);
 }
 
 #[test]
-fn interp_pair_get_second_via_match() {
+fn interp_pair_get_second() {
+    // Les records ne supportent pas le match — on utilise le getter
     assert_eq!(run_ok(r#"
         int main() {
-            Pair<int, int> p = Pair<int, int>::Of(3, 9);
-            match p {
-                Pair::Of(a, b) => { return b; }
-            }
-            return 0;
+            Pair<int, int> p = new Pair<int, int>(3, 9);
+            return p.getSecond();
         }
     "#), 9);
 }
@@ -372,21 +371,18 @@ fn interp_pair_get_second_via_match() {
 fn interp_pair_both_elements() {
     assert_eq!(run_ok(r#"
         int main() {
-            Pair<int, int> p = Pair<int, int>::Of(4, 6);
+            Pair<int, int> p = new Pair<int, int>(4, 6);
             return p.getFirst() + p.getSecond();
         }
     "#), 10);
 }
 
 #[test]
-fn interp_pair_match_sum() {
+fn interp_pair_sum() {
     assert_eq!(run_ok(r#"
         int main() {
-            Pair<int, int> p = Pair<int, int>::Of(13, 29);
-            match p {
-                Pair::Of(a, b) => { return a + b; }
-            }
-            return 0;
+            Pair<int, int> p = new Pair<int, int>(13, 29);
+            return p.getFirst() + p.getSecond();
         }
     "#), 42);
 }
@@ -414,7 +410,7 @@ fn interp_result_in_option() {
 fn interp_pair_of_options() {
     assert_eq!(run_ok(r#"
         int main() {
-            Pair<int?, int?> p = Pair<int?, int?>::Of(
+            Pair<int?, int?> p = new Pair<int?, int?>(
                 Option<int>::Some(3),
                 Option<int>::None
             );

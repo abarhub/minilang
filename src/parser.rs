@@ -76,6 +76,101 @@ fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
     })
 }
 
+// ── Parser record (extrait de program_parser pour alléger son stack frame) ───
+
+/// Parseur de déclaration `record` extrait dans une fonction séparée pour
+/// réduire la taille du stack frame de `program_parser()`.
+/// Retourne un `BoxedParser` (heap-alloué) afin que sa taille sur la pile de
+/// l'appelant soit un simple pointeur (8 octets).
+fn record_def_parser() -> chumsky::BoxedParser<'static, char, RecordDef, Simple<char>> {
+    let ty = type_parser();
+
+    let param = ty.clone()
+        .then(text::ident().padded_by(ws()))
+        .map(|(ty, name)| Param { ty, name });
+    let params = param.separated_by(just(',').padded_by(ws())).allow_trailing();
+
+    // Bloc de corps de méthode : consomme { ... } en gérant une seule
+    // imbrication d'accolades — suffit pour les méthodes de record.
+    // `builtin;` est aussi accepté comme corps natif.
+    let braced_block: chumsky::BoxedParser<char, Vec<Stmt>, Simple<char>> =
+        just('{').padded_by(ws())
+            .ignore_then(take_until(just('}')))
+            .map(|_| vec![Stmt::Builtin])
+            .or(
+                text::keyword("builtin").padded_by(ws())
+                    .then_ignore(just(';').padded_by(ws()))
+                    .map(|_| vec![Stmt::Builtin])
+            )
+            .boxed();
+
+    // Type params : [immutable|readonly] Ident séparés par ','
+    let type_param_list = choice((
+            kw("immutable").to(Qualifier::Immutable),
+            kw("readonly") .to(Qualifier::Readonly),
+        )).or_not().map(|q| q.unwrap_or(Qualifier::Mutable))
+        .then(text::ident().padded_by(ws()))
+        .separated_by(just(',').padded_by(ws())).at_least(1)
+        .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
+        .or_not().map(|v| v.unwrap_or_default());
+
+    // Visibilité + mutable
+    let vis_mut: chumsky::BoxedParser<char, (Visibility, bool), Simple<char>> = choice((
+            kw("private")  .to(Visibility::Private),
+            kw("protected").to(Visibility::Protected),
+        )).or_not().map(|v| v.unwrap_or(Visibility::Public))
+        .then(kw("mutable").to(true).or_not().map(|m| m.unwrap_or(false)))
+        .boxed();
+
+    let record_method = vis_mut
+        .then(ty.clone())
+        .then(text::ident().padded_by(ws()))
+        .then(params.delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
+        .then(braced_block)
+        .map(|(((((visibility, is_mutable), rt), n), p), b)|
+            Method { visibility, is_mutable, return_type: rt, name: n, params: p, body: b });
+
+    // Champs dans les parenthèses : `(int x, string name)`
+    let record_fields = ty.clone()
+        .then(text::ident().padded_by(ws()))
+        .map(|(ty, name)| Field { ty, name })
+        .separated_by(just(',').padded_by(ws())).allow_trailing()
+        .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()));
+
+    // implements Iface1, Iface2
+    let record_implements = kw("implements")
+        .ignore_then(
+            text::ident().padded_by(ws())
+                .then(
+                    just('<')
+                        .ignore_then(type_parser()
+                            .separated_by(just(',').padded_by(ws())).at_least(1))
+                        .then_ignore(just('>').padded_by(ws()))
+                        .or_not()
+                )
+                .map(|(name, _)| name)
+                .separated_by(just(',').padded_by(ws())).at_least(1)
+        )
+        .or_not().map(|v| v.unwrap_or_default());
+
+    kw("record")
+        .ignore_then(text::ident().padded_by(ws()))
+        .then(type_param_list)
+        .then(record_fields)
+        .then(record_implements)
+        .then(record_method.repeated()
+            .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
+        .map(|((((name, tp), fields), implements), methods)| {
+            let type_param_constraints: Vec<(String, Qualifier)> = tp.iter()
+                .filter(|(q, _)| *q != Qualifier::Mutable)
+                .map(|(q, n)| (n.clone(), q.clone()))
+                .collect();
+            let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
+            RecordDef { name, type_params, type_param_constraints, fields, methods, implements }
+        })
+        .boxed()
+}
+
 // ── Point d'entrée ────────────────────────────────────────────────────────────
 
 pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
@@ -731,6 +826,12 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                        fields, constructors: ctors, methods }
         });
 
+    // ── Record ────────────────────────────────────────────────────────────────
+
+    // Parser record dans une fonction séparée pour réduire la taille du stack
+    // frame de program_parser() (trop de variables locales → stack overflow).
+    let record_def = record_def_parser();
+
     // ── Alias de type : `type Name = T;` ─────────────────────────────────────
 
     let type_alias = kw("type")
@@ -783,6 +884,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         Alias(TypeAlias),
         Iface(InterfaceDef),
         Enum(EnumDef),
+        Record(RecordDef),
         Class(ClassDef),
         Func(FuncDef),
     }
@@ -802,15 +904,20 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then(body.clone())
         .map(|(((rt, name), p), b)| FuncDef { return_type: rt, name, params: p, body: b });
 
-    let top_decl = choice((
-        package_decl.map(TopDecl::Package),
-        import_decl.map(TopDecl::Import),
-        type_alias.map(TopDecl::Alias),
-        interface_def.map(TopDecl::Iface),
-        enum_def.map(TopDecl::Enum),
-        class_def.map(TopDecl::Class),
-        func_def.map(TopDecl::Func),
-    ));
+    // Chaque parser est boxé avant d'entrer dans choice() pour que la struct
+    // ChoiceParser ne contienne que des pointeurs (16 octets chacun) et non
+    // les types concrets complets — évite le stack overflow du stack frame de
+    // program_parser() qui est déjà très chargé en variables locales.
+    let top_decl: chumsky::BoxedParser<char, TopDecl, Simple<char>> = choice((
+        package_decl.map(TopDecl::Package).boxed(),
+        import_decl  .map(TopDecl::Import) .boxed(),
+        type_alias   .map(TopDecl::Alias)  .boxed(),
+        interface_def.map(TopDecl::Iface)  .boxed(),
+        enum_def     .map(TopDecl::Enum)   .boxed(),
+        record_def   .map(TopDecl::Record) .boxed(),
+        class_def    .map(TopDecl::Class)  .boxed(),
+        func_def     .map(TopDecl::Func)   .boxed(),
+    )).boxed();
 
     ws()
         .ignore_then(top_decl.repeated())
@@ -821,7 +928,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             let mut pkg = None;
             let mut imports = vec![];
             let mut aliases = vec![]; let mut ifaces = vec![];
-            let mut enums = vec![]; let mut classes = vec![];
+            let mut enums = vec![]; let mut records = vec![]; let mut classes = vec![];
             let mut funcs = vec![];
             for d in decls { match d {
                 TopDecl::Package(p)  => { if pkg.is_none() { pkg = Some(p); } }
@@ -829,10 +936,11 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 TopDecl::Alias(a)    => aliases.push(a),
                 TopDecl::Iface(i)    => ifaces.push(i),
                 TopDecl::Enum(e)     => enums.push(e),
+                TopDecl::Record(r)   => records.push(r),
                 TopDecl::Class(c)    => classes.push(c),
                 TopDecl::Func(f)     => funcs.push(f),
             }}
             Program { package: pkg, imports, type_aliases: aliases,
-                      interfaces: ifaces, enums, classes, funcs, main }
+                      interfaces: ifaces, enums, records, classes, funcs, main }
         })
 }
