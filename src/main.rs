@@ -109,7 +109,10 @@ fn run_mode(args: &[String]) {
     let source = fs::read_to_string(&path).unwrap_or_else(|e| {
         error!("Impossible de lire '{}' : {}", path.display(), e); process::exit(1);
     });
-    let full_source = format!("{}{}", sources_prefix(&cfg, &cfg_path), source);
+    // Stdlib + [sources] include préfixés au fichier exécuté — même
+    // comportement que les API de test Rust (run_source / check_source)
+    let prefix = format!("{}\n{}", mini_parser::STDLIB, sources_prefix(&cfg, &cfg_path));
+    let full_source = format!("{}{}", prefix, source);
 
     info!("Parsing...");
     let mut program = match mini_parser::parser::program_parser().parse(full_source.as_str()) {
@@ -131,7 +134,12 @@ fn run_mode(args: &[String]) {
     }
     let program = program;
 
-    print_program(&program);
+    // AST : n'afficher que les déclarations du fichier utilisateur — on masque
+    // celles du préfixe (stdlib + includes) en comptant ses déclarations.
+    let skip = mini_parser::parser::program_parser().parse(prefix.as_str())
+        .map(|p| DeclCounts::of(&p))
+        .unwrap_or_default();
+    print_program(&program, &skip);
 
     info!("Vérification des types...");
     let tc = TypeChecker::new(&program);
@@ -206,7 +214,8 @@ fn test_mode(target: Option<&str>) -> i32 {
 
     // Profil DI des tests : [tests] modules > [di] modules > tous
     let active_modules = cfg.tests.modules.clone().or_else(|| cfg.di.modules.clone());
-    let prefix = sources_prefix(&cfg, &cfg_path);
+    // Stdlib + [sources] include, comme en mode run
+    let prefix = format!("{}\n{}", mini_parser::STDLIB, sources_prefix(&cfg, &cfg_path));
 
     // ── Exécution ─────────────────────────────────────────────────────────
     let (mut total, mut failures, mut file_errors) = (0usize, 0usize, 0usize);
@@ -265,17 +274,42 @@ fn test_mode(target: Option<&str>) -> i32 {
 
 fn pad(d: usize) -> String { "  ".repeat(d) }
 
-fn print_program(p: &Program) {
+/// Nombre de déclarations par catégorie. Les déclarations du préfixe
+/// (stdlib + [sources] include) précèdent celles du fichier utilisateur dans
+/// chaque Vec du Program — les compter permet de les masquer à l'affichage.
+#[derive(Default)]
+struct DeclCounts {
+    imports: usize, aliases: usize, modules: usize, ifaces: usize,
+    enums: usize, records: usize, classes: usize, funcs: usize,
+}
+
+impl DeclCounts {
+    fn of(p: &Program) -> Self {
+        DeclCounts {
+            imports: p.imports.len(),
+            aliases: p.type_aliases.len(),
+            modules: p.modules.len(),
+            ifaces:  p.interfaces.len(),
+            enums:   p.enums.len(),
+            records: p.records.len(),
+            classes: p.classes.len(),
+            funcs:   p.funcs.len(),
+        }
+    }
+}
+
+fn print_program(p: &Program, skip: &DeclCounts) {
     println!("\n{}\n  AST\n{}", "─".repeat(50), "─".repeat(50));
-    if let Some(pkg) = &p.package { println!("package {};", pkg.path); }
-    for imp in &p.imports { println!("import {};", imp.path); }
-    if p.package.is_some() || !p.imports.is_empty() { println!(); }
-    for alias in &p.type_aliases { println!("type {} = {};", alias.name, alias.ty); }
-    if !p.type_aliases.is_empty() { println!(); }
-    for m in &p.modules        { print_module(m);        println!(); }
-    for iface in &p.interfaces { print_interface(iface); println!(); }
-    for e in &p.enums          { print_enum(e);          println!(); }
-    for c in &p.classes        { print_class(c);         println!(); }
+    let imports: Vec<_> = p.imports.iter().skip(skip.imports).collect();
+    for imp in &imports { println!("import {};", imp.path); }
+    if !imports.is_empty() { println!(); }
+    let aliases: Vec<_> = p.type_aliases.iter().skip(skip.aliases).collect();
+    for alias in &aliases { println!("type {} = {};", alias.name, alias.ty); }
+    if !aliases.is_empty() { println!(); }
+    for m in p.modules.iter().skip(skip.modules)         { print_module(m);        println!(); }
+    for iface in p.interfaces.iter().skip(skip.ifaces)   { print_interface(iface); println!(); }
+    for e in p.enums.iter().skip(skip.enums)             { print_enum(e);          println!(); }
+    for c in p.classes.iter().skip(skip.classes)         { print_class(c);         println!(); }
     if let Some(main) = &p.main {
         println!("int main() {{");
         for s in &main.body { print_stmt(s, 1); }

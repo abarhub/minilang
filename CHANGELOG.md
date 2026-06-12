@@ -4,6 +4,16 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [12/06/2026] — La CLI embarque la bibliothèque standard
+
+Le binaire (`mini_parser fichier.mini` et `mini_parser test`) préfixe désormais la stdlib au programme, comme le font les API de test Rust — `Option`, `Result`, les collections (`ArrayList`, `HashMap`, …) et `obj.equals()` fonctionnent maintenant en ligne de commande. L'affichage de l'AST reste limité aux déclarations du fichier utilisateur.
+
+Au passage :
+- correction d'une incohérence typechecker/interpréteur : une classe utilisateur a maintenant priorité sur un record stdlib du même nom (ex. `Pair`) dans les deux composants ;
+- `example.mini` et `example_optional.mini` mis en conformité avec la règle des champs privés (accès via getters) — tous les exemples passent désormais le typecheck via la CLI.
+
+---
+
 ## [12/06/2026] — Système de tests (`test`, assertions, runner)
 
 Fonctions de test intégrées au langage et runner en ligne de commande.
