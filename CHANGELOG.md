@@ -4,6 +4,12 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [12/06/2026] — Correction du stack overflow de la CLI en mode debug
+
+Le binaire plantait avec « thread 'main' has overflowed its stack » en mode debug sur Windows dès le parsing (stack frames profonds du parser chumsky, pile du thread principal limitée à 1 Mo). Le travail s'exécute désormais dans un thread dédié avec une pile de 16 Mo — `cargo run -- fichier.mini` fonctionne en debug comme en release.
+
+---
+
 ## [12/06/2026] — La CLI embarque la bibliothèque standard
 
 Le binaire (`mini_parser fichier.mini` et `mini_parser test`) préfixe désormais la stdlib au programme, comme le font les API de test Rust — `Option`, `Result`, les collections (`ArrayList`, `HashMap`, …) et `obj.equals()` fonctionnent maintenant en ligne de commande. L'affichage de l'AST reste limité aux déclarations du fichier utilisateur.
