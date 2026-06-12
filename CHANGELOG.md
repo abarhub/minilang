@@ -4,6 +4,24 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [12/06/2026] — DI phase 2 : modules de binding, `with`, `transient`
+
+Le bloc `module` centralise la configuration du conteneur d'injection — c'est lui qui permet d'échanger les implémentations sans toucher au code (profils test/prod). Plusieurs modules coexistent, leurs bindings sont fusionnés.
+
+```java
+module AppModule {
+    bind Logger to FileLogger;                 // choisit l'implémentation (lève l'ambiguïté)
+    bind HttpClient with ("https://api", 30);  // valeurs de configuration du constructeur
+    bind Repo to SqlRepo with ("jdbc:...");    // les deux combinés
+}
+```
+
+- Les paramètres de constructeur non-service (primitifs, classes ordinaires) deviennent des **slots de configuration**, remplis dans l'ordre par les valeurs du `with`.
+- **`transient service class X`** : nouvelle instance à chaque injection au lieu d'un singleton. Un singleton ne peut pas dépendre d'un transient (dépendance captive — erreur de compilation).
+- Nouvelles erreurs au typecheck : binding dupliqué, `bind` sans effet, cible inconnue ou n'implémentant pas l'interface, arité/types du `with` incorrects, dépendance captive, `transient` sans `service`.
+
+---
+
 ## [12/06/2026] — Injection de dépendances (`service` / `inject`)
 
 Conteneur d'injection de dépendances **sans réflexion**, entièrement validé à la compilation. `service class X` marque une classe gérée par le conteneur ; ses dépendances sont les paramètres de son constructeur. `inject T` (autorisé dans `main` et les fonctions de haut niveau) retourne le **singleton** du service `T` — ou de l'unique service implémentant l'interface `T`.

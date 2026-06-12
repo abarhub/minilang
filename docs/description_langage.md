@@ -261,20 +261,67 @@ int main() {
 }
 ```
 
-Règles, toutes vérifiées **à la compilation** (l'exécution ne peut pas échouer) :
+## Modules de binding
+
+Un bloc `module` centralise la configuration du conteneur. C'est lui qui permet d'échanger les implémentations sans toucher au code des classes (profil de test avec des mocks, profil de prod, …). Plusieurs modules peuvent coexister ; leurs bindings sont fusionnés.
+
+```java
+module AppModule {
+    bind Logger to FileLogger;                         // choisit l'implémentation
+    bind HttpClient with ("https://api", 30);          // valeurs de configuration
+    bind Repo to SqlRepo with ("jdbc:...");            // les deux combinés
+}
+```
+
+- **`bind Iface to Service;`** — choisit l'implémentation d'une interface. Obligatoire dès qu'une interface injectée a plusieurs implémentations service (sinon binding ambigu) ; le binding s'applique partout : `inject Iface` et dépendances de constructeur.
+- **`bind Service with (val, …);`** — fournit les **paramètres de configuration** du constructeur. Les paramètres dont le type est une interface ou un service sont injectés ; tous les autres (primitifs, classes ordinaires, …) sont des slots de configuration, remplis dans l'ordre par les valeurs du `with`.
+
+```java
+service class HttpClient {
+    Logger logger;     // injecté (interface)
+    string baseUrl;    // configuration — fourni par le with
+    int    timeout;    // configuration — fourni par le with
+    HttpClient(Logger logger, string baseUrl, int timeout) { … }
+}
+
+module AppModule {
+    bind HttpClient with ("https://api", 30);
+}
+```
+
+## Scope `transient`
+
+Par défaut un service est un **singleton**. Le mot-clé `transient` (placé avant `service`) crée une **nouvelle instance à chaque injection** :
+
+```java
+transient service mut class RequestContext {
+    …
+}
+```
+
+Un service singleton ne peut pas dépendre d'un service `transient` (dépendance captive : le singleton figerait son instance) — c'est une erreur de compilation.
+
+## Règles
+
+Toutes vérifiées **à la compilation** (l'exécution ne peut pas échouer) :
 
 | Règle | Erreur si violée |
 |---|---|
 | Un service a au plus un constructeur | `au plus un constructeur` |
 | Un service ne peut pas être générique | `ne peut pas être générique` |
-| Les paramètres du constructeur d'un service sont des services ou des interfaces de services | `n'est pas injectable` |
-| Chaque interface injectée a exactement une implémentation service | `Aucun service n'implémente…` / `Binding ambigu…` |
+| Les paramètres non-service du constructeur sont couverts par un `bind … with (…)` | `n'est pas injectable — fournissez sa valeur via bind…` |
+| Le nombre et les types des valeurs `with` correspondent aux paramètres de configuration | `valeur(s) fournie(s) mais…` / `type incompatible` |
+| Chaque interface injectée a une implémentation choisie (unique ou via `bind … to …`) | `Aucun service n'implémente…` / `Binding ambigu…` |
+| Un binding cible une interface connue et un service qui l'implémente | `n'implémente pas…` / `doit être déclarée service` |
+| Pas deux bindings (ou deux `with`) pour la même cible | `Binding dupliqué…` / `Valeurs with dupliquées…` |
 | Le graphe de dépendances est acyclique | `Cycle de dépendances entre services` |
+| Un singleton ne dépend pas d'un service `transient` | `dépendance captive` |
+| `transient` ne s'applique qu'aux services | `transient nécessite service` |
 | `inject` n'est autorisé que dans `main` et les fonctions de haut niveau | `'inject' n'est autorisé que dans…` |
 
 Un service peut être `mut` (`service mut class Stats { … }`) et avoir des méthodes `mutable` ; comme les injections partagent le même singleton, l'état est visible par tous les consommateurs.
 
-Avoir plusieurs services implémentant la même interface n'est une erreur que si cette interface est effectivement injectée quelque part (le binding est alors ambigu).
+Avoir plusieurs services implémentant la même interface n'est une erreur que si cette interface est effectivement injectée quelque part sans `bind … to …` (le binding est alors ambigu).
 
 # Fonctions
 
