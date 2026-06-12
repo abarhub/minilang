@@ -234,6 +234,48 @@ Empty;
 }
 ```
 
+# Injection de dépendances
+
+Le mot-clé `service` marque une classe gérée par le conteneur d'injection de dépendances.
+Les dépendances d'un service sont **les paramètres de son constructeur** : le conteneur les résout et les fournit automatiquement. Aucune réflexion n'est utilisée — tout le câblage est résolu à la compilation.
+
+L'expression `inject T` récupère l'instance du service `T`. Si `T` est une interface, le conteneur injecte l'unique service qui l'implémente. Les services sont des **singletons** : chaque `inject` retourne la même instance.
+
+```java
+interface Logger { void log(string msg); }
+
+service class ConsoleLogger implements Logger {
+    void log(string msg) { print(msg); }
+}
+
+service class UserService {
+    Logger logger;
+    UserService(Logger logger) { this.logger = logger; }   // dépendance injectée
+    void hello() { logger.log("hello"); }
+}
+
+int main() {
+    UserService s = inject UserService;   // câble ConsoleLogger → UserService
+    s.hello();
+    return 0;
+}
+```
+
+Règles, toutes vérifiées **à la compilation** (l'exécution ne peut pas échouer) :
+
+| Règle | Erreur si violée |
+|---|---|
+| Un service a au plus un constructeur | `au plus un constructeur` |
+| Un service ne peut pas être générique | `ne peut pas être générique` |
+| Les paramètres du constructeur d'un service sont des services ou des interfaces de services | `n'est pas injectable` |
+| Chaque interface injectée a exactement une implémentation service | `Aucun service n'implémente…` / `Binding ambigu…` |
+| Le graphe de dépendances est acyclique | `Cycle de dépendances entre services` |
+| `inject` n'est autorisé que dans `main` et les fonctions de haut niveau | `'inject' n'est autorisé que dans…` |
+
+Un service peut être `mut` (`service mut class Stats { … }`) et avoir des méthodes `mutable` ; comme les injections partagent le même singleton, l'état est visible par tous les consommateurs.
+
+Avoir plusieurs services implémentant la même interface n'est une erreur que si cette interface est effectivement injectée quelque part (le binding est alors ambigu).
+
 # Fonctions
 
 Une fonction permet de faire un traitement avec des instructions.

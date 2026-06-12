@@ -57,7 +57,13 @@ fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
             kw("double").to(Type::Double),
             kw("void")  .to(Type::Void),
             fn_type,   // fn / fn(...)->T  — avant ident
-            text::ident().padded_by(ws())
+            text::ident()
+                // `inject` est un mot-clé réservé — sinon `inject X;` serait
+                // parsé comme la déclaration d'une variable X de type inject
+                .try_map(|n: String, span| if n == "inject" {
+                    Err(Simple::custom(span, "'inject' est un mot-clé réservé"))
+                } else { Ok(n) })
+                .padded_by(ws())
                 .then(generic_args.or_not())
                 .map(|(n, a)| match a {
                     Some(a) => Type::Generic(n, a),
@@ -278,6 +284,11 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
         let this_kw = kw("this").to(Expr::Ident("this".to_string()));
 
+        // `inject T` — résolution d'un service (classe service ou interface)
+        let inject_expr = kw("inject")
+            .ignore_then(text::ident().padded_by(ws()))
+            .map(|name| Expr::Inject(Type::UserDefined(name)));
+
         let ident_or_call = text::ident().padded_by(ws())
             .then(call_args.clone().or_not())
             .map(|(name, args)| match args {
@@ -324,7 +335,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
         let atom = choice((
             str_lit, char_lit, number_lit, bool_lit,
-            this_kw, array_lit, array_new, new_expr, enum_ctor, ident_or_call,
+            this_kw, inject_expr, array_lit, array_new, new_expr, enum_ctor, ident_or_call,
             paren_or_call,
         ));
 
@@ -790,7 +801,8 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             InterfaceDef { is_mut, name, type_params, type_param_constraints, methods }
         });
 
-    let class_def = kw("mut").to(true).or_not().map(|m| m.unwrap_or(false))
+    let class_def = kw("service").to(true).or_not().map(|s| s.unwrap_or(false))
+        .then(kw("mut").to(true).or_not().map(|m| m.unwrap_or(false)))
         .then_ignore(kw("class"))
         .then(text::ident().padded_by(ws()))
         .then(type_param_list.clone())
@@ -810,7 +822,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .or_not().map(|v| v.unwrap_or_default()))
         .then(class_member.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|(((((is_mut, name), tp), parent), impls), members)| {
+        .map(|((((((is_service, is_mut), name), tp), parent), impls), members)| {
             let mut fields = vec![]; let mut ctors = vec![]; let mut methods = vec![];
             for m in members { match m {
                 CM::F(f) => fields.push(f),
@@ -822,7 +834,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 .map(|(q, n)| (n.clone(), q.clone()))
                 .collect();
             let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
-            ClassDef { is_mut, name, type_params, type_param_constraints, parent, implements: impls,
+            ClassDef { is_service, is_mut, name, type_params, type_param_constraints, parent, implements: impls,
                        fields, constructors: ctors, methods }
         });
 

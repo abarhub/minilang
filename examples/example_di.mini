@@ -1,0 +1,76 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : injection de dépendances
+//
+//  - `service class X`  : classe gérée par le conteneur d'injection.
+//    Ses dépendances sont les paramètres de son constructeur.
+//  - `inject T`         : récupère le singleton du service T (ou de l'unique
+//    service implémentant l'interface T). Autorisé dans main et les fonctions
+//    de haut niveau uniquement.
+//
+//  Tout est vérifié à la compilation : binding manquant, binding ambigu,
+//  cycle de dépendances — l'exécution ne peut pas échouer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Logger {
+    void log(string msg);
+}
+
+// Unique implémentation de Logger → injectée partout où un Logger est demandé
+service class ConsoleLogger implements Logger {
+    void log(string msg) {
+        print("[LOG]", msg);
+    }
+}
+
+interface Repo {
+    string findUser(int id);
+}
+
+service class MemoryRepo implements Repo {
+    string findUser(int id) {
+        if (id == 1) { return "alice"; }
+        return "inconnu";
+    }
+}
+
+// Service avec deux dépendances, câblées automatiquement par le conteneur
+service class UserService {
+    Logger logger;
+    Repo   repo;
+
+    UserService(Logger logger, Repo repo) {
+        this.logger = logger;
+        this.repo   = repo;
+    }
+
+    string greet(int id) {
+        string name = repo.findUser(id);
+        logger.log("recherche utilisateur " + name);
+        return "bonjour " + name;
+    }
+}
+
+// Service avec état — les injections retournent toujours le même singleton
+service mut class Stats {
+    int calls;
+
+    Stats() { this.calls = 0; }
+
+    mutable void tick() { calls = calls + 1; }
+    int count()         { return calls; }
+}
+
+int main() {
+    UserService users = inject UserService;
+    print(users.greet(1));
+    print(users.greet(2));
+
+    Stats a = inject Stats;
+    Stats b = inject Stats;
+    a.tick();
+    a.tick();
+    b.tick();
+    print("appels :", b.count());   // 3 — a et b sont la même instance
+
+    return 0;
+}

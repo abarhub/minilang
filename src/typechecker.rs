@@ -210,6 +210,7 @@ impl TypeChecker {
         };
 
         ClassDef {
+            is_service:             false,
             is_mut:                 true,
             name:                   rd.name.clone(),
             type_params:            rd.type_params.clone(),
@@ -226,6 +227,7 @@ impl TypeChecker {
         let mut classes: HashMap<String, ClassDef> =
             program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
         classes.entry("Object".to_string()).or_insert_with(|| ClassDef {
+            is_service: false,
             is_mut: true,
             name: "Object".to_string(),
             type_params: vec![],
@@ -245,6 +247,7 @@ impl TypeChecker {
         });
         // ── Classe abstraite Record — ancêtre de tous les records ─────────
         classes.entry("Record".to_string()).or_insert_with(|| ClassDef {
+            is_service: false,
             is_mut: true,
             name: "Record".to_string(),
             type_params: vec![],
@@ -338,6 +341,7 @@ impl TypeChecker {
     fn check_program(&mut self, program: &Program) {
         self.check_class_hierarchy();
         self.check_interface_impls();
+        self.check_services();
         self.check_enums(program);
         self.check_records(program);
         for class in &program.classes.clone() { self.check_class(class); }
@@ -443,6 +447,129 @@ impl TypeChecker {
                 }
             }
         }
+    }
+
+    // ── Injection de dépendances ──────────────────────────────────────────────
+    //
+    //  Les classes `service` sont instanciées par le conteneur d'injection :
+    //  leurs dépendances sont les paramètres de leur constructeur. Tout est
+    //  validé ici, au typecheck — l'exécution ne peut pas échouer :
+    //  - un service a au plus un constructeur et n'est pas générique ;
+    //  - chaque dépendance résout vers exactement un service ;
+    //  - le graphe de dépendances est acyclique.
+
+    /// Résout un nom de type injectable vers le nom de la classe service concrète.
+    /// - classe `service`              → elle-même ;
+    /// - interface implémentée par exactement un service → ce service ;
+    /// - sinon                          → erreur (binding manquant ou ambigu).
+    fn resolve_service(&self, name: &str) -> Result<String, TypeError> {
+        if let Some(c) = self.classes.get(name) {
+            if c.is_service { return Ok(name.to_string()); }
+            return type_err!(
+                "'{}' n'est pas injectable : la classe doit être déclarée `service`", name);
+        }
+        if self.interfaces.contains_key(name) {
+            let mut impls: Vec<String> = self.classes.values()
+                .filter(|c| c.is_service && c.implements.iter().any(|i| i == name))
+                .map(|c| c.name.clone())
+                .collect();
+            impls.sort();
+            return match impls.len() {
+                0 => type_err!(
+                    "Aucun service n'implémente l'interface '{}'", name),
+                1 => Ok(impls.remove(0)),
+                _ => type_err!(
+                    "Binding ambigu : '{}' est implémenté par plusieurs services ({})",
+                    name, impls.join(", ")),
+            };
+        }
+        type_err!("'{}' n'est pas injectable : ni classe `service` ni interface", name)
+    }
+
+    /// Dépendances d'un service = paramètres de son constructeur, résolues vers
+    /// les classes services concrètes. Les dépendances non résolvables sont
+    /// ignorées ici (l'erreur est déjà remontée par check_services).
+    fn service_deps(&self, cn: &str) -> Vec<String> {
+        self.classes.get(cn)
+            .and_then(|c| c.constructors.first())
+            .map(|ctor| ctor.params.iter()
+                .filter_map(|p| match &p.ty {
+                    Type::UserDefined(n) => self.resolve_service(n).ok(),
+                    _ => None,
+                })
+                .collect())
+            .unwrap_or_default()
+    }
+
+    fn check_services(&mut self) {
+        let mut services: Vec<String> = self.classes.values()
+            .filter(|c| c.is_service)
+            .map(|c| c.name.clone())
+            .collect();
+        services.sort();
+
+        // ── Validation de chaque service ──────────────────────────────────
+        for sn in &services {
+            let class = self.classes[sn].clone();
+            if !class.type_params.is_empty() {
+                self.err(format!(
+                    "Service '{}' : un service ne peut pas être générique", sn));
+            }
+            if class.constructors.len() > 1 {
+                self.err(format!(
+                    "Service '{}' : un service doit avoir au plus un constructeur \
+                     ({} trouvés)", sn, class.constructors.len()));
+            }
+            if let Some(ctor) = class.constructors.first() {
+                for p in &ctor.params {
+                    let dep = match &p.ty {
+                        Type::UserDefined(n) => n.clone(),
+                        other => {
+                            self.err(format!(
+                                "Service '{}' : le paramètre '{}' de type {} n'est pas \
+                                 injectable (seuls les services et les interfaces de \
+                                 services le sont)", sn, p.name, other));
+                            continue;
+                        }
+                    };
+                    if let Err(e) = self.resolve_service(&dep) {
+                        self.err(format!("Service '{}', dépendance '{}' : {}", sn, p.name, e.0));
+                    }
+                }
+            }
+        }
+
+        // ── Détection de cycle (DFS avec chemin courant) ──────────────────
+        let mut done: HashSet<String> = HashSet::new();
+        for sn in &services {
+            if done.contains(sn) { continue; }
+            let mut path: Vec<String> = vec![];
+            if let Some(cycle) = self.find_service_cycle(sn, &mut path, &mut done) {
+                self.err(format!("Cycle de dépendances entre services : {}", cycle));
+            }
+        }
+    }
+
+    /// DFS : retourne la description du cycle si un service du chemin courant
+    /// est revisité. `done` évite de re-parcourir (et re-signaler) les sous-graphes.
+    fn find_service_cycle(
+        &self, cur: &str, path: &mut Vec<String>, done: &mut HashSet<String>,
+    ) -> Option<String> {
+        if let Some(pos) = path.iter().position(|p| p == cur) {
+            let mut cycle: Vec<&str> = path[pos..].iter().map(|s| s.as_str()).collect();
+            cycle.push(cur);
+            return Some(cycle.join(" → "));
+        }
+        if done.contains(cur) { return None; }
+        path.push(cur.to_string());
+        for dep in self.service_deps(cur) {
+            if let Some(c) = self.find_service_cycle(&dep, path, done) {
+                return Some(c);
+            }
+        }
+        path.pop();
+        done.insert(cur.to_string());
+        None
     }
 
     // ── Enums ─────────────────────────────────────────────────────────────────
@@ -951,6 +1078,22 @@ impl TypeChecker {
                 }
                 if type_args.is_empty() { Ok(Type::UserDefined(class_name.clone())) }
                 else { Ok(Type::Generic(class_name.clone(), type_args.clone())) }
+            }
+
+            // ── inject T — point d'entrée du conteneur d'injection ──────────
+            Expr::Inject(ty) => {
+                if self.current_class.is_some() || self.current_enum.is_some() {
+                    return type_err!(
+                        "'inject' n'est autorisé que dans main ou les fonctions de \
+                         haut niveau (point de composition unique)");
+                }
+                let name = match ty {
+                    Type::UserDefined(n) => n.clone(),
+                    other => return type_err!("inject : type non injectable {}", other),
+                };
+                // Vérifie que le binding résout (exactement un service)
+                self.resolve_service(&name)?;
+                Ok(Type::UserDefined(name))
             }
 
             Expr::EnumConstructor { enum_name, type_args, variant, args } => {
