@@ -230,8 +230,15 @@ impl TypeChecker {
     }
 
     pub fn new(program: &Program) -> Self {
-        let mut classes: HashMap<String, ClassDef> =
-            program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
+        // Records en premier, puis classes — les classes utilisateur ont
+        // priorité sur un record stdlib du même nom (ex. Pair), comme dans
+        // l'interpréteur (Interpreter::new_with_print).
+        let mut classes: HashMap<String, ClassDef> = program.records.iter()
+            .map(|rd| (rd.name.clone(), Self::record_to_class(rd)))
+            .collect();
+        for c in &program.classes {
+            classes.insert(c.name.clone(), c.clone());
+        }
         classes.entry("Object".to_string()).or_insert_with(|| ClassDef {
             is_service: false,
             is_transient: false,
@@ -283,10 +290,6 @@ impl TypeChecker {
                 },
             ],
         });
-        // ── Convertit chaque record en ClassDef ───────────────────────────
-        for rd in &program.records {
-            classes.insert(rd.name.clone(), Self::record_to_class(rd));
-        }
         Self {
             classes,
             interfaces:      program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),

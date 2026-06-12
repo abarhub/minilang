@@ -16,6 +16,10 @@ class User {
         return "Bonjour " + this.name;
     }
 
+    string getName() {
+        return this.name;
+    }
+
     int nextAge() {
         return this.age + 1;
     }
@@ -75,7 +79,7 @@ int main() {
     // ── match sur Option<T> ───────────────────────────────────
     User? u3 = findUser(2);
     match u3 {
-        Option::Some(user) => { print("trouvé :", user.name); }
+        Option::Some(user) => { print("trouvé :", user.getName()); }
         Option::None       => { print("non trouvé"); }
     }
 

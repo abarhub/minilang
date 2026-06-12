@@ -69,8 +69,8 @@ int main() {
     print("Ratio :", ratio, "| Précision :", precision);
     print(message);
 
-    // Accès à un champ (lecture)
-    print("Nom de l'animal :", a.name);
+    // Lecture d'un champ via son getter (les champs sont privés)
+    print("Nom de l'animal :", a.getName());
 
     // Appel de méthode
     a.describe();
