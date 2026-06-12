@@ -18,3 +18,5 @@ mod example_errors_tests;
 mod example_optional_tests;
 #[path = "example/example_collections_tests.rs"]
 mod example_collections_tests;
+#[path = "example/example_di_tests.rs"]
+mod example_di_tests;

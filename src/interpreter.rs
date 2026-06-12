@@ -124,6 +124,8 @@ pub struct Interpreter {
     classes:  HashMap<String, ClassDef>,
     enums:    HashMap<String, EnumDef>,
     funcs:    HashMap<String, FuncDef>,
+    /// Instances des services déjà créées par `inject` (nom de classe → singleton)
+    singletons: HashMap<String, Value>,
     print_fn: Box<dyn FnMut(&str)>,
 }
 
@@ -148,6 +150,7 @@ impl Interpreter {
             classes,
             enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
             funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
+            singletons: HashMap::new(),
             print_fn,
         }
     }
@@ -1192,6 +1195,17 @@ impl Interpreter {
                 Ok(obj)
             }
 
+            // ── inject T — résolution d'un service (singleton) ───────────────
+            // Le typechecker garantit : binding unique, pas de cycle.
+            Expr::Inject(ty) => {
+                let name = match ty {
+                    Type::UserDefined(n) => n.clone(),
+                    other => return err!("inject : type non injectable {}", other),
+                };
+                let concrete = self.resolve_service_class(&name)?;
+                self.get_or_create_service(&concrete)
+            }
+
             Expr::EnumConstructor { enum_name, variant, args, .. } => {
                 let ed = self.enums.get(enum_name)
                     .ok_or_else(|| RuntimeError(format!("Enum inconnu '{}'", enum_name)))?.clone();
@@ -1353,6 +1367,57 @@ impl Interpreter {
                 }
             }
         }
+    }
+
+    // ── Injection de dépendances ──────────────────────────────────────────────
+
+    /// Résout un nom injectable vers la classe service concrète :
+    /// la classe elle-même si elle est `service`, sinon l'unique service
+    /// implémentant l'interface (l'unicité est garantie par le typechecker).
+    fn resolve_service_class(&self, name: &str) -> Result<String, RuntimeError> {
+        if let Some(c) = self.classes.get(name) {
+            if c.is_service { return Ok(name.to_string()); }
+        }
+        let mut impls: Vec<&String> = self.classes.values()
+            .filter(|c| c.is_service && c.implements.iter().any(|i| i == name))
+            .map(|c| &c.name)
+            .collect();
+        impls.sort();
+        match impls.first() {
+            Some(n) => Ok((*n).clone()),
+            None    => err!("Aucun service pour '{}'", name),
+        }
+    }
+
+    /// Retourne le singleton du service `cn`, en l'instanciant (ainsi que ses
+    /// dépendances, récursivement) au premier appel. Les services sont des
+    /// `Rc<RefCell<…>>` : le clone partage la même instance.
+    fn get_or_create_service(&mut self, cn: &str) -> Result<Value, RuntimeError> {
+        if let Some(v) = self.singletons.get(cn) { return Ok(v.clone()); }
+        debug!("inject : création du service '{}'", cn);
+        let ctor = self.classes.get(cn).and_then(|c| c.constructors.first().cloned());
+        // Résoudre les dépendances d'abord (ordre topologique implicite)
+        let mut dep_vals: Vec<Value> = vec![];
+        if let Some(ctor) = &ctor {
+            for p in &ctor.params {
+                let dep = match &p.ty {
+                    Type::UserDefined(n) => n.clone(),
+                    other => return err!(
+                        "Service '{}' : dépendance non injectable {}", cn, other),
+                };
+                let concrete = self.resolve_service_class(&dep)?;
+                dep_vals.push(self.get_or_create_service(&concrete)?);
+            }
+        }
+        let obj = self.instantiate(cn)?;
+        let rc = match &obj { Value::Object(r) => r.clone(), _ => unreachable!() };
+        if let Some(ctor) = ctor {
+            let mut ce = Env::new(); ce.push();
+            for (p, v) in ctor.params.iter().zip(dep_vals) { ce.declare(p.name.clone(), v); }
+            self.exec_body(&ctor.body, &mut ce, Some(rc))?;
+        }
+        self.singletons.insert(cn.to_string(), obj.clone());
+        Ok(obj)
     }
 
     // ── Appel d'une valeur lambda ─────────────────────────────────────────────

@@ -154,6 +154,10 @@ pub enum Expr {
     MethodCall   { object: Box<Expr>, method: String, args: Vec<Expr> },
     FunctionCall { name: String, args: Vec<Expr> },
     New             { class_name: String, type_args: Vec<Type>, args: Vec<Expr> },
+    /// `inject T` — résolution d'un service par le conteneur d'injection.
+    /// T est une classe `service` ou une interface implémentée par exactement
+    /// un service. Validé entièrement au typecheck — l'exécution ne peut pas échouer.
+    Inject(Type),
     EnumConstructor { enum_name: String, type_args: Vec<Type>, variant: String, args: Vec<Expr> },
     Lambda          { params: Vec<String>, body: LambdaBody },
     LambdaCall      { callee: Box<Expr>, args: Vec<Expr> },
@@ -229,6 +233,9 @@ pub struct MethodSig { pub is_mutable: bool, pub return_type: Type, pub name: St
 
 #[derive(Debug, Clone)]
 pub struct ClassDef {
+    /// true si la classe est déclarée `service` — instanciable par le conteneur
+    /// d'injection de dépendances (singleton, dépendances via le constructeur).
+    pub is_service: bool,
     pub is_mut:   bool,
     pub name: String, pub type_params: Vec<String>,
     /// Contraintes de qualificateur sur les paramètres de type.

@@ -103,7 +103,8 @@ fn print_class(c: &ClassDef) {
     let ext = c.parent.as_deref().map(|p| format!(" extends {}", p)).unwrap_or_default();
     let imp = if c.implements.is_empty() { String::new() }
               else { format!(" implements {}", c.implements.join(", ")) };
-    println!("class {}{}{}{} {{", c.name, tps, ext, imp);
+    let svc = if c.is_service { "service " } else { "" };
+    println!("{}class {}{}{}{} {{", svc, c.name, tps, ext, imp);
     for f in &c.fields { println!("{}  {} {};", pad(0), f.ty, f.name); }
     for ctor in &c.constructors {
         let ps: Vec<String> = ctor.params.iter().map(|p| format!("{} {}", p.ty, p.name)).collect();
@@ -235,6 +236,7 @@ fn fmt_expr(e: &Expr) -> String {
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
             format!("new {}{}({})", class_name, ta, a.join(", "))
         }
+        Expr::Inject(ty) => format!("inject {}", ty),
         Expr::EnumConstructor { enum_name, type_args, variant, args } => {
             let ta = if type_args.is_empty() { String::new() }
                      else { format!("<{}>", type_args.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", ")) };

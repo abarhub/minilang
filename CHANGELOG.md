@@ -4,6 +4,29 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [12/06/2026] — Injection de dépendances (`service` / `inject`)
+
+Conteneur d'injection de dépendances **sans réflexion**, entièrement validé à la compilation. `service class X` marque une classe gérée par le conteneur ; ses dépendances sont les paramètres de son constructeur. `inject T` (autorisé dans `main` et les fonctions de haut niveau) retourne le **singleton** du service `T` — ou de l'unique service implémentant l'interface `T`.
+
+Erreurs détectées au typecheck : binding manquant, binding ambigu (plusieurs implémentations), cycle de dépendances, paramètre non injectable, service générique, constructeurs multiples. L'exécution ne peut pas échouer.
+
+```java
+interface Logger { void log(string msg); }
+service class ConsoleLogger implements Logger {
+    void log(string msg) { print(msg); }
+}
+service class UserService {
+    Logger logger;
+    UserService(Logger logger) { this.logger = logger; }
+}
+int main() {
+    UserService s = inject UserService;  // ConsoleLogger câblé automatiquement
+    return 0;
+}
+```
+
+---
+
 ## [02/06/2026] — Visibilité des membres + type `record`
 
 Les champs de classe sont désormais **toujours privés** (accès autorisé depuis la même classe, interdit depuis l'extérieur). Les méthodes sont **publiques par défaut** ; `private` et `protected` permettent de restreindre l'accès.
