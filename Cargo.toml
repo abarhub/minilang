@@ -17,4 +17,6 @@ path = "src/lib.rs"
 chumsky  = "0.9"
 log      = "0.4"
 env_logger = "0.11"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "1.1.2"
 

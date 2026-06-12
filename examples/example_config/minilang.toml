@@ -1,0 +1,15 @@
+# Configuration de projet minilang — fichier optionnel.
+# Sans ce fichier : comportement par défaut (tous les modules DI actifs,
+# log "info", fichier source obligatoire en argument).
+
+[project]
+name = "demo-config"
+main = "app.mini"          # point d'entrée si aucun fichier passé en argument
+
+[di]
+# Profil actif : seuls les modules listés ici sont pris en compte.
+# Remplacer par ["TestModule"] pour basculer sur le FakeRepo sans toucher au code.
+modules = ["ProdModule"]
+
+[runtime]
+log = "warn"               # RUST_LOG reste prioritaire
