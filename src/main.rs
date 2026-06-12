@@ -18,7 +18,27 @@ use std::{env, fs, path::{Path, PathBuf}, process};
 use chumsky::Parser;
 use log::{error, info};
 
+/// Taille de pile du thread de travail. Le parser chumsky construit des stack
+/// frames très profonds : en mode debug, la pile par défaut du thread principal
+/// Windows (1 Mo) déborde dès le parsing. Les threads de test Rust (2 Mo)
+/// passent ; 16 Mo donne une marge confortable, sans coût réel (mémoire
+/// virtuelle réservée, engagée seulement à l'usage).
+const STACK_SIZE: usize = 16 * 1024 * 1024;
+
 fn main() {
+    // Tout le travail s'exécute dans un thread à pile dimensionnée.
+    let handle = std::thread::Builder::new()
+        .name("minilang".to_string())
+        .stack_size(STACK_SIZE)
+        .spawn(real_main)
+        .expect("impossible de créer le thread de travail");
+    if handle.join().is_err() {
+        // panic dans le thread de travail (déjà affiché sur stderr)
+        process::exit(101);
+    }
+}
+
+fn real_main() {
     let args: Vec<String> = env::args().collect();
     // Sous-commande : `mini_parser test [fichier|répertoire]`
     if args.get(1).map(|s| s.as_str()) == Some("test") {
