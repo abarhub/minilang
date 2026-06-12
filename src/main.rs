@@ -1,39 +1,93 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  main.rs – point d'entrée
 //  RUST_LOG=info  cargo run -- example.mini
+//
+//  Configuration de projet optionnelle : un fichier `minilang.toml` est
+//  cherché dans le répertoire du fichier source (ou le répertoire courant)
+//  puis ses parents. Absent → configuration par défaut.
+//  Priorité : CLI > minilang.toml > défauts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Les modules sont exposés via lib.rs.
 use mini_parser::ast::*;
+use mini_parser::config;
 use mini_parser::interpreter::Interpreter;
 use mini_parser::typechecker::TypeChecker;
 
-use std::{env, fs, process};
+use std::{env, fs, path::{Path, PathBuf}, process};
 use chumsky::Parser;
 use log::{error, info};
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let cli_file: Option<&str> = args.get(1).map(|s| s.as_str());
+
+    // ── Découverte du minilang.toml ───────────────────────────────────────
+    // Point de départ : répertoire du fichier passé en argument, sinon cwd.
+    // Le logger n'est pas encore initialisé (le niveau peut venir de la
+    // config) → les erreurs de cette étape passent par eprintln!.
+    let start_dir: PathBuf = match cli_file {
+        Some(f) => Path::new(f).parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(".")),
+        None => PathBuf::from("."),
+    };
+    let loaded = config::load(&start_dir).unwrap_or_else(|e| {
+        eprintln!("Configuration invalide — {}", e); process::exit(1);
+    });
+    let (cfg, cfg_path) = match loaded {
+        Some((c, p)) => (c, Some(p)),
+        None         => (config::ProjectConfig::default(), None),
+    };
+
+    // ── Logger : RUST_LOG > [runtime] log > "info" ────────────────────────
+    let default_log = cfg.runtime.log.as_deref().unwrap_or("info");
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
+        env_logger::Env::default().default_filter_or(default_log),
     ).init();
 
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 { error!("Usage: {} <fichier.mini>", args[0]); process::exit(1); }
-    let path = &args[1];
-    info!("Lecture de '{}'", path);
+    if let Some(p) = &cfg_path { info!("Configuration : {}", p.display()); }
+    if let Some(name) = &cfg.project.name { info!("Projet '{}'", name); }
 
-    let source = fs::read_to_string(path).unwrap_or_else(|e| {
-        error!("Impossible de lire '{}' : {}", path, e); process::exit(1);
+    // ── Fichier source : argument CLI, sinon [project] main ──────────────
+    let path: PathBuf = match cli_file {
+        Some(f) => PathBuf::from(f),
+        None => match (&cfg.project.main, &cfg_path) {
+            (Some(main), Some(cp)) =>
+                cp.parent().unwrap_or(Path::new(".")).join(main),
+            _ => {
+                error!("Usage: {} <fichier.mini>  (ou [project] main dans {})",
+                    args[0], config::CONFIG_FILE);
+                process::exit(1);
+            }
+        },
+    };
+    info!("Lecture de '{}'", path.display());
+
+    let source = fs::read_to_string(&path).unwrap_or_else(|e| {
+        error!("Impossible de lire '{}' : {}", path.display(), e); process::exit(1);
     });
 
     info!("Parsing...");
-    let program = match mini_parser::parser::program_parser().parse(source.as_str()) {
+    let mut program = match mini_parser::parser::program_parser().parse(source.as_str()) {
         Ok(p)  => { info!("AST construit ✓"); p }
         Err(errors) => {
             for e in &errors { error!("Syntaxe : {}", e); }
             process::exit(1);
         }
     };
+
+    // ── Profil DI : [di] modules restreint les modules de binding actifs ──
+    if let Some(active) = &cfg.di.modules {
+        if let Err(e) = config::select_modules(&mut program, active) {
+            error!("Configuration — {}", e);
+            process::exit(1);
+        }
+        info!("Modules DI actifs : {}",
+            if active.is_empty() { "aucun".to_string() } else { active.join(", ") });
+    }
+    let program = program;
 
     print_program(&program);
 

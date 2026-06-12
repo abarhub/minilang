@@ -4,6 +4,26 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [12/06/2026] — Fichier de configuration de projet (`minilang.toml`)
+
+Fichier **optionnel** à la racine du projet, découvert en remontant les répertoires depuis le fichier source (ou le répertoire courant). Absent → comportement par défaut inchangé. Priorité : CLI > `minilang.toml` > défauts. Un fichier présent mais invalide (TOML cassé, clé inconnue) est une erreur fatale.
+
+```toml
+[project]
+name = "mon-appli"
+main = "src/app.mini"       # permet de lancer mini_parser sans argument
+
+[di]
+modules = ["ProdModule"]    # profil DI : seuls ces modules de binding sont actifs
+
+[runtime]
+log = "info"                # RUST_LOG prioritaire
+```
+
+`[di] modules` apporte les **profils d'injection** : le code déclare `ProdModule` et `TestModule`, la config choisit — on bascule sur les mocks sans toucher au code. Documentation : `docs/configuration.md`, exemple : `examples/example_config/`.
+
+---
+
 ## [12/06/2026] — DI phase 2 : modules de binding, `with`, `transient`
 
 Le bloc `module` centralise la configuration du conteneur d'injection — c'est lui qui permet d'échanger les implémentations sans toucher au code (profils test/prod). Plusieurs modules coexistent, leurs bindings sont fusionnés.
