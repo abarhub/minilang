@@ -6,10 +6,16 @@
 name = "demo-config"
 main = "app.mini"          # point d'entrée si aucun fichier passé en argument
 
+[sources]
+include = ["lib.mini"]     # code partagé, préfixé en mode run ET en mode test
+
 [di]
-# Profil actif : seuls les modules listés ici sont pris en compte.
-# Remplacer par ["TestModule"] pour basculer sur le FakeRepo sans toucher au code.
+# Profil actif en exécution normale.
 modules = ["ProdModule"]
+
+[tests]
+dir = "tests"              # répertoire des fichiers de tests (défaut : "tests")
+modules = ["TestModule"]   # profil DI des tests : les mocks
 
 [runtime]
 log = "warn"               # RUST_LOG reste prioritaire

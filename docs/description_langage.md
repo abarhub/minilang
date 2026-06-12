@@ -346,6 +346,47 @@ int main() {
 }
 ```
 
+# Tests
+
+Une fonction de haut niveau préfixée par `test` est une fonction de test : `void`, sans paramètres. Un fichier de tests n'a pas besoin de `main` (qui reste obligatoire pour l'exécution normale).
+
+```java
+int add(int a, int b) { return a + b; }
+
+test void additionSimple() {
+    assertEquals(add(2, 3), 5);
+}
+
+test void comparaisons() {
+    assertTrue(1 < 2);
+    assertFalse(1 > 2);
+    assertNotEquals("a", "b");
+}
+```
+
+Les assertions sont des fonctions builtin, vérifiées par le typechecker :
+
+| Assertion | Vérifie | Erreur de compilation si |
+|---|---|---|
+| `assertTrue(bool)` | la condition est vraie | argument non-bool |
+| `assertFalse(bool)` | la condition est fausse | argument non-bool |
+| `assertEquals(a, b)` | `a` égale `b` | types incomparables |
+| `assertNotEquals(a, b)` | `a` diffère de `b` | types incomparables |
+| `fail(string)` | échoue toujours avec le message | argument non-string |
+
+Le runner s'invoque avec `mini_parser test [fichier|répertoire]` (par défaut : le répertoire `[tests] dir` du `minilang.toml`, sinon `tests/`). Chaque test s'exécute dans un **interpréteur neuf** : environnement vierge et conteneur d'injection réinitialisé — les singletons ne fuient pas d'un test à l'autre. Un échec (assertion, `panic`, erreur runtime) n'arrête pas les tests suivants ; le code de sortie est non-zéro si au moins un test échoue.
+
+```
+$ mini_parser test
+── tests/user_service_test.mini
+test greetUtiliseLeRepoInjecte ... ok
+test lesAssertionsDeBase ... ok
+
+Résultat : 2 test(s), 0 échec(s)
+```
+
+Combiné aux modules de binding et au `minilang.toml`, le runner applique le **profil DI de test** (`[tests] modules`) : le code injecte `Repo`, la prod binde `SqlRepo`, les tests bindent `FakeRepo` — sans toucher au code testé. Voir `docs/configuration.md` et l'exemple `examples/example_config/`.
+
 # Variable
 
 Exemples :

@@ -4,6 +4,24 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [12/06/2026] — Système de tests (`test`, assertions, runner)
+
+Fonctions de test intégrées au langage et runner en ligne de commande.
+
+```java
+test void additionSimple() {
+    assertEquals(add(2, 3), 5);
+}
+```
+
+- **`test void nom() { ... }`** : fonction de test (void, sans paramètres — vérifié au typecheck). `main` devient **optionnel** pour les fichiers de tests (toujours requis en exécution normale).
+- **Assertions builtin** typées : `assertTrue`, `assertFalse`, `assertEquals`, `assertNotEquals`, `fail` — types vérifiés à la compilation.
+- **`mini_parser test [fichier|répertoire]`** : exécute les tests (défaut : `[tests] dir`, sinon `tests/`). Chaque test tourne dans un interpréteur neuf — **conteneur DI réinitialisé**, les singletons ne fuient pas entre tests. Code de sortie non-zéro si échec.
+- **`[tests]` dans minilang.toml** : `dir` (répertoire) et `modules` (profil DI des tests → les mocks, sans toucher au code testé).
+- **`[sources] include`** : fichiers partagés (sans `main`) préfixés au fichier exécuté, en mode run comme en mode test — les tests peuvent référencer le code de l'application.
+
+---
+
 ## [12/06/2026] — Fichier de configuration de projet (`minilang.toml`)
 
 Fichier **optionnel** à la racine du projet, découvert en remontant les répertoires depuis le fichier source (ou le répertoire courant). Absent → comportement par défaut inchangé. Priorité : CLI > `minilang.toml` > défauts. Un fichier présent mais invalide (TOML cassé, clé inconnue) est une erreur fatale.

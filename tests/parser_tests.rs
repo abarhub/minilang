@@ -309,7 +309,10 @@ fn test_field_access_and_assignment() {
 
 #[test]
 fn test_missing_main() {
-    parse_fails("class Foo {}");
+    // Depuis le système de tests, main est optionnel : un fichier sans main
+    // parse (main = None) — c'est l'exécution (mode run) qui le refuse.
+    let program = program_parser().parse("class Foo {}").expect("parse ok sans main");
+    assert!(program.main.is_none());
 }
 
 #[test]

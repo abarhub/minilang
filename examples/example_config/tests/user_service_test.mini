@@ -1,0 +1,28 @@
+// Tests de UserService (définie dans lib.mini, préfixé via [sources] include).
+// Le runner applique le profil [tests] modules = ["TestModule"] → FakeRepo
+// est injecté à la place de SqlRepo, sans toucher au code testé.
+
+test void greetUtiliseLeRepoInjecte() {
+    UserService users = inject UserService;
+    assertEquals(users.greet(1), "bonjour utilisateur-test (fake)");
+}
+
+test void injectionRetourneLeMemeSingleton() {
+    Stats a = inject Stats;
+    Stats b = inject Stats;
+    a.tick();
+    b.tick();
+    assertEquals(a.count(), 2);   // a et b sont la même instance
+}
+
+test void chaqueTestRepartDUnConteneurNeuf() {
+    Stats s = inject Stats;
+    assertEquals(s.count(), 0);   // le singleton du test précédent ne fuit pas
+}
+
+test void lesAssertionsDeBase() {
+    assertTrue(1 < 2);
+    assertFalse(1 > 2);
+    assertEquals(2 + 2, 4);
+    assertNotEquals("a", "b");
+}

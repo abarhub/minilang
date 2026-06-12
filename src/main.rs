@@ -20,12 +20,64 @@ use log::{error, info};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    // Sous-commande : `mini_parser test [fichier|répertoire]`
+    if args.get(1).map(|s| s.as_str()) == Some("test") {
+        let exit_code = test_mode(args.get(2).map(|s| s.as_str()));
+        process::exit(exit_code);
+    }
+    run_mode(&args);
+}
+
+// ── Chargement de la configuration ───────────────────────────────────────────
+
+/// Charge le minilang.toml (optionnel) en partant de `start_dir`.
+/// Le logger n'est pas encore initialisé à ce stade (le niveau peut venir de
+/// la config) → les erreurs passent par eprintln!.
+fn load_config_or_exit(start_dir: &Path) -> (config::ProjectConfig, Option<PathBuf>) {
+    let loaded = config::load(start_dir).unwrap_or_else(|e| {
+        eprintln!("Configuration invalide — {}", e); process::exit(1);
+    });
+    match loaded {
+        Some((c, p)) => (c, Some(p)),
+        None         => (config::ProjectConfig::default(), None),
+    }
+}
+
+/// Logger : RUST_LOG > [runtime] log > `fallback`.
+fn init_logger(cfg: &config::ProjectConfig, fallback: &str) {
+    let default_log = cfg.runtime.log.as_deref().unwrap_or(fallback);
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or(default_log),
+    ).init();
+}
+
+/// Concatène les fichiers de [sources] include (relatifs au minilang.toml).
+/// Préfixé au fichier exécuté, comme l'est la stdlib pour les tests Rust.
+fn sources_prefix(cfg: &config::ProjectConfig, cfg_path: &Option<PathBuf>) -> String {
+    let Some(includes) = &cfg.sources.include else { return String::new() };
+    let base: PathBuf = cfg_path.as_ref()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let mut prefix = String::new();
+    for inc in includes {
+        let p = base.join(inc);
+        match fs::read_to_string(&p) {
+            Ok(s) => { prefix.push_str(&s); prefix.push('\n'); }
+            Err(e) => {
+                eprintln!("[sources] include — impossible de lire '{}' : {}", p.display(), e);
+                process::exit(1);
+            }
+        }
+    }
+    prefix
+}
+
+// ── Mode run : exécute le main d'un programme ────────────────────────────────
+
+fn run_mode(args: &[String]) {
     let cli_file: Option<&str> = args.get(1).map(|s| s.as_str());
 
-    // ── Découverte du minilang.toml ───────────────────────────────────────
-    // Point de départ : répertoire du fichier passé en argument, sinon cwd.
-    // Le logger n'est pas encore initialisé (le niveau peut venir de la
-    // config) → les erreurs de cette étape passent par eprintln!.
+    // Point de départ de la découverte : répertoire du fichier, sinon cwd
     let start_dir: PathBuf = match cli_file {
         Some(f) => Path::new(f).parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -33,19 +85,8 @@ fn main() {
             .unwrap_or_else(|| PathBuf::from(".")),
         None => PathBuf::from("."),
     };
-    let loaded = config::load(&start_dir).unwrap_or_else(|e| {
-        eprintln!("Configuration invalide — {}", e); process::exit(1);
-    });
-    let (cfg, cfg_path) = match loaded {
-        Some((c, p)) => (c, Some(p)),
-        None         => (config::ProjectConfig::default(), None),
-    };
-
-    // ── Logger : RUST_LOG > [runtime] log > "info" ────────────────────────
-    let default_log = cfg.runtime.log.as_deref().unwrap_or("info");
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(default_log),
-    ).init();
+    let (cfg, cfg_path) = load_config_or_exit(&start_dir);
+    init_logger(&cfg, "info");
 
     if let Some(p) = &cfg_path { info!("Configuration : {}", p.display()); }
     if let Some(name) = &cfg.project.name { info!("Projet '{}'", name); }
@@ -68,9 +109,10 @@ fn main() {
     let source = fs::read_to_string(&path).unwrap_or_else(|e| {
         error!("Impossible de lire '{}' : {}", path.display(), e); process::exit(1);
     });
+    let full_source = format!("{}{}", sources_prefix(&cfg, &cfg_path), source);
 
     info!("Parsing...");
-    let mut program = match mini_parser::parser::program_parser().parse(source.as_str()) {
+    let mut program = match mini_parser::parser::program_parser().parse(full_source.as_str()) {
         Ok(p)  => { info!("AST construit ✓"); p }
         Err(errors) => {
             for e in &errors { error!("Syntaxe : {}", e); }
@@ -108,6 +150,117 @@ fn main() {
     }
 }
 
+// ── Mode test : exécute les fonctions `test` ─────────────────────────────────
+
+/// Collecte récursivement les fichiers .mini d'un répertoire, triés.
+fn collect_mini_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+    paths.sort();
+    for p in paths {
+        if p.is_dir() { collect_mini_files(&p, out); }
+        else if p.extension().map(|e| e == "mini").unwrap_or(false) { out.push(p); }
+    }
+}
+
+/// `mini_parser test [fichier|répertoire]` — lance les tests et retourne le
+/// code de sortie (0 = tout passe, 1 = au moins un échec ou une erreur).
+fn test_mode(target: Option<&str>) -> i32 {
+    // Point de départ de la découverte de la config
+    let start_dir: PathBuf = match target {
+        Some(t) if Path::new(t).is_dir() => PathBuf::from(t),
+        Some(t) => Path::new(t).parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(".")),
+        None => PathBuf::from("."),
+    };
+    let (cfg, cfg_path) = load_config_or_exit(&start_dir);
+    // Sortie de test propre par défaut — RUST_LOG / [runtime] log prioritaires
+    init_logger(&cfg, "warn");
+
+    // ── Fichiers de tests ─────────────────────────────────────────────────
+    let cfg_dir: PathBuf = cfg_path.as_ref()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let mut files: Vec<PathBuf> = vec![];
+    match target {
+        Some(t) if Path::new(t).is_file() => files.push(PathBuf::from(t)),
+        Some(t) if Path::new(t).is_dir()  => collect_mini_files(Path::new(t), &mut files),
+        Some(t) => { eprintln!("'{}' : fichier ou répertoire introuvable", t); return 1; }
+        None => {
+            let dir = cfg_dir.join(cfg.tests.dir.as_deref().unwrap_or("tests"));
+            if !dir.is_dir() {
+                eprintln!("Répertoire de tests introuvable : {} \
+                           (configurez [tests] dir dans {})",
+                    dir.display(), config::CONFIG_FILE);
+                return 1;
+            }
+            collect_mini_files(&dir, &mut files);
+        }
+    }
+    if files.is_empty() {
+        eprintln!("Aucun fichier de test (.mini) trouvé");
+        return 1;
+    }
+
+    // Profil DI des tests : [tests] modules > [di] modules > tous
+    let active_modules = cfg.tests.modules.clone().or_else(|| cfg.di.modules.clone());
+    let prefix = sources_prefix(&cfg, &cfg_path);
+
+    // ── Exécution ─────────────────────────────────────────────────────────
+    let (mut total, mut failures, mut file_errors) = (0usize, 0usize, 0usize);
+    for file in &files {
+        println!("── {}", file.display());
+        let source = match fs::read_to_string(file) {
+            Ok(s) => s,
+            Err(e) => { println!("  erreur : lecture impossible : {}", e);
+                        file_errors += 1; continue; }
+        };
+        let full = format!("{}{}", prefix, source);
+        let mut program = match mini_parser::parser::program_parser().parse(full.as_str()) {
+            Ok(p) => p,
+            Err(errors) => {
+                for e in &errors { println!("  erreur de syntaxe : {}", e); }
+                file_errors += 1; continue;
+            }
+        };
+        if let Some(active) = &active_modules {
+            if let Err(e) = config::select_modules(&mut program, active) {
+                println!("  erreur de configuration : {}", e);
+                file_errors += 1; continue;
+            }
+        }
+        let type_errors = TypeChecker::new(&program).check(&program);
+        if !type_errors.is_empty() {
+            for e in &type_errors { println!("  {}", e); }
+            file_errors += 1; continue;
+        }
+        let results = mini_parser::test_runner::run_tests(&program);
+        if results.is_empty() {
+            println!("  (aucune fonction test)");
+        }
+        for r in &results {
+            total += 1;
+            match &r.error {
+                None    => println!("test {} ... ok", r.name),
+                Some(e) => {
+                    failures += 1;
+                    println!("test {} ... ECHEC", r.name);
+                    println!("    {}", e);
+                }
+            }
+        }
+    }
+
+    // ── Bilan ─────────────────────────────────────────────────────────────
+    println!();
+    let mut bilan = format!("Résultat : {} test(s), {} échec(s)", total, failures);
+    if file_errors > 0 { bilan.push_str(&format!(", {} fichier(s) en erreur", file_errors)); }
+    println!("{}", bilan);
+    if failures > 0 || file_errors > 0 { 1 } else { 0 }
+}
+
 // ── Affichage de l'AST ────────────────────────────────────────────────────────
 
 fn pad(d: usize) -> String { "  ".repeat(d) }
@@ -123,9 +276,11 @@ fn print_program(p: &Program) {
     for iface in &p.interfaces { print_interface(iface); println!(); }
     for e in &p.enums          { print_enum(e);          println!(); }
     for c in &p.classes        { print_class(c);         println!(); }
-    println!("int main() {{");
-    for s in &p.main.body { print_stmt(s, 1); }
-    println!("}}");
+    if let Some(main) = &p.main {
+        println!("int main() {{");
+        for s in &main.body { print_stmt(s, 1); }
+        println!("}}");
+    }
     println!("{}", "─".repeat(50));
 }
 
