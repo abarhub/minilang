@@ -1,40 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Exemple : configuration de projet (minilang.toml)
+//  Exemple : configuration de projet (minilang.toml) + tests
 //
-//  Le fichier minilang.toml de ce répertoire sélectionne le profil DI :
-//    [di] modules = ["ProdModule"]   →  Repo = SqlRepo
-//    [di] modules = ["TestModule"]   →  Repo = FakeRepo
-//  Les deux modules coexistent dans le source ; sans sélection ils seraient
-//  en conflit (binding dupliqué). Le profil se change sans toucher au code.
+//  Le code partagé est dans lib.mini ([sources] include). Le minilang.toml
+//  sélectionne le profil DI :
+//    [di]    modules = ["ProdModule"]  →  exécution : Repo = SqlRepo
+//    [tests] modules = ["TestModule"]  →  tests     : Repo = FakeRepo
+//  Le profil se change sans toucher au code.
 //
 //  Lancer :  mini_parser examples/example_config/app.mini
-//  ou, depuis ce répertoire :  mini_parser   (le main vient du minilang.toml)
+//  ou, depuis ce répertoire :  mini_parser         (le main vient du toml)
+//  Tests  :  mini_parser test  (depuis ce répertoire)
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface Repo {
-    string findUser(int id);
-}
-
-service class SqlRepo implements Repo {
-    string findUser(int id) {
-        return "alice (sql)";
-    }
-}
-
-service class FakeRepo implements Repo {
-    string findUser(int id) {
-        return "utilisateur-test (fake)";
-    }
-}
-
-module ProdModule { bind Repo to SqlRepo; }
-module TestModule { bind Repo to FakeRepo; }
-
-service class UserService {
-    Repo repo;
-    UserService(Repo repo) { this.repo = repo; }
-    string greet(int id) { return "bonjour " + repo.findUser(id); }
-}
 
 int main() {
     UserService users = inject UserService;

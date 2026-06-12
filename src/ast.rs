@@ -314,6 +314,9 @@ pub struct ModuleDef { pub name: String, pub binds: Vec<BindDecl> }
 
 #[derive(Debug, Clone)]
 pub struct FuncDef {
+    /// true si la fonction est déclarée `test` — exécutée par le runner de
+    /// tests (`mini_parser test`). Doit être `void` et sans paramètres.
+    pub is_test:     bool,
     pub return_type: Type,
     pub name:        String,
     pub params:      Vec<Param>,
@@ -338,5 +341,7 @@ pub struct Program {
     pub records:      Vec<RecordDef>,
     pub classes:      Vec<ClassDef>,
     pub funcs:        Vec<FuncDef>,
-    pub main:         MainFunc,
+    /// Optionnel : un fichier de tests peut ne pas avoir de main.
+    /// L'exécution normale (mode run) exige sa présence.
+    pub main:         Option<MainFunc>,
 }

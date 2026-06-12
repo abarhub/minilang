@@ -178,12 +178,27 @@ impl Interpreter {
 
     pub fn run(&mut self, program: &Program) -> Result<i64, RuntimeError> {
         info!("▶ Exécution");
+        let Some(main) = &program.main else {
+            return err!("Aucune fonction main — rien à exécuter \
+                         (utilisez `mini_parser test` pour un fichier de tests)");
+        };
         let mut env = Env::new();
-        match self.exec_body(&program.main.body, &mut env, None)? {
+        match self.exec_body(&main.body.clone(), &mut env, None)? {
             Flow::Return(Value::Int(n)) => { info!("✓ main → {}", n); Ok(n) }
             Flow::Return(v) => { warn!("main valeur non-int : {}", v); Ok(0) }
             _ => { warn!("main sans return"); Ok(0) }
         }
+    }
+
+    /// Exécute une fonction de test (sans paramètres) dans un environnement
+    /// neuf. Utilisé par le runner de tests — chaque test tourne dans un
+    /// interpréteur fraîchement créé (singletons DI réinitialisés).
+    pub fn run_test(&mut self, name: &str) -> Result<(), RuntimeError> {
+        let func = self.funcs.get(name).cloned()
+            .ok_or_else(|| RuntimeError(format!("Fonction de test inconnue '{}'", name)))?;
+        let mut env = Env::new();
+        self.exec_body(&func.body, &mut env, None)?;
+        Ok(())
     }
 
     // ── Valeur par défaut ─────────────────────────────────────────────────────
@@ -1179,6 +1194,39 @@ impl Interpreter {
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| "panic".to_string());
                     return err!("{}", msg);
+                }
+                // ── Assertions builtin (système de tests) ────────────────────
+                match name.as_str() {
+                    "assertTrue" => {
+                        return match args.first() {
+                            Some(Value::Bool(true))  => Ok(Value::Void),
+                            Some(Value::Bool(false)) => err!("assertTrue : la condition est fausse"),
+                            _ => err!("assertTrue : condition non-bool"),
+                        };
+                    }
+                    "assertFalse" => {
+                        return match args.first() {
+                            Some(Value::Bool(false)) => Ok(Value::Void),
+                            Some(Value::Bool(true))  => err!("assertFalse : la condition est vraie"),
+                            _ => err!("assertFalse : condition non-bool"),
+                        };
+                    }
+                    "assertEquals" => {
+                        if args.len() != 2 { return err!("assertEquals attend 2 arguments"); }
+                        return if val_eq(&args[0], &args[1]) { Ok(Value::Void) }
+                               else { err!("assertEquals : {} ≠ {}", args[0], args[1]) };
+                    }
+                    "assertNotEquals" => {
+                        if args.len() != 2 { return err!("assertNotEquals attend 2 arguments"); }
+                        return if !val_eq(&args[0], &args[1]) { Ok(Value::Void) }
+                               else { err!("assertNotEquals : les deux valeurs valent {}", args[0]) };
+                    }
+                    "fail" => {
+                        let msg = args.first().map(|v| v.to_string())
+                            .unwrap_or_else(|| "fail".to_string());
+                        return err!("fail : {}", msg);
+                    }
+                    _ => {}
                 }
                 // Fonction de haut niveau
                 if let Some(func) = self.funcs.get(name.as_str()).cloned() {

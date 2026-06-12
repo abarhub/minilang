@@ -1,0 +1,38 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Bibliothèque du projet — référencée par [sources] include dans minilang.toml.
+//  Pas de main ici : ce fichier est préfixé au fichier exécuté (app.mini en
+//  mode run, chaque fichier de tests/ en mode test).
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Repo {
+    string findUser(int id);
+}
+
+service class SqlRepo implements Repo {
+    string findUser(int id) {
+        return "alice (sql)";
+    }
+}
+
+service class FakeRepo implements Repo {
+    string findUser(int id) {
+        return "utilisateur-test (fake)";
+    }
+}
+
+module ProdModule { bind Repo to SqlRepo; }
+module TestModule { bind Repo to FakeRepo; }
+
+service class UserService {
+    Repo repo;
+    UserService(Repo repo) { this.repo = repo; }
+    string greet(int id) { return "bonjour " + repo.findUser(id); }
+}
+
+// Service avec état — sert à démontrer le partage du singleton
+service mut class Stats {
+    int calls;
+    Stats() { this.calls = 0; }
+    mutable void tick() { calls = calls + 1; }
+    int count()         { return calls; }
+}

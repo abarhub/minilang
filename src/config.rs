@@ -34,7 +34,11 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub project: ProjectSection,
     #[serde(default)]
+    pub sources: SourcesSection,
+    #[serde(default)]
     pub di:      DiSection,
+    #[serde(default)]
+    pub tests:   TestsSection,
     #[serde(default)]
     pub runtime: RuntimeSection,
 }
@@ -47,6 +51,25 @@ pub struct ProjectSection {
     /// Point d'entrée, relatif au répertoire du minilang.toml.
     /// Utilisé quand aucun fichier n'est passé en argument.
     pub main: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SourcesSection {
+    /// Fichiers source additionnels (bibliothèque du projet, sans `main`),
+    /// relatifs au répertoire du minilang.toml. Ils sont préfixés au fichier
+    /// exécuté — en mode run comme en mode test — comme l'est la stdlib.
+    pub include: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TestsSection {
+    /// Répertoire des fichiers de tests, relatif au minilang.toml (défaut : "tests").
+    pub dir: Option<String>,
+    /// Modules de binding actifs pendant les tests (profil DI de test).
+    /// Défaut : la valeur de [di] modules, sinon tous les modules.
+    pub modules: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]

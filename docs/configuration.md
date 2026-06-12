@@ -19,8 +19,15 @@ Un fichier présent mais invalide (TOML cassé, section ou clé inconnue — typ
 name = "mon-appli"          # affiché dans les logs
 main = "src/app.mini"       # point d'entrée, relatif au minilang.toml
 
+[sources]
+include = ["lib.mini"]      # code partagé, préfixé au fichier exécuté
+
 [di]
 modules = ["ProdModule"]    # modules de binding actifs
+
+[tests]
+dir = "tests"               # répertoire des fichiers de tests
+modules = ["TestModule"]    # profil DI pendant les tests
 
 [runtime]
 log = "info"                # niveau de log par défaut
@@ -54,6 +61,21 @@ modules = ["ProdModule"]    # ou ["TestModule"] pour les mocks
 ```
 
 Sans sélection, tous les modules sont fusionnés — deux `bind` pour la même interface seraient alors un binding dupliqué (erreur de compilation).
+
+### `[sources]`
+
+| Clé | Effet | Défaut |
+|---|---|---|
+| `include` | Fichiers source additionnels (bibliothèque du projet, **sans `main`**), relatifs au `minilang.toml`. Concaténés avant le fichier exécuté — en mode run comme en mode test. C'est ce qui permet aux fichiers de tests de référencer le code de l'application | — |
+
+Limitation actuelle : les fichiers étant concaténés (comme la stdlib), les positions dans les messages d'erreur de syntaxe ne tiennent pas compte du fichier d'origine.
+
+### `[tests]` — runner de tests
+
+| Clé | Effet | Défaut |
+|---|---|---|
+| `dir` | Répertoire des fichiers de tests (`.mini`, parcouru récursivement), relatif au `minilang.toml`. Utilisé par `mini_parser test` sans argument | `tests` |
+| `modules` | Modules de binding actifs **pendant les tests** — le profil de mocks | `[di] modules`, sinon tous |
 
 ### `[runtime]`
 

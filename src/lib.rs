@@ -3,6 +3,7 @@ pub mod ast;
 pub mod config;
 pub mod interpreter;
 pub mod parser;
+pub mod test_runner;
 pub mod typechecker;
 
 /// Bibliothèque standard embarquée — lib/std/minilang/lang/ et lib/std/minilang/collection/

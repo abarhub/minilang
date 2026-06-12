@@ -924,9 +924,11 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         Func(FuncDef),
     }
 
-    // Fonction de haut niveau : `Type name(params) { body }`
+    // Fonction de haut niveau : `[test] Type name(params) { body }`
     // On exclut "main" pour que main_func le prenne en charge séparément.
-    let func_def = ty.clone()
+    // Le préfixe `test` marque une fonction de test (runner `mini_parser test`).
+    let func_def = kw("test").to(true).or_not().map(|t| t.unwrap_or(false))
+        .then(ty.clone())
         .then(text::ident().padded_by(ws()).try_map(|name: String, span| {
             if name == "main" {
                 Err(Simple::custom(span, "main is reserved"))
@@ -937,7 +939,8 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then(params.clone()
             .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())))
         .then(body.clone())
-        .map(|(((rt, name), p), b)| FuncDef { return_type: rt, name, params: p, body: b });
+        .map(|((((is_test, rt), name), p), b)|
+            FuncDef { is_test, return_type: rt, name, params: p, body: b });
 
     // Chaque parser est boxé avant d'entrer dans choice() pour que la struct
     // ChoiceParser ne contienne que des pointeurs (16 octets chacun) et non
@@ -957,7 +960,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     ws()
         .ignore_then(top_decl.repeated())
-        .then(main_func)
+        .then(main_func.or_not())   // optionnel : un fichier de tests n'a pas de main
         .then_ignore(ws())
         .then_ignore(end())
         .map(|(decls, main)| {

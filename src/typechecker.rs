@@ -358,9 +358,12 @@ impl TypeChecker {
         self.check_records(program);
         for class in &program.classes.clone() { self.check_class(class); }
         for func in &program.funcs.clone() { self.check_func(func); }
-        let mut env = TypeEnv::new();
-        self.expected_return = Type::Int;
-        for stmt in &program.main.body.clone() { self.check_stmt(stmt, &mut env); }
+        // main est optionnel (fichiers de tests) — le mode run exige sa présence
+        if let Some(main) = &program.main {
+            let mut env = TypeEnv::new();
+            self.expected_return = Type::Int;
+            for stmt in &main.body.clone() { self.check_stmt(stmt, &mut env); }
+        }
     }
 
     // ── Records ───────────────────────────────────────────────────────────────
@@ -404,6 +407,19 @@ impl TypeChecker {
     }
 
     fn check_func(&mut self, func: &FuncDef) {
+        // Contraintes des fonctions de test : void, sans paramètres
+        if func.is_test {
+            if func.return_type != Type::Void {
+                self.err(format!(
+                    "Fonction de test '{}' : doit retourner void (trouvé {})",
+                    func.name, func.return_type));
+            }
+            if !func.params.is_empty() {
+                self.err(format!(
+                    "Fonction de test '{}' : ne doit pas avoir de paramètres \
+                     ({} trouvé(s))", func.name, func.params.len()));
+            }
+        }
         let mut env = TypeEnv::new();
         for p in &func.params { env.declare(p.name.clone(), p.ty.clone()); }
         let saved = self.expected_return.clone();
@@ -1152,6 +1168,44 @@ impl TypeChecker {
                 }
                 if name == "panic" {
                     for a in args { self.infer(a, env); }
+                    return Ok(Type::Void);
+                }
+
+                // ── Assertions builtin (système de tests) ────────────────────
+                if name == "assertTrue" || name == "assertFalse" {
+                    if args.len() != 1 {
+                        return type_err!("{}() attend 1 argument, {} fourni(s)", name, args.len());
+                    }
+                    if let Some(at) = self.infer(&args[0], env) {
+                        if at != Type::Bool && !matches!(at, Type::Fn) {
+                            self.err(format!("{}() : la condition doit être bool, trouvé {}", name, at));
+                        }
+                    }
+                    return Ok(Type::Void);
+                }
+                if name == "assertEquals" || name == "assertNotEquals" {
+                    if args.len() != 2 {
+                        return type_err!("{}() attend 2 arguments, {} fourni(s)", name, args.len());
+                    }
+                    let at = self.infer(&args[0], env);
+                    let bt = self.infer(&args[1], env);
+                    if let (Some(at), Some(bt)) = (at, bt) {
+                        if !self.is_compatible(&at, &bt) && !self.is_compatible(&bt, &at) {
+                            self.err(format!(
+                                "{}() : types incomparables {} et {}", name, at, bt));
+                        }
+                    }
+                    return Ok(Type::Void);
+                }
+                if name == "fail" {
+                    if args.len() != 1 {
+                        return type_err!("fail() attend 1 argument (le message), {} fourni(s)", args.len());
+                    }
+                    if let Some(at) = self.infer(&args[0], env) {
+                        if at != Type::Str && !matches!(at, Type::Fn) {
+                            self.err(format!("fail() : le message doit être string, trouvé {}", at));
+                        }
+                    }
                     return Ok(Type::Void);
                 }
 
