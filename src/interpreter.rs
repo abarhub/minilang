@@ -124,6 +124,13 @@ pub struct Interpreter {
     classes:  HashMap<String, ClassDef>,
     enums:    HashMap<String, EnumDef>,
     funcs:    HashMap<String, FuncDef>,
+    /// Noms des interfaces — pour classifier les paramètres de constructeur
+    /// des services (dépendance vs valeur de configuration)
+    interfaces: std::collections::HashSet<String>,
+    /// Bindings explicites des modules : interface → service concret
+    binds_to: HashMap<String, String>,
+    /// Valeurs de configuration des modules : service → args du `with`
+    with_values: HashMap<String, Vec<Expr>>,
     /// Instances des services déjà créées par `inject` (nom de classe → singleton)
     singletons: HashMap<String, Value>,
     print_fn: Box<dyn FnMut(&str)>,
@@ -146,10 +153,24 @@ impl Interpreter {
         for c in &program.classes {
             classes.insert(c.name.clone(), c.clone());
         }
+        // Bindings et valeurs de configuration des modules — la validation
+        // (cibles connues, doublons, types) a déjà été faite par le typechecker.
+        let mut binds_to:    HashMap<String, String>    = HashMap::new();
+        let mut with_values: HashMap<String, Vec<Expr>> = HashMap::new();
+        for m in &program.modules {
+            for b in &m.binds {
+                let concrete = b.to.clone().unwrap_or_else(|| b.target.clone());
+                if b.to.is_some() { binds_to.insert(b.target.clone(), concrete.clone()); }
+                if !b.with.is_empty() { with_values.insert(concrete, b.with.clone()); }
+            }
+        }
         Self {
             classes,
             enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
             funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
+            interfaces: program.interfaces.iter().map(|i| i.name.clone()).collect(),
+            binds_to,
+            with_values,
             singletons: HashMap::new(),
             print_fn,
         }
@@ -1371,13 +1392,27 @@ impl Interpreter {
 
     // ── Injection de dépendances ──────────────────────────────────────────────
 
+    /// true si le paramètre est un slot de dépendance (interface ou classe
+    /// service) — même classification que dans le typechecker. Tout autre type
+    /// est un slot de configuration, rempli par les valeurs du `with`.
+    fn is_dep_slot(&self, ty: &Type) -> bool {
+        match ty {
+            Type::UserDefined(n) =>
+                self.interfaces.contains(n)
+                || self.classes.get(n).map(|c| c.is_service).unwrap_or(false),
+            _ => false,
+        }
+    }
+
     /// Résout un nom injectable vers la classe service concrète :
-    /// la classe elle-même si elle est `service`, sinon l'unique service
-    /// implémentant l'interface (l'unicité est garantie par le typechecker).
+    /// la classe elle-même si elle est `service`, sinon le binding explicite
+    /// d'un module, sinon l'unique service implémentant l'interface
+    /// (l'unicité est garantie par le typechecker).
     fn resolve_service_class(&self, name: &str) -> Result<String, RuntimeError> {
         if let Some(c) = self.classes.get(name) {
             if c.is_service { return Ok(name.to_string()); }
         }
+        if let Some(s) = self.binds_to.get(name) { return Ok(s.clone()); }
         let mut impls: Vec<&String> = self.classes.values()
             .filter(|c| c.is_service && c.implements.iter().any(|i| i == name))
             .map(|c| &c.name)
@@ -1389,34 +1424,50 @@ impl Interpreter {
         }
     }
 
-    /// Retourne le singleton du service `cn`, en l'instanciant (ainsi que ses
-    /// dépendances, récursivement) au premier appel. Les services sont des
-    /// `Rc<RefCell<…>>` : le clone partage la même instance.
+    /// Retourne l'instance du service `cn`, en l'instanciant (ainsi que ses
+    /// dépendances, récursivement) si nécessaire. Les services singletons sont
+    /// mémorisés ; les services `transient` sont recréés à chaque injection.
+    /// Les services sont des `Rc<RefCell<…>>` : le clone partage l'instance.
     fn get_or_create_service(&mut self, cn: &str) -> Result<Value, RuntimeError> {
-        if let Some(v) = self.singletons.get(cn) { return Ok(v.clone()); }
+        let is_transient = self.classes.get(cn).map(|c| c.is_transient).unwrap_or(false);
+        if !is_transient {
+            if let Some(v) = self.singletons.get(cn) { return Ok(v.clone()); }
+        }
         debug!("inject : création du service '{}'", cn);
         let ctor = self.classes.get(cn).and_then(|c| c.constructors.first().cloned());
-        // Résoudre les dépendances d'abord (ordre topologique implicite)
-        let mut dep_vals: Vec<Value> = vec![];
+        let with = self.with_values.get(cn).cloned().unwrap_or_default();
+        let mut with_iter = with.into_iter();
+        // Résoudre les arguments du constructeur : dépendances injectées
+        // (ordre topologique implicite) + valeurs de configuration du `with`
+        let mut arg_vals: Vec<Value> = vec![];
         if let Some(ctor) = &ctor {
             for p in &ctor.params {
-                let dep = match &p.ty {
-                    Type::UserDefined(n) => n.clone(),
-                    other => return err!(
-                        "Service '{}' : dépendance non injectable {}", cn, other),
-                };
-                let concrete = self.resolve_service_class(&dep)?;
-                dep_vals.push(self.get_or_create_service(&concrete)?);
+                if self.is_dep_slot(&p.ty) {
+                    let dep = match &p.ty {
+                        Type::UserDefined(n) => n.clone(),
+                        _ => unreachable!("is_dep_slot ne matche que UserDefined"),
+                    };
+                    let concrete = self.resolve_service_class(&dep)?;
+                    arg_vals.push(self.get_or_create_service(&concrete)?);
+                } else {
+                    let expr = with_iter.next().ok_or_else(|| RuntimeError(format!(
+                        "Service '{}' : valeur de configuration manquante pour '{}'",
+                        cn, p.name)))?;
+                    let mut wenv = Env::new();
+                    arg_vals.push(self.eval(&expr, &mut wenv, None)?);
+                }
             }
         }
         let obj = self.instantiate(cn)?;
         let rc = match &obj { Value::Object(r) => r.clone(), _ => unreachable!() };
         if let Some(ctor) = ctor {
             let mut ce = Env::new(); ce.push();
-            for (p, v) in ctor.params.iter().zip(dep_vals) { ce.declare(p.name.clone(), v); }
+            for (p, v) in ctor.params.iter().zip(arg_vals) { ce.declare(p.name.clone(), v); }
             self.exec_body(&ctor.body, &mut ce, Some(rc))?;
         }
-        self.singletons.insert(cn.to_string(), obj.clone());
+        if !is_transient {
+            self.singletons.insert(cn.to_string(), obj.clone());
+        }
         Ok(obj)
     }
 

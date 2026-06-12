@@ -93,6 +93,11 @@ pub struct TypeChecker {
     enums:           HashMap<String, EnumDef>,
     aliases:                HashMap<String, Type>,
     funcs:                  HashMap<String, FuncDef>,
+    modules:                Vec<ModuleDef>,
+    /// Bindings explicites issus des modules : interface → service concret
+    binds_to:               HashMap<String, String>,
+    /// Valeurs de configuration issues des modules : service → args du `with`
+    with_values:            HashMap<String, Vec<Expr>>,
     type_params:            HashSet<String>,
     current_class:          Option<String>,
     current_enum:           Option<String>,
@@ -211,6 +216,7 @@ impl TypeChecker {
 
         ClassDef {
             is_service:             false,
+            is_transient:           false,
             is_mut:                 true,
             name:                   rd.name.clone(),
             type_params:            rd.type_params.clone(),
@@ -228,6 +234,7 @@ impl TypeChecker {
             program.classes.iter().map(|c| (c.name.clone(), c.clone())).collect();
         classes.entry("Object".to_string()).or_insert_with(|| ClassDef {
             is_service: false,
+            is_transient: false,
             is_mut: true,
             name: "Object".to_string(),
             type_params: vec![],
@@ -248,6 +255,7 @@ impl TypeChecker {
         // ── Classe abstraite Record — ancêtre de tous les records ─────────
         classes.entry("Record".to_string()).or_insert_with(|| ClassDef {
             is_service: false,
+            is_transient: false,
             is_mut: true,
             name: "Record".to_string(),
             type_params: vec![],
@@ -285,6 +293,9 @@ impl TypeChecker {
             enums:           program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
             aliases:         program.type_aliases.iter().map(|a| (a.name.clone(), a.ty.clone())).collect(),
             funcs:           program.funcs.iter().map(|f| (f.name.clone(), f.clone())).collect(),
+            modules:         program.modules.clone(),
+            binds_to:        HashMap::new(),
+            with_values:     HashMap::new(),
             type_params:            HashSet::new(),
             current_class:          None,
             current_enum:           None,
@@ -341,6 +352,7 @@ impl TypeChecker {
     fn check_program(&mut self, program: &Program) {
         self.check_class_hierarchy();
         self.check_interface_impls();
+        self.check_modules();
         self.check_services();
         self.check_enums(program);
         self.check_records(program);
@@ -455,13 +467,30 @@ impl TypeChecker {
     //  leurs dépendances sont les paramètres de leur constructeur. Tout est
     //  validé ici, au typecheck — l'exécution ne peut pas échouer :
     //  - un service a au plus un constructeur et n'est pas générique ;
-    //  - chaque dépendance résout vers exactement un service ;
+    //  - chaque dépendance résout vers exactement un service (binding explicite
+    //    d'un module, sinon implémentation unique) ;
+    //  - les paramètres non-service sont couverts par un `bind ... with (...)` ;
+    //  - un singleton ne dépend pas d'un service `transient` ;
     //  - le graphe de dépendances est acyclique.
 
+    /// true si le paramètre est un slot de dépendance (injecté par le conteneur) :
+    /// son type est une interface ou une classe `service`. Tout autre type est
+    /// un slot de configuration, à fournir via `bind ... with (...)`.
+    /// L'interpréteur applique exactement la même classification.
+    fn is_dep_slot(&self, ty: &Type) -> bool {
+        match ty {
+            Type::UserDefined(n) =>
+                self.interfaces.contains_key(n)
+                || self.classes.get(n).map(|c| c.is_service).unwrap_or(false),
+            _ => false,
+        }
+    }
+
     /// Résout un nom de type injectable vers le nom de la classe service concrète.
-    /// - classe `service`              → elle-même ;
+    /// - classe `service`                    → elle-même ;
+    /// - interface liée par un module        → le service du `bind` ;
     /// - interface implémentée par exactement un service → ce service ;
-    /// - sinon                          → erreur (binding manquant ou ambigu).
+    /// - sinon                               → erreur (binding manquant ou ambigu).
     fn resolve_service(&self, name: &str) -> Result<String, TypeError> {
         if let Some(c) = self.classes.get(name) {
             if c.is_service { return Ok(name.to_string()); }
@@ -469,6 +498,8 @@ impl TypeChecker {
                 "'{}' n'est pas injectable : la classe doit être déclarée `service`", name);
         }
         if self.interfaces.contains_key(name) {
+            // Binding explicite d'un module — prioritaire sur la règle d'unicité
+            if let Some(s) = self.binds_to.get(name) { return Ok(s.clone()); }
             let mut impls: Vec<String> = self.classes.values()
                 .filter(|c| c.is_service && c.implements.iter().any(|i| i == name))
                 .map(|c| c.name.clone())
@@ -479,20 +510,22 @@ impl TypeChecker {
                     "Aucun service n'implémente l'interface '{}'", name),
                 1 => Ok(impls.remove(0)),
                 _ => type_err!(
-                    "Binding ambigu : '{}' est implémenté par plusieurs services ({})",
-                    name, impls.join(", ")),
+                    "Binding ambigu : '{}' est implémenté par plusieurs services ({}) \
+                     — choisissez avec `bind {} to ...` dans un module",
+                    name, impls.join(", "), name),
             };
         }
         type_err!("'{}' n'est pas injectable : ni classe `service` ni interface", name)
     }
 
-    /// Dépendances d'un service = paramètres de son constructeur, résolues vers
-    /// les classes services concrètes. Les dépendances non résolvables sont
-    /// ignorées ici (l'erreur est déjà remontée par check_services).
+    /// Dépendances d'un service = paramètres-dépendances de son constructeur,
+    /// résolus vers les classes services concrètes. Les dépendances non
+    /// résolvables sont ignorées ici (l'erreur est déjà remontée par check_services).
     fn service_deps(&self, cn: &str) -> Vec<String> {
         self.classes.get(cn)
             .and_then(|c| c.constructors.first())
             .map(|ctor| ctor.params.iter()
+                .filter(|p| self.is_dep_slot(&p.ty))
                 .filter_map(|p| match &p.ty {
                     Type::UserDefined(n) => self.resolve_service(n).ok(),
                     _ => None,
@@ -501,7 +534,108 @@ impl TypeChecker {
             .unwrap_or_default()
     }
 
+    /// Valide les modules et construit les tables `binds_to` / `with_values`.
+    /// Plusieurs modules peuvent coexister : leurs bindings sont fusionnés,
+    /// un binding (ou un `with`) dupliqué pour la même cible est une erreur.
+    fn check_modules(&mut self) {
+        for m in &self.modules.clone() {
+            for b in &m.binds {
+                let target_is_iface   = self.interfaces.contains_key(&b.target);
+                let target_is_service = self.classes.get(&b.target)
+                    .map(|c| c.is_service).unwrap_or(false);
+                if !target_is_iface && !target_is_service {
+                    self.err(format!(
+                        "Module '{}' : bind '{}' — '{}' n'est ni une interface ni une \
+                         classe service", m.name, b.target, b.target));
+                    continue;
+                }
+
+                // ── bind Iface to Service ─────────────────────────────────
+                let concrete: Option<String> = match &b.to {
+                    Some(to) => {
+                        if !target_is_iface {
+                            self.err(format!(
+                                "Module '{}' : bind {} to {} — la cible d'un `to` doit \
+                                 être une interface", m.name, b.target, to));
+                            None
+                        } else {
+                            match self.classes.get(to) {
+                                None => {
+                                    self.err(format!(
+                                        "Module '{}' : bind {} to {} — classe '{}' inconnue",
+                                        m.name, b.target, to, to));
+                                    None
+                                }
+                                Some(c) if !c.is_service => {
+                                    self.err(format!(
+                                        "Module '{}' : bind {} to {} — '{}' doit être \
+                                         déclarée `service`", m.name, b.target, to, to));
+                                    None
+                                }
+                                Some(c) if !c.implements.iter().any(|i| i == &b.target) => {
+                                    self.err(format!(
+                                        "Module '{}' : bind {} to {} — '{}' n'implémente \
+                                         pas '{}'", m.name, b.target, to, to, b.target));
+                                    None
+                                }
+                                Some(_) => {
+                                    if self.binds_to.contains_key(&b.target) {
+                                        self.err(format!(
+                                            "Binding dupliqué pour '{}' : déjà lié à '{}'",
+                                            b.target, self.binds_to[&b.target]));
+                                        None
+                                    } else {
+                                        self.binds_to.insert(b.target.clone(), to.clone());
+                                        Some(to.clone())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None if target_is_service => Some(b.target.clone()),
+                    None => {
+                        // Interface sans `to`
+                        if b.with.is_empty() {
+                            self.err(format!(
+                                "Module '{}' : bind {} — binding sans effet (précisez \
+                                 `to` et/ou `with`)", m.name, b.target));
+                        } else {
+                            self.err(format!(
+                                "Module '{}' : bind {} with (...) — `with` sur une \
+                                 interface nécessite `to`", m.name, b.target));
+                        }
+                        None
+                    }
+                };
+
+                // ── with (valeurs de configuration) ───────────────────────
+                if !b.with.is_empty() {
+                    if let Some(c) = concrete {
+                        if self.with_values.contains_key(&c) {
+                            self.err(format!(
+                                "Valeurs `with` dupliquées pour le service '{}'", c));
+                        } else {
+                            self.with_values.insert(c, b.with.clone());
+                        }
+                    }
+                } else if b.to.is_none() && target_is_service {
+                    self.err(format!(
+                        "Module '{}' : bind {} — binding sans effet (précisez \
+                         `to` et/ou `with`)", m.name, b.target));
+                }
+            }
+        }
+    }
+
     fn check_services(&mut self) {
+        // `transient` sans `service` est interdit
+        for c in self.classes.values().cloned().collect::<Vec<_>>() {
+            if c.is_transient && !c.is_service {
+                self.err(format!(
+                    "Classe '{}' : `transient` nécessite `service`", c.name));
+            }
+        }
+
         let mut services: Vec<String> = self.classes.values()
             .filter(|c| c.is_service)
             .map(|c| c.name.clone())
@@ -520,20 +654,62 @@ impl TypeChecker {
                     "Service '{}' : un service doit avoir au plus un constructeur \
                      ({} trouvés)", sn, class.constructors.len()));
             }
+            // Partition des paramètres : dépendances vs configuration
+            let mut config_params: Vec<Param> = vec![];
             if let Some(ctor) = class.constructors.first() {
                 for p in &ctor.params {
-                    let dep = match &p.ty {
-                        Type::UserDefined(n) => n.clone(),
-                        other => {
-                            self.err(format!(
-                                "Service '{}' : le paramètre '{}' de type {} n'est pas \
-                                 injectable (seuls les services et les interfaces de \
-                                 services le sont)", sn, p.name, other));
-                            continue;
+                    if self.is_dep_slot(&p.ty) {
+                        let dep = match &p.ty {
+                            Type::UserDefined(n) => n.clone(),
+                            _ => unreachable!("is_dep_slot ne matche que UserDefined"),
+                        };
+                        match self.resolve_service(&dep) {
+                            Err(e) => self.err(format!(
+                                "Service '{}', dépendance '{}' : {}", sn, p.name, e.0)),
+                            Ok(concrete) => {
+                                // Dépendance captive : un singleton qui capture un
+                                // transient figerait son instance — interdit.
+                                let dep_transient = self.classes.get(&concrete)
+                                    .map(|c| c.is_transient).unwrap_or(false);
+                                if !class.is_transient && dep_transient {
+                                    self.err(format!(
+                                        "Service '{}' (singleton) ne peut pas dépendre du \
+                                         service transient '{}' (dépendance captive : \
+                                         l'instance serait figée)", sn, concrete));
+                                }
+                            }
                         }
-                    };
-                    if let Err(e) = self.resolve_service(&dep) {
-                        self.err(format!("Service '{}', dépendance '{}' : {}", sn, p.name, e.0));
+                    } else {
+                        config_params.push(p.clone());
+                    }
+                }
+            }
+            // Paramètres de configuration : couverts par `bind ... with (...)` ?
+            let with = self.with_values.get(sn).cloned().unwrap_or_default();
+            if with.len() != config_params.len() {
+                if with.is_empty() {
+                    for p in &config_params {
+                        self.err(format!(
+                            "Service '{}' : le paramètre '{}' de type {} n'est pas \
+                             injectable — fournissez sa valeur via `bind {} with (...)` \
+                             dans un module", sn, p.name, p.ty, sn));
+                    }
+                } else {
+                    self.err(format!(
+                        "bind {} with : {} valeur(s) fournie(s) mais {} paramètre(s) \
+                         de configuration dans le constructeur",
+                        sn, with.len(), config_params.len()));
+                }
+            } else {
+                let env = TypeEnv::new();
+                for (expr, p) in with.iter().zip(config_params.iter()) {
+                    if let Some(at) = self.infer(expr, &env) {
+                        let expected = self.resolve(&p.ty);
+                        if !self.is_compatible(&at, &expected) {
+                            self.err(format!(
+                                "bind {} with : type incompatible pour '{}' : {} ≠ {}",
+                                sn, p.name, at, expected));
+                        }
                     }
                 }
             }

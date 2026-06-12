@@ -801,7 +801,8 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             InterfaceDef { is_mut, name, type_params, type_param_constraints, methods }
         });
 
-    let class_def = kw("service").to(true).or_not().map(|s| s.unwrap_or(false))
+    let class_def = kw("transient").to(true).or_not().map(|t| t.unwrap_or(false))
+        .then(kw("service").to(true).or_not().map(|s| s.unwrap_or(false)))
         .then(kw("mut").to(true).or_not().map(|m| m.unwrap_or(false)))
         .then_ignore(kw("class"))
         .then(text::ident().padded_by(ws()))
@@ -822,7 +823,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .or_not().map(|v| v.unwrap_or_default()))
         .then(class_member.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|((((((is_service, is_mut), name), tp), parent), impls), members)| {
+        .map(|(((((((is_transient, is_service), is_mut), name), tp), parent), impls), members)| {
             let mut fields = vec![]; let mut ctors = vec![]; let mut methods = vec![];
             for m in members { match m {
                 CM::F(f) => fields.push(f),
@@ -834,9 +835,30 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 .map(|(q, n)| (n.clone(), q.clone()))
                 .collect();
             let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
-            ClassDef { is_service, is_mut, name, type_params, type_param_constraints, parent, implements: impls,
-                       fields, constructors: ctors, methods }
+            ClassDef { is_service, is_transient, is_mut, name, type_params, type_param_constraints,
+                       parent, implements: impls, fields, constructors: ctors, methods }
         });
+
+    // ── Module d'injection : module Name { bind ...; } ───────────────────────
+
+    let bind_decl = kw("bind")
+        .ignore_then(text::ident().padded_by(ws()))
+        .then(kw("to").ignore_then(text::ident().padded_by(ws())).or_not())
+        .then(kw("with")
+            .ignore_then(
+                expr.clone()
+                    .separated_by(just(',').padded_by(ws())).allow_trailing()
+                    .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()))
+            )
+            .or_not().map(|v| v.unwrap_or_default()))
+        .then_ignore(just(';').padded_by(ws()))
+        .map(|((target, to), with)| BindDecl { target, to, with });
+
+    let module_def = kw("module")
+        .ignore_then(text::ident().padded_by(ws()))
+        .then(bind_decl.repeated()
+            .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
+        .map(|(name, binds)| ModuleDef { name, binds });
 
     // ── Record ────────────────────────────────────────────────────────────────
 
@@ -894,6 +916,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         Package(PackageDecl),
         Import(Import),
         Alias(TypeAlias),
+        Module(ModuleDef),
         Iface(InterfaceDef),
         Enum(EnumDef),
         Record(RecordDef),
@@ -924,6 +947,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         package_decl.map(TopDecl::Package).boxed(),
         import_decl  .map(TopDecl::Import) .boxed(),
         type_alias   .map(TopDecl::Alias)  .boxed(),
+        module_def   .map(TopDecl::Module) .boxed(),
         interface_def.map(TopDecl::Iface)  .boxed(),
         enum_def     .map(TopDecl::Enum)   .boxed(),
         record_def   .map(TopDecl::Record) .boxed(),
@@ -939,20 +963,21 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .map(|(decls, main)| {
             let mut pkg = None;
             let mut imports = vec![];
-            let mut aliases = vec![]; let mut ifaces = vec![];
+            let mut aliases = vec![]; let mut modules = vec![]; let mut ifaces = vec![];
             let mut enums = vec![]; let mut records = vec![]; let mut classes = vec![];
             let mut funcs = vec![];
             for d in decls { match d {
                 TopDecl::Package(p)  => { if pkg.is_none() { pkg = Some(p); } }
                 TopDecl::Import(i)   => imports.push(i),
                 TopDecl::Alias(a)    => aliases.push(a),
+                TopDecl::Module(m)   => modules.push(m),
                 TopDecl::Iface(i)    => ifaces.push(i),
                 TopDecl::Enum(e)     => enums.push(e),
                 TopDecl::Record(r)   => records.push(r),
                 TopDecl::Class(c)    => classes.push(c),
                 TopDecl::Func(f)     => funcs.push(f),
             }}
-            Program { package: pkg, imports, type_aliases: aliases,
+            Program { package: pkg, imports, type_aliases: aliases, modules,
                       interfaces: ifaces, enums, records, classes, funcs, main }
         })
 }

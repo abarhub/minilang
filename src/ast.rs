@@ -236,6 +236,9 @@ pub struct ClassDef {
     /// true si la classe est déclarée `service` — instanciable par le conteneur
     /// d'injection de dépendances (singleton, dépendances via le constructeur).
     pub is_service: bool,
+    /// true si le service est déclaré `transient` — nouvelle instance à chaque
+    /// injection au lieu d'un singleton. Nécessite `service`.
+    pub is_transient: bool,
     pub is_mut:   bool,
     pub name: String, pub type_params: Vec<String>,
     /// Contraintes de qualificateur sur les paramètres de type.
@@ -288,6 +291,25 @@ pub struct RecordDef {
     pub implements:             Vec<String>,
 }
 
+// ── Module d'injection de dépendances ─────────────────────────────────────────
+
+/// Une directive de binding dans un module :
+/// - `bind Iface to Service;`              — choisit l'implémentation d'une interface
+/// - `bind Service with (val, ...);`       — fournit les paramètres de configuration
+/// - `bind Iface to Service with (val, ...);` — les deux
+#[derive(Debug, Clone)]
+pub struct BindDecl {
+    pub target: String,
+    pub to:     Option<String>,
+    pub with:   Vec<Expr>,
+}
+
+/// `module AppModule { bind ...; }` — configuration centralisée du conteneur
+/// d'injection. Plusieurs modules peuvent coexister ; leurs bindings sont
+/// fusionnés (un binding dupliqué est une erreur de compilation).
+#[derive(Debug, Clone)]
+pub struct ModuleDef { pub name: String, pub binds: Vec<BindDecl> }
+
 // ── Fonction de haut niveau ───────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -310,6 +332,7 @@ pub struct Program {
     pub package:      Option<PackageDecl>,
     pub imports:      Vec<Import>,
     pub type_aliases: Vec<TypeAlias>,
+    pub modules:      Vec<ModuleDef>,
     pub interfaces:   Vec<InterfaceDef>,
     pub enums:        Vec<EnumDef>,
     pub records:      Vec<RecordDef>,

@@ -315,6 +315,8 @@ fn tc_err_non_injectable_param() {
 
 #[test]
 fn tc_err_dependency_on_plain_class() {
+    // Depuis la phase 2, un paramètre de classe non-service est un slot de
+    // configuration : sans `bind S with (...)` dans un module, c'est une erreur.
     assert_tc_err(r#"
         class Plain {}
         service class S {
@@ -322,7 +324,7 @@ fn tc_err_dependency_on_plain_class() {
             S(Plain p) { this.p = p; }
         }
         int main() { return 0; }
-    "#, "doit être déclarée `service`");
+    "#, "n'est pas injectable");
 }
 
 #[test]

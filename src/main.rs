@@ -65,6 +65,7 @@ fn print_program(p: &Program) {
     if p.package.is_some() || !p.imports.is_empty() { println!(); }
     for alias in &p.type_aliases { println!("type {} = {};", alias.name, alias.ty); }
     if !p.type_aliases.is_empty() { println!(); }
+    for m in &p.modules        { print_module(m);        println!(); }
     for iface in &p.interfaces { print_interface(iface); println!(); }
     for e in &p.enums          { print_enum(e);          println!(); }
     for c in &p.classes        { print_class(c);         println!(); }
@@ -72,6 +73,20 @@ fn print_program(p: &Program) {
     for s in &p.main.body { print_stmt(s, 1); }
     println!("}}");
     println!("{}", "─".repeat(50));
+}
+
+fn print_module(m: &ModuleDef) {
+    println!("module {} {{", m.name);
+    for b in &m.binds {
+        let to = b.to.as_deref().map(|t| format!(" to {}", t)).unwrap_or_default();
+        let with = if b.with.is_empty() { String::new() }
+                   else {
+                       let a: Vec<String> = b.with.iter().map(fmt_expr).collect();
+                       format!(" with ({})", a.join(", "))
+                   };
+        println!("{}  bind {}{}{};", pad(0), b.target, to, with);
+    }
+    println!("}}");
 }
 
 fn print_interface(i: &InterfaceDef) {
@@ -103,8 +118,9 @@ fn print_class(c: &ClassDef) {
     let ext = c.parent.as_deref().map(|p| format!(" extends {}", p)).unwrap_or_default();
     let imp = if c.implements.is_empty() { String::new() }
               else { format!(" implements {}", c.implements.join(", ")) };
+    let tr  = if c.is_transient { "transient " } else { "" };
     let svc = if c.is_service { "service " } else { "" };
-    println!("{}class {}{}{}{} {{", svc, c.name, tps, ext, imp);
+    println!("{}{}class {}{}{}{} {{", tr, svc, c.name, tps, ext, imp);
     for f in &c.fields { println!("{}  {} {};", pad(0), f.ty, f.name); }
     for ctor in &c.constructors {
         let ps: Vec<String> = ctor.params.iter().map(|p| format!("{} {}", p.ty, p.name)).collect();
