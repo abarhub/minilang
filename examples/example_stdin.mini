@@ -1,0 +1,34 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : lecture de l'entrée standard (StandardInput)
+//
+//  Lit stdin ligne par ligne et renvoie chaque ligne préfixée et numérotée.
+//  readLine() renvoie Result<Option<string>, IoError> :
+//    Ok(Some(ligne)) → une ligne ; Ok(None) → fin de flux (EOF) ; Err → erreur.
+//
+//  Essai :   echo -e "bonjour\nmonde" | mini_parser examples/example_stdin.mini
+// ─────────────────────────────────────────────────────────────────────────────
+
+int main() {
+    StandardInput  in  = inject StandardInput;
+    StandardOutput out = inject StandardOutput;
+
+    int n = 1;
+    bool fini = false;
+    while (!fini) {
+        Result<Option<string>, IoError> r = in.readLine();
+        if (r.isErr()) {
+            StandardError err = inject StandardError;
+            err.writeLine("erreur de lecture : " + r.getError().message());
+            return 1;
+        }
+        match r.getValue() {
+            Option::Some(ligne) => {
+                out.writeLine(n.toString() + ": " + ligne);
+                n = n + 1;
+            }
+            Option::None => { fini = true; }
+        }
+    }
+    out.writeLine("(" + (n - 1).toString() + " ligne(s))");
+    return 0;
+}

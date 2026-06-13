@@ -721,6 +721,9 @@ impl Interpreter {
                                 ("StandardError",  "write")     => io_write(&args, false, true),
                                 ("StandardError",  "writeLine") => io_write(&args, true,  true),
                                 ("StandardError",  "flush")     => io_flush(true),
+                                ("StandardInput",  "readLine")  => io_read_line(),
+                                ("StandardInput",  "readChar")  => io_read_char(),
+                                ("StandardInput",  "readAll")   => io_read_all(),
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -1730,6 +1733,66 @@ fn io_flush(to_stderr: bool) -> Result<Value, RuntimeError> {
     match res {
         Ok(())  => Ok(ok_unit()),
         Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+    }
+}
+
+/// Lit une ligne sur stdin (sans le saut de ligne final).
+/// `Result<Option<string>, IoError>` : Ok(Some(ligne)), Ok(None) à EOF, Err sinon.
+fn io_read_line() -> Result<Value, RuntimeError> {
+    use std::io::BufRead;
+    let mut line = String::new();
+    match std::io::stdin().lock().read_line(&mut line) {
+        Ok(0) => Ok(make_ok(make_none())),   // EOF
+        Ok(_) => {
+            while line.ends_with('\n') || line.ends_with('\r') { line.pop(); }
+            Ok(make_ok(make_some(Value::Str(line))))
+        }
+        Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
+    }
+}
+
+/// Lit tout le reste de stdin. `Result<string, IoError>`.
+fn io_read_all() -> Result<Value, RuntimeError> {
+    use std::io::Read;
+    let mut buf = String::new();
+    match std::io::stdin().read_to_string(&mut buf) {
+        Ok(_)  => Ok(make_ok(Value::Str(buf))),
+        Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
+    }
+}
+
+/// Lit un caractère Unicode sur stdin (1 à 4 octets UTF-8).
+/// `Result<Option<char>, IoError>` : Ok(Some(c)), Ok(None) à EOF, Err sinon.
+fn io_read_char() -> Result<Value, RuntimeError> {
+    use std::io::Read;
+    let stdin = std::io::stdin();
+    let mut lock = stdin.lock();
+    let mut bytes = [0u8; 4];
+    let mut len = 0usize;
+    loop {
+        let mut b = [0u8; 1];
+        match lock.read(&mut b) {
+            Ok(0) => {
+                return if len == 0 {
+                    Ok(make_ok(make_none()))   // EOF propre
+                } else {
+                    Ok(io_err("ReadFailed", Some("séquence UTF-8 incomplète".to_string())))
+                };
+            }
+            Ok(_) => {
+                bytes[len] = b[0];
+                len += 1;
+                if let Ok(s) = std::str::from_utf8(&bytes[..len]) {
+                    if let Some(c) = s.chars().next() {
+                        return Ok(make_ok(make_some(Value::Char(c))));
+                    }
+                }
+                if len == 4 {
+                    return Ok(io_err("ReadFailed", Some("séquence UTF-8 invalide".to_string())));
+                }
+            }
+            Err(e) => return Ok(io_err("ReadFailed", Some(e.to_string()))),
+        }
     }
 }
 
