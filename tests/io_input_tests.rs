@@ -59,6 +59,29 @@ fn string_input_read_lines_until_eof() {
 }
 
 #[test]
+fn string_input_strips_crlf() {
+    // Politique de fin de ligne : '\r\n' et '\n' sont des terminateurs, le '\r'
+    // final est retiré (cohérent avec StandardInput). Un '\r' interne est gardé.
+    let (ret, lines) = run_output(r#"
+        int main() {
+            StringInput in = new StringInput();
+            in.feed("alpha\r\nb\reta\r\n");
+            bool fini = false;
+            while (!fini) {
+                match in.readLine().getValue() {
+                    Option::Some(l) => { print("[" + l + "]"); }
+                    Option::None    => { fini = true; }
+                }
+            }
+            return 0;
+        }
+    "#);
+    assert_eq!(ret, 0);
+    // "alpha" (CR retiré) ; "b\reta" (CR interne gardé)
+    assert_eq!(lines, vec!["[alpha]", "[b\reta]"]);
+}
+
+#[test]
 fn string_input_eof_returns_ok_none() {
     let ret = run_ok(r#"
         int main() {

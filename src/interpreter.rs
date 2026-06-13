@@ -1744,7 +1744,14 @@ fn io_read_line() -> Result<Value, RuntimeError> {
     match std::io::stdin().lock().read_line(&mut line) {
         Ok(0) => Ok(make_ok(make_none())),   // EOF
         Ok(_) => {
-            while line.ends_with('\n') || line.ends_with('\r') { line.pop(); }
+            // Retire un seul terminateur de ligne : '\n', et le '\r' qui le
+            // précède (cas '\r\n'). On ne touche pas aux autres '\r' qui font
+            // partie de la donnée. read_line ne lit qu'une ligne, donc il n'y a
+            // au plus qu'un '\n' (le dernier caractère).
+            if line.ends_with('\n') {
+                line.pop();
+                if line.ends_with('\r') { line.pop(); }
+            }
             Ok(make_ok(make_some(Value::Str(line))))
         }
         Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),

@@ -29,6 +29,11 @@ service mut class StringInput implements Input {
         match nl {
             Option::Some(i) => {
                 string line = rest.substring(0, i);
+                // Cas '\r\n' : retire le '\r' final pour rester cohérent avec
+                // StandardInput (même politique de fin de ligne).
+                if (line.endsWith("\r")) {
+                    line = line.substring(0, line.length() - 1);
+                }
                 pos = pos + i + 1;          // saute aussi le '\n'
                 return Result<Option<string>, IoError>::Ok(Option<string>::Some(line));
             }
