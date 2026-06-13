@@ -30,3 +30,5 @@ mod example_byte_tests;
 mod example_files_tests;
 #[path = "example/example_file_capabilities_tests.rs"]
 mod example_file_capabilities_tests;
+#[path = "example/example_files_config_tests.rs"]
+mod example_files_config_tests;

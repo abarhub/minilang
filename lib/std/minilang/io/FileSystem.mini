@@ -8,10 +8,17 @@ package minilang.io;
 
 import minilang.lang.Result;
 import minilang.io.IoError;
+import minilang.io.ReadDir;
 import minilang.io.ReadWriteDir;
 
 service class FileSystem {
     // Crée un nouveau répertoire temporaire (vide) et renvoie une capacité
     // lecture/écriture confinée à celui-ci. Un nouveau à chaque appel.
     Result<ReadWriteDir, IoError> tempDir() builtin;
+
+    // Capacité sur une racine NOMMÉE configurée dans [files.roots] :
+    //   - root(nom)   : vue lecture seule (Err si le nom est inconnu).
+    //   - rootRW(nom) : lecture/écriture (Err si inconnu ou en lecture seule).
+    Result<ReadDir, IoError>      root(string name)   builtin;
+    Result<ReadWriteDir, IoError> rootRW(string name) builtin;
 }

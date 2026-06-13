@@ -137,6 +137,9 @@ pub struct Interpreter {
     with_values: HashMap<String, Vec<Expr>>,
     /// Instances des services déjà créées par `inject` (nom de classe → singleton)
     singletons: HashMap<String, Value>,
+    /// Racines fichiers configurées : nom → (chemin absolu canonique, writable).
+    /// Renseignées depuis [files.roots] du minilang.toml ; vide par défaut.
+    file_roots: HashMap<String, (String, bool)>,
     print_fn: Box<dyn FnMut(&str)>,
 }
 
@@ -178,7 +181,31 @@ impl Interpreter {
             binds_to,
             with_values,
             singletons: HashMap::new(),
+            file_roots: HashMap::new(),
             print_fn,
+        }
+    }
+
+    /// Renseigne les racines fichiers configurées (issues de [files.roots]).
+    /// Map : nom → (chemin absolu canonique, writable).
+    pub fn set_file_roots(&mut self, roots: HashMap<String, (String, bool)>) {
+        self.file_roots = roots;
+    }
+
+    /// `FileSystem.root(name)` / `rootRW(name)` : renvoie une capacité sur la
+    /// racine configurée. `root` donne toujours une vue lecture (writable=false) ;
+    /// `rootRW` échoue si la racine est en lecture seule. Nom inconnu → Err.
+    fn fs_root(&self, args: &[Value], writable_requested: bool) -> Result<Value, RuntimeError> {
+        let name = str_arg(args, 0)?;
+        match self.file_roots.get(&name) {
+            None => Ok(io_err("Other", Some(format!("racine '{}' non configurée", name)))),
+            Some((path, writable)) => {
+                if writable_requested && !writable {
+                    Ok(io_err("Other", Some(format!("racine '{}' est en lecture seule", name))))
+                } else {
+                    Ok(make_ok(make_directory(path.clone(), writable_requested)))
+                }
+            }
         }
     }
 
@@ -778,6 +805,8 @@ impl Interpreter {
                                 ("Files", "delete") if args.len() == 1 => file_delete(&args),
                                 // ── Capacités de répertoire (minilang.io) ─────
                                 ("FileSystem", "tempDir") => fs_temp_dir(),
+                                ("FileSystem", "root")   if args.len() == 1 => self.fs_root(&args, false),
+                                ("FileSystem", "rootRW") if args.len() == 1 => self.fs_root(&args, true),
                                 ("Directory", "readBytes")  if args.len() == 1 =>
                                     cap_read(&dir_path(&rc), &args, false),
                                 ("Directory", "readText")   if args.len() == 1 =>

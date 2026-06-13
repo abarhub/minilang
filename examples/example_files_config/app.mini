@@ -1,0 +1,34 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : racines fichiers configurées (capacités octroyées par la config)
+//
+//  Le minilang.toml octroie deux racines NOMMÉES :
+//    - data   (read-write)   - assets (read seulement)
+//  Le code ne choisit pas de chemin : il demande une racine par son nom.
+//    - root(nom)   : vue lecture seule.
+//    - rootRW(nom) : lecture/écriture, ÉCHOUE si la racine est en lecture seule.
+//
+//  Lancer depuis ce répertoire :  mini_parser
+// ─────────────────────────────────────────────────────────────────────────────
+
+int main() {
+    StandardOutput out = inject StandardOutput;
+    FileSystem     fs  = inject FileSystem;
+
+    // assets : lecture seule
+    ReadDir assets = fs.root("assets").getValue();
+    out.writeLine(assets.readText("banner.txt").getValue());        // === mon appli ===
+
+    // Demander l'écriture sur une racine read-only échoue (octroi refusé)
+    out.writeLine("assets en RW ? " + fs.rootRW("assets").isOk().toString());   // false
+
+    // data : lecture/écriture
+    ReadWriteDir data = fs.rootRW("data").getValue();
+    data.writeText("greeting.txt", "bonjour depuis data");
+    out.writeLine(data.readText("greeting.txt").getValue());        // bonjour depuis data
+    data.delete("greeting.txt");                                    // nettoyage
+
+    // Le confinement reste actif : impossible de sortir de la racine
+    out.writeLine("évasion bloquée ? " + data.readText("../assets/banner.txt").isErr().toString()); // true
+
+    return 0;
+}

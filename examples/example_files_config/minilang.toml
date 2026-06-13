@@ -1,0 +1,17 @@
+# Démo des racines fichiers configurées.
+# Les répertoires data/ et assets/ doivent exister au démarrage.
+
+[project]
+name = "demo-files-config"
+main = "app.mini"
+
+[files.roots.data]
+path = "data"
+mode = "read-write"      # lecture/écriture
+
+[files.roots.assets]
+path = "assets"
+mode = "read"            # lecture seule (défaut, mais explicite ici)
+
+[runtime]
+log = "warn"

@@ -89,7 +89,31 @@ root.readText("../secret");                       // → Err : hors de la capaci
 | `ReadDir` | `readBytes`/`readText`, `exists`, `sub` (→ `ReadDir`), `name` |
 | `ReadWriteDir` (extends `ReadDir`) | + `writeBytes`/`writeText`, `appendBytes`/`appendText`, `delete`, `subRW` (→ `ReadWriteDir`) |
 
-Source de racine : `FileSystem.tempDir()` (répertoire temporaire frais). Une racine issue du `minilang.toml`, un garde-fou contre les symlinks, et le nettoyage des répertoires temporaires (marqueur `delete.me` pour un processus externe) sont prévus pour plus tard. Modèle de menace actuel : prévention des évasions accidentelles et code coopératif — pas la défense contre un programme qui planterait un lien symbolique.
+### Sources de racine
+
+- **`FileSystem.tempDir()`** → `Result<ReadWriteDir, IoError>` : un répertoire temporaire frais (un par appel).
+- **`FileSystem.root(nom)` / `rootRW(nom)`** : une racine **nommée** configurée dans le `minilang.toml` (`[files.roots]`). `root` donne une vue lecture seule ; `rootRW` échoue si la racine est en lecture seule ou inconnue.
+
+```toml
+[files.roots.data]
+path = "data"            # relatif au minilang.toml
+mode = "read-write"
+
+[files.roots.assets]
+path = "assets"
+mode = "read"            # défaut
+```
+
+```java
+FileSystem fs = inject FileSystem;
+ReadWriteDir data   = fs.rootRW("data").getValue();
+ReadDir      assets = fs.root("assets").getValue();
+fs.rootRW("assets");     // → Err : racine en lecture seule
+```
+
+Les répertoires configurés doivent **exister au démarrage** (sinon erreur de configuration fatale) ; leur chemin est canonicalisé. C'est la config — hors du programme — qui octroie les racines : le code ne peut pas en forger une.
+
+Encore à venir : un garde-fou contre les symlinks, et le nettoyage des répertoires temporaires (marqueur `.minilang-temp` pour un processus externe). Modèle de menace actuel : prévention des évasions accidentelles et code coopératif — pas la défense contre un programme qui planterait un lien symbolique.
 
 Voir l'exemple : [examples/example_file_capabilities.mini](../examples/example_file_capabilities.mini).
 

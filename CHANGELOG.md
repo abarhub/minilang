@@ -4,6 +4,34 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Racines fichiers configurées (`[files.roots]`)
+
+Les capacités de répertoire peuvent désormais être **octroyées par le `minilang.toml`** (en plus de `FileSystem.tempDir()`) : des **racines nommées**, avec un mode d'accès.
+
+```toml
+[files.roots.data]
+path = "data"            # relatif au minilang.toml ; doit exister au démarrage
+mode = "read-write"
+
+[files.roots.assets]
+path = "assets"
+mode = "read"            # défaut
+```
+
+```java
+FileSystem fs = inject FileSystem;
+ReadWriteDir data   = fs.rootRW("data").getValue();
+ReadDir      assets = fs.root("assets").getValue();
+fs.rootRW("assets");     // → Err : racine en lecture seule
+```
+
+- `root(nom)` → `Result<ReadDir, IoError>` (lecture) ; `rootRW(nom)` → `Result<ReadWriteDir, IoError>` (échoue si la racine est `read` ou inconnue).
+- Les répertoires configurés **doivent exister au démarrage** (sinon erreur de configuration fatale) ; chemins canonicalisés. La config — hors du programme — octroie les racines : le code ne peut pas en forger.
+
+Doc : `docs/configuration.md`, `docs/io.md`. Exemple : `examples/example_files_config/`. À venir : garde-fou symlinks, nettoyage des temp.
+
+---
+
 ## [13/06/2026] — Accès fichiers par capacités (confinement)
 
 Accès au système de fichiers **confiné** par capacités (modèle object-capability, cf. WASI/Capsicum), en alternative aux chemins bruts de `Files`.
