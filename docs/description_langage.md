@@ -202,6 +202,25 @@ string toString();
 }
 ```
 
+Une interface peut **en étendre une ou plusieurs** avec `extends`. Une classe qui implémente une interface doit fournir les méthodes de celle-ci **et de tous ses parents** (transitif). Une sous-interface est un sous-type de ses parents.
+
+```java
+interface Animal { string name(); }
+interface Pet extends Animal {        // Pet hérite de name()
+    string owner();
+}
+
+class Dog implements Pet {            // doit fournir name() ET owner()
+    string name()  { return "Rex"; }
+    string owner() { return "Alice"; }
+}
+
+Pet    p = new Dog();
+Animal a = p;                          // Pet est sous-type d'Animal
+```
+
+L'héritage multiple et le diamant sont autorisés (`interface D extends B, C`) ; un cycle d'héritage est une erreur de compilation. Limitation actuelle : les arguments de type sur un parent générique (`extends Base<int>`) sont ignorés.
+
 ### Enum
 
 Exemple :

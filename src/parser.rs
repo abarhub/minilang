@@ -786,19 +786,35 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
 
+    // extends Iface1, Iface2  — interfaces étendues (type args éventuels ignorés)
+    let extends_ifaces = kw("extends")
+        .ignore_then(
+            text::ident().padded_by(ws())
+                .then(
+                    just('<')
+                        .ignore_then(type_parser().separated_by(just(',').padded_by(ws())).at_least(1))
+                        .then_ignore(just('>').padded_by(ws()))
+                        .or_not()
+                )
+                .map(|(name, _)| name)
+                .separated_by(just(',').padded_by(ws())).at_least(1)
+        )
+        .or_not().map(|v| v.unwrap_or_default());
+
     let interface_def = kw("mut").to(true).or_not().map(|m| m.unwrap_or(false))
         .then_ignore(kw("interface"))
         .then(text::ident().padded_by(ws()))
         .then(type_param_list.clone())
+        .then(extends_ifaces)
         .then(method_sig.repeated()
             .delimited_by(just('{').padded_by(ws()), just('}').padded_by(ws())))
-        .map(|(((is_mut, name), tp), methods)| {
+        .map(|((((is_mut, name), tp), parents), methods)| {
             let type_param_constraints: Vec<(String, Qualifier)> = tp.iter()
                 .filter(|(q, _)| *q != Qualifier::Mutable)
                 .map(|(q, n)| (n.clone(), q.clone()))
                 .collect();
             let type_params: Vec<String> = tp.into_iter().map(|(_, n)| n).collect();
-            InterfaceDef { is_mut, name, type_params, type_param_constraints, methods }
+            InterfaceDef { is_mut, name, type_params, type_param_constraints, parents, methods }
         });
 
     let class_def = kw("transient").to(true).or_not().map(|t| t.unwrap_or(false))

@@ -4,6 +4,25 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Héritage d'interface (`interface Sub extends A, B`)
+
+Une interface peut désormais en étendre une ou plusieurs. Une classe (ou un record) qui implémente une interface doit fournir les méthodes de celle-ci **et de tous ses parents** (transitif) ; une sous-interface est un sous-type de ses parents ; la résolution de méthode remonte la chaîne des parents.
+
+```java
+interface Animal { string name(); }
+interface Pet extends Animal { string owner(); }   // hérite de name()
+
+class Dog implements Pet {
+    string name()  { return "Rex"; }
+    string owner() { return "Alice"; }
+}
+Animal a = new Dog();   // Dog -> Pet -> Animal
+```
+
+Héritage multiple et diamant autorisés ; cycle d'héritage = erreur de compilation. Première brique du futur système d'I/O (`BufferedOutput extends Output`). Limitation : les arguments de type sur un parent générique sont ignorés.
+
+---
+
 ## [12/06/2026] — Correction du stack overflow de la CLI en mode debug
 
 Le binaire plantait avec « thread 'main' has overflowed its stack » en mode debug sur Windows dès le parsing (stack frames profonds du parser chumsky, pile du thread principal limitée à 1 Mo). Le travail s'exécute désormais dans un thread dédié avec une pile de 16 Mo — `cargo run -- fichier.mini` fonctionne en debug comme en release.

@@ -354,6 +354,7 @@ impl TypeChecker {
 
     fn check_program(&mut self, program: &Program) {
         self.check_class_hierarchy();
+        self.check_interface_hierarchy();
         self.check_interface_impls();
         self.check_modules();
         self.check_services();
@@ -388,13 +389,13 @@ impl TypeChecker {
                         rd.name, m.name));
                 }
             }
-            // Vérifier les interfaces implémentées
+            // Vérifier les interfaces implémentées (méthodes propres + héritées)
             for iname in &rd.implements.clone() {
                 if !self.interfaces.contains_key(iname) {
                     self.err(format!("Record '{}' implements '{}' inconnu", rd.name, iname));
-                } else if let Some(iface) = self.interfaces.get(iname).cloned() {
-                    for sig in &iface.methods {
-                        let synth = Self::record_to_class(rd);
+                } else {
+                    let synth = Self::record_to_class(rd);
+                    for sig in self.iface_all_methods(iname) {
                         if synth.methods.iter().find(|m| m.name == sig.name).is_none() {
                             self.err(format!(
                                 "Record '{}' n'implémente pas '{}.{}()'",
@@ -469,8 +470,9 @@ impl TypeChecker {
         for cn in &self.classes.keys().cloned().collect::<Vec<_>>() {
             let class = self.classes[cn].clone();
             for iname in &class.implements.clone() {
-                if let Some(iface) = self.interfaces.get(iname).cloned() {
-                    for sig in &iface.methods {
+                if self.interfaces.contains_key(iname) {
+                    // Méthodes de l'interface ET de ses parents (transitif)
+                    for sig in self.iface_all_methods(iname) {
                         if self.find_method_def(cn, &sig.name).is_none() {
                             self.err(format!("'{}' n'implémente pas '{}.{}()'", cn, iname, sig.name));
                         }
@@ -478,6 +480,84 @@ impl TypeChecker {
                 }
             }
         }
+    }
+
+    // ── Hiérarchie d'interfaces ────────────────────────────────────────────────
+
+    fn check_interface_hierarchy(&mut self) {
+        for name in &self.interfaces.keys().cloned().collect::<Vec<_>>() {
+            let iface = self.interfaces[name].clone();
+            for p in &iface.parents {
+                if !self.interfaces.contains_key(p) {
+                    self.err(format!(
+                        "Interface '{}' extends '{}' inconnu (ou n'est pas une interface)",
+                        name, p));
+                }
+            }
+            let mut path = vec![]; let mut seen = HashSet::new();
+            if self.iface_cycle(name, &mut path, &mut seen) {
+                self.err(format!("Cycle d'héritage d'interface pour '{}'", name));
+            }
+        }
+    }
+
+    /// DFS de détection de cycle dans le graphe d'héritage d'interfaces.
+    fn iface_cycle(&self, cur: &str, path: &mut Vec<String>, seen: &mut HashSet<String>) -> bool {
+        if path.iter().any(|p| p == cur) { return true; }
+        if seen.contains(cur) { return false; }
+        path.push(cur.to_string());
+        if let Some(i) = self.interfaces.get(cur).cloned() {
+            for p in &i.parents {
+                if self.iface_cycle(p, path, seen) { return true; }
+            }
+        }
+        path.pop();
+        seen.insert(cur.to_string());
+        false
+    }
+
+    /// Toutes les signatures de méthode d'une interface, parents inclus
+    /// (transitif). Une méthode redéfinie par l'enfant masque celle du parent.
+    fn iface_all_methods(&self, iname: &str) -> Vec<MethodSig> {
+        let mut out: Vec<MethodSig> = vec![];
+        let mut seen_names: HashSet<String> = HashSet::new();
+        let mut visited: HashSet<String> = HashSet::new();
+        self.collect_iface_methods(iname, &mut out, &mut seen_names, &mut visited);
+        out
+    }
+
+    fn collect_iface_methods(
+        &self, iname: &str, out: &mut Vec<MethodSig>,
+        seen_names: &mut HashSet<String>, visited: &mut HashSet<String>,
+    ) {
+        if !visited.insert(iname.to_string()) { return; } // garde anti-cycle
+        let Some(iface) = self.interfaces.get(iname).cloned() else { return };
+        for sig in &iface.methods {
+            if seen_names.insert(sig.name.clone()) { out.push(sig.clone()); }
+        }
+        for p in &iface.parents {
+            self.collect_iface_methods(p, out, seen_names, visited);
+        }
+    }
+
+    /// Cherche la signature d'une méthode dans une interface et ses parents.
+    fn iface_find_sig(&self, iname: &str, method: &str) -> Option<MethodSig> {
+        let mut visited = HashSet::new();
+        self.iface_find_sig_inner(iname, method, &mut visited)
+    }
+
+    fn iface_find_sig_inner(
+        &self, iname: &str, method: &str, visited: &mut HashSet<String>,
+    ) -> Option<MethodSig> {
+        if !visited.insert(iname.to_string()) { return None; }
+        let iface = self.interfaces.get(iname)?;
+        if let Some(s) = iface.methods.iter().find(|m| m.name == method) {
+            return Some(s.clone());
+        }
+        for p in &iface.parents.clone() {
+            if let Some(s) = self.iface_find_sig_inner(p, method, visited) { return Some(s); }
+        }
+        None
     }
 
     // ── Injection de dépendances ──────────────────────────────────────────────
@@ -1559,10 +1639,17 @@ impl TypeChecker {
     fn is_subclass(&self, sub: &str, sup: &str) -> bool {
         if sub == sup { return true; }
         if sup == "Object" { return true; }
+        // Interface étendant (transitivement) sup
+        if let Some(i) = self.interfaces.get(sub) {
+            for p in &i.parents {
+                if self.is_subclass(p, sup) { return true; }
+            }
+        }
         if let Some(c) = self.classes.get(sub) {
             if let Some(p) = &c.parent { if self.is_subclass(p, sup) { return true; } }
             for iface in &c.implements {
-                if iface == sup { return true; }
+                // iface == sup, ou iface étend sup (transitif)
+                if iface == sup || self.is_subclass(iface, sup) { return true; }
             }
         }
         false
@@ -1651,7 +1738,8 @@ impl TypeChecker {
             }
         }
         if let Some(iface) = self.interfaces.get(&cn) {
-            if let Some(sig) = iface.methods.iter().find(|m| m.name == method) {
+            // Méthode de l'interface ou d'un parent (transitif)
+            if let Some(sig) = self.iface_find_sig(&cn, method) {
                 let subst: Vec<(String, Type)> = iface.type_params.iter()
                     .zip(type_args.iter())
                     .map(|(p, t)| (p.clone(), t.clone()))
@@ -1768,9 +1856,9 @@ impl TypeChecker {
         if let Some(m) = self.find_method_def(cn, method) {
             return m.is_mutable;
         }
-        // Interface
-        if let Some(iface) = self.interfaces.get(cn) {
-            if let Some(sig) = iface.methods.iter().find(|s| s.name == method) {
+        // Interface (méthode propre ou héritée d'un parent)
+        if self.interfaces.contains_key(cn) {
+            if let Some(sig) = self.iface_find_sig(cn, method) {
                 return sig.is_mutable;
             }
         }
