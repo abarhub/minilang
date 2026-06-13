@@ -103,6 +103,22 @@ pub struct RootConfig {
     pub mode: FileMode,
 }
 
+/// Politique de nettoyage des répertoires temporaires créés par
+/// `FileSystem.tempDir()`.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum TempCleanup {
+    /// Ne rien faire : pas de marqueur, pas de suppression.
+    None,
+    /// Poser un marqueur `.minilang-temp` à la création (un nettoyeur externe
+    /// supprimera les répertoires marqués selon leur âge). Défaut.
+    #[default]
+    Mark,
+    /// Supprimer les répertoires temporaires en fin de programme (best-effort) ;
+    /// le marqueur reste posé comme filet de sécurité en cas d'arrêt anormal.
+    Delete,
+}
+
 #[derive(Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FilesSection {
@@ -110,6 +126,9 @@ pub struct FilesSection {
     /// Une capacité de répertoire s'obtient via `FileSystem.root(nom)` /
     /// `rootRW(nom)`. Les répertoires doivent exister au démarrage.
     pub roots: Option<HashMap<String, RootConfig>>,
+    /// Nettoyage des répertoires temporaires (`tempDir()`). Défaut : `mark`.
+    #[serde(default)]
+    pub temp: TempCleanup,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]

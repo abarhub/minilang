@@ -4,6 +4,20 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Nettoyage des répertoires temporaires (`[files] temp`)
+
+Politique configurable pour les répertoires créés par `FileSystem.tempDir()` :
+
+| `[files] temp` | Effet |
+|---|---|
+| `mark` (défaut) | Pose un marqueur `.minilang-temp` **à la création** ; un nettoyeur externe (cron…) supprime les répertoires marqués selon leur âge. |
+| `delete` | Supprime les répertoires temp en fin de `run()` (best-effort) ; le marqueur reste comme filet en cas d'arrêt anormal. |
+| `none` | Ne rien faire (pas de marqueur, pas de suppression). |
+
+Le marqueur est posé **dès la création** (pas en fin de programme) : robuste face à un arrêt brutal. Clôt le chantier sûreté fichiers (config des racines, garde-fou symlink, nettoyage temp).
+
+---
+
 ## [13/06/2026] — Garde-fou symlink pour les capacités fichiers
 
 Le confinement des capacités de répertoire ne se limite plus au rejet lexical de `..`/chemins absolus : la cible réelle est **canonicalisée** (liens symboliques et jonctions Windows résolus) et vérifiée comme restant **sous la racine canonique**. Un lien pointant hors de la capacité est donc bloqué (`chemin hors de la capacité`) ; un lien interne reste autorisé.

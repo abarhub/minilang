@@ -96,7 +96,7 @@ fn resolve_roots_existing_dirs() {
         RootConfig { path: data.to_string_lossy().to_string(), mode: FileMode::ReadWrite });
     roots.insert("assets".to_string(),
         RootConfig { path: assets.to_string_lossy().to_string(), mode: FileMode::Read });
-    let files = FilesSection { roots: Some(roots) };
+    let files = FilesSection { roots: Some(roots), ..Default::default() };
 
     let resolved = config::resolve_roots(&files, None).expect("résolution ok");
     assert!(resolved["data"].1, "data writable");
@@ -111,7 +111,7 @@ fn resolve_roots_missing_dir_is_error() {
     let mut roots = HashMap::new();
     roots.insert("ghost".to_string(),
         RootConfig { path: "/zzz_nexiste_pas_12345".to_string(), mode: FileMode::Read });
-    let files = FilesSection { roots: Some(roots) };
+    let files = FilesSection { roots: Some(roots), ..Default::default() };
     let err = config::resolve_roots(&files, None).unwrap_err();
     assert!(err.contains("ghost") && err.contains("introuvable"), "message: {}", err);
 }

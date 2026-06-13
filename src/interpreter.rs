@@ -140,8 +140,17 @@ pub struct Interpreter {
     /// Racines fichiers configurées : nom → (chemin absolu canonique, writable).
     /// Renseignées depuis [files.roots] du minilang.toml ; vide par défaut.
     file_roots: HashMap<String, (String, bool)>,
+    /// Pose un marqueur `.minilang-temp` à la création des répertoires temp.
+    create_temp_marker: bool,
+    /// Supprime les répertoires temp créés en fin de `run()`.
+    delete_temp_at_end: bool,
+    /// Répertoires temporaires créés par `tempDir()` (pour la suppression finale).
+    temp_dirs: Vec<String>,
     print_fn: Box<dyn FnMut(&str)>,
 }
+
+/// Nom du fichier marqueur posé dans un répertoire temporaire minilang.
+const TEMP_MARKER: &str = ".minilang-temp";
 
 impl Interpreter {
     /// Crée un interpréteur qui affiche sur la console (comportement par défaut).
@@ -182,8 +191,18 @@ impl Interpreter {
             with_values,
             singletons: HashMap::new(),
             file_roots: HashMap::new(),
+            create_temp_marker: true,   // défaut = "mark"
+            delete_temp_at_end: false,
+            temp_dirs: Vec::new(),
             print_fn,
         }
+    }
+
+    /// Politique de nettoyage des répertoires temporaires (issue de [files] temp).
+    /// - none   : (false, false) ; - mark : (true, false) ; - delete : (true, true).
+    pub fn set_temp_policy(&mut self, create_marker: bool, delete_at_end: bool) {
+        self.create_temp_marker = create_marker;
+        self.delete_temp_at_end = delete_at_end;
     }
 
     /// Renseigne les racines fichiers configurées (issues de [files.roots]).
@@ -209,7 +228,41 @@ impl Interpreter {
         }
     }
 
+    /// `FileSystem.tempDir()` : crée un nouveau répertoire temporaire et renvoie
+    /// une capacité RW dessus. Pose un marqueur `.minilang-temp` si la politique
+    /// l'exige, et enregistre le répertoire pour une éventuelle suppression finale.
+    /// Préfixe "minilang_cap_" pour repérage/nettoyage externe.
+    fn fs_temp_dir(&mut self) -> Result<Value, RuntimeError> {
+        let mut p = std::env::temp_dir();
+        p.push(format!("minilang_cap_{}_{}", std::process::id(), next_temp_seq()));
+        if let Err(e) = std::fs::create_dir_all(&p) {
+            return Ok(io_err("Other", Some(e.to_string())));
+        }
+        let path = p.to_string_lossy().to_string();
+        if self.create_temp_marker {
+            let _ = std::fs::write(p.join(TEMP_MARKER),
+                "Répertoire temporaire minilang — réclamable si aucun processus ne l'utilise.\n");
+        }
+        if self.delete_temp_at_end {
+            self.temp_dirs.push(path.clone());
+        }
+        Ok(make_ok(make_directory(path, true)))
+    }
+
     pub fn run(&mut self, program: &Program) -> Result<i64, RuntimeError> {
+        let result = self.run_main(program);
+        // Nettoyage des répertoires temporaires (best-effort), quelle que soit
+        // l'issue. En cas d'arrêt anormal qui court-circuite ceci, le marqueur
+        // `.minilang-temp` reste le filet pour un nettoyeur externe.
+        if self.delete_temp_at_end {
+            for d in std::mem::take(&mut self.temp_dirs) {
+                let _ = std::fs::remove_dir_all(&d);
+            }
+        }
+        result
+    }
+
+    fn run_main(&mut self, program: &Program) -> Result<i64, RuntimeError> {
         info!("▶ Exécution");
         let Some(main) = &program.main else {
             return err!("Aucune fonction main — rien à exécuter \
@@ -804,7 +857,7 @@ impl Interpreter {
                                 }
                                 ("Files", "delete") if args.len() == 1 => file_delete(&args),
                                 // ── Capacités de répertoire (minilang.io) ─────
-                                ("FileSystem", "tempDir") => fs_temp_dir(),
+                                ("FileSystem", "tempDir") => self.fs_temp_dir(),
                                 ("FileSystem", "root")   if args.len() == 1 => self.fs_root(&args, false),
                                 ("FileSystem", "rootRW") if args.len() == 1 => self.fs_root(&args, true),
                                 ("Directory", "readBytes")  if args.len() == 1 =>
@@ -2167,17 +2220,8 @@ fn cap_sub(path: &str, args: &[Value], child_writable: bool) -> Result<Value, Ru
     }
 }
 
-/// FileSystem.tempDir() : crée un nouveau répertoire temporaire et renvoie une
-/// capacité RW dessus. Préfixe "minilang_cap_" pour repérage/nettoyage externe.
-fn fs_temp_dir() -> Result<Value, RuntimeError> {
-    let seq = CAP_SEQ.fetch_add(1, Ordering::Relaxed);
-    let mut p = std::env::temp_dir();
-    p.push(format!("minilang_cap_{}_{}", std::process::id(), seq));
-    match std::fs::create_dir_all(&p) {
-        Ok(())  => Ok(make_ok(make_directory(p.to_string_lossy().to_string(), true))),
-        Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
-    }
-}
+/// Numéro de séquence des répertoires temporaires (unicité dans le processus).
+fn next_temp_seq() -> u64 { CAP_SEQ.fetch_add(1, Ordering::Relaxed) }
 
 // ── Hachage de valeurs ────────────────────────────────────────────────────────
 
