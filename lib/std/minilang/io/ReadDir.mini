@@ -1,0 +1,27 @@
+// ── Bibliothèque standard – ReadDir ──────────────────────────────────────────
+//  Capacité d'accès fichiers en LECTURE seule, confinée à un sous-arbre.
+//  On ne manipule jamais de chemin absolu : on détient une capacité (obtenue
+//  via FileSystem) et on accède à des enfants relatifs. Impossible de remonter
+//  au-dessus de la racine ('..' et chemins absolus sont rejetés).
+//  Modèle de capacités : on ne peut que RESTREINDRE (dériver un sous-répertoire),
+//  jamais élargir.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.IoError;
+
+interface ReadDir {
+    // Lit un fichier enfant (chemin relatif) en octets / en texte UTF-8.
+    Result<byte[], IoError> readBytes(string child);
+    Result<string, IoError> readText(string child);
+
+    // true si l'enfant existe.
+    bool exists(string child);
+
+    // Dérive une capacité LECTURE seule sur un sous-répertoire.
+    ReadDir sub(string name);
+
+    // Dernier segment du chemin de la racine (pour le debug).
+    string name();
+}

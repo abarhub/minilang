@@ -4,6 +4,26 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Accès fichiers par capacités (confinement)
+
+Accès au système de fichiers **confiné** par capacités (modèle object-capability, cf. WASI/Capsicum), en alternative aux chemins bruts de `Files`.
+
+- **`ReadDir`** (lecture) et **`ReadWriteDir extends ReadDir`** (+ écriture) : le **mode est dans le type**. Une fonction qui reçoit un `ReadDir` ne peut **pas compiler** une écriture — restriction de droits garantie à la compilation (rendue possible par l'héritage d'interface).
+- **`FileSystem`** (service injectable) : seul à pouvoir **minter** une racine (`tempDir()` → répertoire temporaire frais) — pas d'autorité ambiante. Le code ne peut ensuite que **restreindre** via `sub`/`subRW`.
+- On ne manipule **jamais de chemin absolu** : accès à des enfants relatifs ; `..` et chemins absolus rejetés (confinement). Les parents sont créés à l'écriture.
+- `new Directory()` direct est **inerte** (racine non-forgeable).
+
+```java
+FileSystem fs = inject FileSystem;
+ReadWriteDir root = fs.tempDir().getValue();
+root.writeText("notes.txt", "bonjour");
+ReadDir ro = root.sub("config");     // ro.writeText(...) ne compile pas
+```
+
+À venir : racine depuis `minilang.toml`, garde-fou symlinks, nettoyage des temp (marqueur `delete.me`). Modèle de menace : évasions accidentelles / code coopératif. Doc : `docs/io.md`, exemple : `examples/example_file_capabilities.mini`.
+
+---
+
 ## [13/06/2026] — I/O fichiers en bloc (I/O phase 3b)
 
 Classe utilitaire **injectable `Files`** (`minilang.io`) pour lire/écrire des fichiers **en bloc** — pas de flux, pas de handle à fermer. Les octets sont la donnée primitive ; la string est un décodage UTF-8 faillible.

@@ -60,7 +60,38 @@ files.delete("notes.txt");
 | `exists(path)` | `bool` |
 | `delete(path)` | `Result<Unit, IoError>` |
 
-> Note : l'accès au système de fichiers est libre pour l'instant (aucun garde-fou de chemin). Le streaming de fichiers (lecture ligne par ligne via `Input`/`Output`) n'est pas fourni — `Files` couvre la lecture/écriture en bloc.
+> Note : `Files` travaille sur des chemins **bruts**, sans garde-fou. Pour un accès **confiné**, préférer les capacités de répertoire (ci-dessous). Le streaming de fichiers (ligne par ligne via `Input`/`Output`) n'est pas fourni.
+
+## Accès confiné : les capacités de répertoire
+
+Plutôt que des chemins bruts, on peut travailler avec des **capacités** : un objet qui représente l'autorité d'accéder à un sous-arbre, et rien au-dessus. C'est le modèle des *object-capabilities* (cf. preopens de WASI, Capsicum).
+
+- On n'écrit jamais de chemin absolu : on obtient une racine via `FileSystem` (seul à pouvoir en créer une — pas d'autorité ambiante), puis on accède à des **enfants relatifs**.
+- On ne peut que **restreindre** : `sub`/`subRW` dérivent une capacité sur un sous-répertoire, jamais au-dessus. `..` et les chemins absolus sont rejetés.
+- Le **mode est dans le type** : `ReadDir` (lecture) vs `ReadWriteDir extends ReadDir` (+ écriture). Une fonction qui reçoit un `ReadDir` ne peut **pas compiler** une écriture — la restriction de droits est garantie à la compilation.
+
+```java
+FileSystem fs = inject FileSystem;
+ReadWriteDir root = fs.tempDir().getValue();     // racine temporaire (une par exécution)
+
+root.writeText("notes.txt", "bonjour");
+ReadWriteDir conf = root.subRW("config");        // sous-répertoire RW (parents créés à l'écriture)
+conf.writeText("app.ini", "mode=demo");
+
+ReadDir ro = root.sub("config");                 // vue lecture seule
+// ro.writeText(...)  →  ne compile pas
+
+root.readText("../secret");                       // → Err : hors de la capacité
+```
+
+| Type | Méthodes |
+|---|---|
+| `ReadDir` | `readBytes`/`readText`, `exists`, `sub` (→ `ReadDir`), `name` |
+| `ReadWriteDir` (extends `ReadDir`) | + `writeBytes`/`writeText`, `appendBytes`/`appendText`, `delete`, `subRW` (→ `ReadWriteDir`) |
+
+Source de racine : `FileSystem.tempDir()` (répertoire temporaire frais). Une racine issue du `minilang.toml`, un garde-fou contre les symlinks, et le nettoyage des répertoires temporaires (marqueur `delete.me` pour un processus externe) sont prévus pour plus tard. Modèle de menace actuel : prévention des évasions accidentelles et code coopératif — pas la défense contre un programme qui planterait un lien symbolique.
+
+Voir l'exemple : [examples/example_file_capabilities.mini](../examples/example_file_capabilities.mini).
 
 ## Result : les erreurs sont explicites
 

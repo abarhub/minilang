@@ -776,6 +776,38 @@ impl Interpreter {
                                     Ok(Value::Bool(std::path::Path::new(&path).exists()))
                                 }
                                 ("Files", "delete") if args.len() == 1 => file_delete(&args),
+                                // ── Capacités de répertoire (minilang.io) ─────
+                                ("FileSystem", "tempDir") => fs_temp_dir(),
+                                ("Directory", "readBytes")  if args.len() == 1 =>
+                                    cap_read(&dir_path(&rc), &args, false),
+                                ("Directory", "readText")   if args.len() == 1 =>
+                                    cap_read(&dir_path(&rc), &args, true),
+                                ("Directory", "exists")     if args.len() == 1 =>
+                                    cap_exists(&dir_path(&rc), &args),
+                                ("Directory", "name")       =>
+                                    Ok(Value::Str(dir_name(&dir_path(&rc)))),
+                                ("Directory", "sub")        if args.len() == 1 =>
+                                    cap_sub(&dir_path(&rc), &args, false),
+                                ("Directory", "subRW")      if args.len() == 1 =>
+                                    cap_sub(&dir_path(&rc), &args, dir_writable(&rc)),
+                                ("Directory", "writeBytes") if args.len() == 2 => {
+                                    let d = bytes_arg(&args, 1)?;
+                                    cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, false)
+                                }
+                                ("Directory", "writeText")  if args.len() == 2 => {
+                                    let d = str_arg(&args, 1)?.into_bytes();
+                                    cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, false)
+                                }
+                                ("Directory", "appendBytes") if args.len() == 2 => {
+                                    let d = bytes_arg(&args, 1)?;
+                                    cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, true)
+                                }
+                                ("Directory", "appendText") if args.len() == 2 => {
+                                    let d = str_arg(&args, 1)?.into_bytes();
+                                    cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, true)
+                                }
+                                ("Directory", "delete")     if args.len() == 1 =>
+                                    cap_delete(&dir_path(&rc), dir_writable(&rc), &args),
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -1947,6 +1979,147 @@ fn file_delete(args: &[Value]) -> Result<Value, RuntimeError> {
     let path = str_arg(args, 0)?;
     match std::fs::remove_file(&path) {
         Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
+    }
+}
+
+// ── Capacités de répertoire (minilang.io.Directory / FileSystem) ────────────────
+
+use std::sync::atomic::{AtomicU64, Ordering};
+static CAP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Construit une capacité Directory native : chemin absolu + mode.
+fn make_directory(path: String, writable: bool) -> Value {
+    let mut fields = HashMap::new();
+    fields.insert("_path".to_string(), Value::Str(path));
+    fields.insert("_writable".to_string(), Value::Bool(writable));
+    Value::Object(Rc::new(RefCell::new(ObjectData {
+        class_name: "Directory".to_string(), fields,
+    })))
+}
+
+fn dir_path(rc: &Rc<RefCell<ObjectData>>) -> String {
+    match rc.borrow().fields.get("_path") {
+        Some(Value::Str(s)) => s.clone(),
+        _ => String::new(),
+    }
+}
+fn dir_writable(rc: &Rc<RefCell<ObjectData>>) -> bool {
+    matches!(rc.borrow().fields.get("_writable"), Some(Value::Bool(true)))
+}
+
+fn dir_name(path: &str) -> String {
+    std::path::Path::new(path).file_name()
+        .map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+}
+
+/// Résout un chemin enfant relatif sous `root`. None si `child` est absolu ou
+/// contient un segment `..` (évasion lexicale). Pas de résolution de symlink
+/// (hors périmètre).
+fn cap_resolve(root: &str, child: &str) -> Option<std::path::PathBuf> {
+    use std::path::Component;
+    if root.is_empty() { return None; }
+    let p = std::path::Path::new(child);
+    if p.is_absolute() { return None; }
+    for c in p.components() {
+        match c {
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+            _ => {}
+        }
+    }
+    Some(std::path::Path::new(root).join(child))
+}
+
+fn cap_read(path: &str, args: &[Value], as_text: bool) -> Result<Value, RuntimeError> {
+    if path.is_empty() { return Ok(io_err("Other", Some("capacité non initialisée".to_string()))); }
+    let child = str_arg(args, 0)?;
+    let full = match cap_resolve(path, &child) {
+        Some(f) => f,
+        None    => return Ok(io_err("Other", Some("chemin hors de la capacité".to_string()))),
+    };
+    if as_text {
+        match std::fs::read_to_string(&full) {
+            Ok(s)  => Ok(make_ok(Value::Str(s))),
+            Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
+        }
+    } else {
+        match std::fs::read(&full) {
+            Ok(b)  => Ok(make_ok(byte_array_value(b))),
+            Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
+        }
+    }
+}
+
+fn cap_write(path: &str, writable: bool, args: &[Value], data: Vec<u8>, append: bool)
+    -> Result<Value, RuntimeError>
+{
+    use std::io::Write;
+    if path.is_empty() { return Ok(io_err("Other", Some("capacité non initialisée".to_string()))); }
+    if !writable { return Ok(io_err("Other", Some("capacité en lecture seule".to_string()))); }
+    let child = str_arg(args, 0)?;
+    let full = match cap_resolve(path, &child) {
+        Some(f) => f,
+        None    => return Ok(io_err("Other", Some("chemin hors de la capacité".to_string()))),
+    };
+    // Crée les répertoires parents (dans la capacité) au besoin.
+    if let Some(parent) = full.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            return Ok(io_err("WriteFailed", Some(e.to_string())));
+        }
+    }
+    let res = if append {
+        std::fs::OpenOptions::new().create(true).append(true).open(&full)
+            .and_then(|mut f| f.write_all(&data))
+    } else {
+        std::fs::write(&full, &data)
+    };
+    match res {
+        Ok(_)  => Ok(ok_unit()),
+        Err(e) => Ok(io_err("WriteFailed", Some(e.to_string()))),
+    }
+}
+
+fn cap_delete(path: &str, writable: bool, args: &[Value]) -> Result<Value, RuntimeError> {
+    if path.is_empty() { return Ok(io_err("Other", Some("capacité non initialisée".to_string()))); }
+    if !writable { return Ok(io_err("Other", Some("capacité en lecture seule".to_string()))); }
+    let child = str_arg(args, 0)?;
+    let full = match cap_resolve(path, &child) {
+        Some(f) => f,
+        None    => return Ok(io_err("Other", Some("chemin hors de la capacité".to_string()))),
+    };
+    match std::fs::remove_file(&full) {
+        Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
+    }
+}
+
+fn cap_exists(path: &str, args: &[Value]) -> Result<Value, RuntimeError> {
+    if path.is_empty() { return Ok(Value::Bool(false)); }
+    let child = str_arg(args, 0)?;
+    match cap_resolve(path, &child) {
+        Some(full) => Ok(Value::Bool(full.exists())),
+        None       => Ok(Value::Bool(false)),
+    }
+}
+
+/// Dérive une capacité enfant. `child_writable` borne les droits (jamais
+/// au-dessus du parent). Nom invalide ou capacité inerte → enfant inerte.
+fn cap_sub(path: &str, args: &[Value], child_writable: bool) -> Result<Value, RuntimeError> {
+    let name = str_arg(args, 0)?;
+    match cap_resolve(path, &name) {
+        Some(full) => Ok(make_directory(full.to_string_lossy().to_string(), child_writable)),
+        None       => Ok(make_directory(String::new(), false)),
+    }
+}
+
+/// FileSystem.tempDir() : crée un nouveau répertoire temporaire et renvoie une
+/// capacité RW dessus. Préfixe "minilang_cap_" pour repérage/nettoyage externe.
+fn fs_temp_dir() -> Result<Value, RuntimeError> {
+    let seq = CAP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let mut p = std::env::temp_dir();
+    p.push(format!("minilang_cap_{}_{}", std::process::id(), seq));
+    match std::fs::create_dir_all(&p) {
+        Ok(())  => Ok(make_ok(make_directory(p.to_string_lossy().to_string(), true))),
         Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
     }
 }

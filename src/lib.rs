@@ -47,6 +47,10 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/minilang/io/BufferedWriter.mini"), "\n",
     include_str!("../lib/std/minilang/io/Bytes.mini"),          "\n",
     include_str!("../lib/std/minilang/io/Files.mini"),          "\n",
+    include_str!("../lib/std/minilang/io/ReadDir.mini"),        "\n",
+    include_str!("../lib/std/minilang/io/ReadWriteDir.mini"),   "\n",
+    include_str!("../lib/std/minilang/io/Directory.mini"),      "\n",
+    include_str!("../lib/std/minilang/io/FileSystem.mini"),     "\n",
     // ── minilang.system ──────────────────────────────────────────────────────────
     include_str!("../lib/std/minilang/system/StandardOutput.mini"), "\n",
     include_str!("../lib/std/minilang/system/StandardError.mini"),  "\n",

@@ -1,0 +1,51 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : accès fichiers par capacités (sécurisé)
+//
+//  On ne manipule jamais de chemin absolu : on obtient une capacité de
+//  répertoire via FileSystem (seul à pouvoir en créer une), puis on accède à
+//  des enfants relatifs. Impossible de remonter au-dessus de la racine.
+//
+//  - ReadWriteDir : lecture + écriture.   - ReadDir : lecture seule.
+//  Une fonction qui reçoit un ReadDir ne PEUT PAS compiler une écriture :
+//  la restriction de droits est garantie à la compilation.
+//
+//  Cet exemple travaille dans un répertoire temporaire frais (un par exécution).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Ne reçoit qu'une capacité LECTURE : ne peut pas modifier les fichiers.
+string lireBanniere(ReadDir dir) {
+    match dir.readText("banner.txt") {
+        Result::Ok(s)  => { return s; }
+        Result::Err(e) => { return "(pas de bannière : " + e.message() + ")"; }
+    }
+}
+
+int main() {
+    StandardOutput out = inject StandardOutput;
+    FileSystem     fs  = inject FileSystem;
+
+    // Racine temporaire en lecture/écriture
+    ReadWriteDir root = fs.tempDir().getValue();
+
+    root.writeText("banner.txt", "=== mon appli ===");
+    root.appendText("log.txt", "démarrage\n");
+
+    // Sous-répertoire (les parents sont créés à l'écriture)
+    ReadWriteDir conf = root.subRW("config");
+    conf.writeText("app.ini", "mode=demo");
+    out.writeLine(root.readText("config/app.ini").getValue());   // mode=demo
+
+    // On passe une vue LECTURE SEULE à une fonction : elle ne peut que lire.
+    out.writeLine(lireBanniere(root));   // root (RW) accepté là où ReadDir est attendu
+
+    // Confinement : toute tentative de sortie est bloquée à l'exécution.
+    Result<string, IoError> evasion = root.readText("../../etc/passwd");
+    out.writeLine("évasion bloquée ? " + evasion.isErr().toString());   // true
+
+    // Nettoyage explicite (le répertoire temporaire lui-même reste, repéré par
+    // son préfixe minilang_cap_ pour un nettoyage externe — cf. docs).
+    root.delete("banner.txt");
+    root.delete("log.txt");
+
+    return 0;
+}
