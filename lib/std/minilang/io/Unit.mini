@@ -1,0 +1,8 @@
+// ── Bibliothèque standard – Unit ─────────────────────────────────────────────
+//  Valeur de succès « sans contenu », équivalent du () de Rust.
+//  Utilisée comme payload de Result<Unit, IoError> pour les opérations d'I/O
+//  qui réussissent sans rien produire (write, flush…).
+
+package minilang.io;
+
+record Unit() {}

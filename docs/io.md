@@ -1,0 +1,98 @@
+# Entrées / sorties
+
+Le système d'I/O est réparti en deux packages :
+
+- **`minilang.io`** — les interfaces générales et les types de support ;
+- **`minilang.system`** — les flux standard du processus (stdout, stderr).
+
+Toutes ces classes sont dans la bibliothèque standard : accessibles sans import.
+
+## Principe : une seule hiérarchie, orientée texte
+
+Contrairement à Java (flux d'octets `InputStream` **et** flux de caractères `Reader`), minilang a **une seule hiérarchie, orientée texte**. L'unité d'I/O est la `string` (UTF-8) ; il n'y a pas de flux d'octets séparé. Le binaire (type `byte`, fichiers) viendra plus tard via des conversions `string ↔ byte[]`, sans hiérarchie parallèle.
+
+## Result : les erreurs sont explicites
+
+Chaque opération d'I/O renvoie un `Result` :
+
+- écriture / flush → `Result<Unit, IoError>` (`Unit` = succès sans valeur, l'équivalent du `()` de Rust) ;
+- lecture → `Result<Option<string>, IoError>` : `Ok(Some(x))` = donnée, `Ok(None)` = fin de flux (EOF), `Err(e)` = erreur réelle.
+
+Le `Result` peut être **ignoré** (appel en instruction simple) pour le code rapide, ou **traité** explicitement :
+
+```java
+StandardOutput out = inject StandardOutput;
+
+out.writeLine("rapide");                       // Result ignoré
+
+Result<Unit, IoError> r = out.writeLine("soigné");
+if (r.isErr()) {
+    // r.getError().message() décrit l'erreur
+}
+```
+
+## Interfaces (`minilang.io`)
+
+```java
+mut interface Output {
+    mutable Result<Unit, IoError> write(string s);       // sans saut de ligne
+    mutable Result<Unit, IoError> writeLine(string s);   // avec saut de ligne
+}
+
+mut interface Flushable {
+    mutable Result<Unit, IoError> flush();
+}
+
+// Héritage d'interface : combine écriture et vidage
+mut interface BufferedOutput extends Output, Flushable {}
+
+mut interface Input {
+    mutable Result<Option<string>, IoError> readLine();   // Ok(None) = EOF
+    mutable Result<Option<char>, IoError>   readChar();
+    mutable Result<string, IoError>         readAll();
+}
+```
+
+`IoError` est un enum (`BrokenPipe`, `WriteFailed(msg)`, `ReadFailed(msg)`, `Other(msg)`) avec une méthode `message()`.
+
+## Flux standard (`minilang.system`)
+
+`StandardOutput` (stdout) et `StandardError` (stderr) sont des **services injectables** implémentant `BufferedOutput` :
+
+```java
+StandardOutput out = inject StandardOutput;
+out.writeLine("bonjour");
+
+StandardError err = inject StandardError;
+err.writeLine("attention");
+```
+
+`StandardInput` (stdin) arrivera en phase 2.
+
+## Capture en mémoire et testabilité
+
+`StringOutput` (dans `minilang.io`) est une sortie qui accumule le texte en mémoire (équivalent du `StringWriter` de Java). Comme `Output` est une interface et que les flux sont injectables, on teste du code d'I/O **sans toucher au code testé** : un module de test binde `Output` sur `StringOutput`, puis on relit `content()`.
+
+```java
+service class Report {
+    Output out;
+    Report(Output out) { this.out = out; }
+    void render() { out.writeLine("ligne 1"); out.writeLine("ligne 2"); }
+}
+
+// En test : on capture au lieu d'écrire sur la console
+module TestModule { bind Output to StringOutput; }
+
+test void leRapportEcritDeuxLignes() {
+    Report r = inject Report;
+    r.render();
+    StringOutput captured = inject StringOutput;   // même singleton
+    assertEquals(captured.content(), "ligne 1\nligne 2\n");
+}
+```
+
+C'est le bénéfice combiné de l'injection de dépendances, des modules de binding et de l'héritage d'interface.
+
+> Note : `StandardOutput` / `StandardError` écrivent sur les vrais flux du processus ; leur sortie n'est pas capturée par `print`. En test, on passe par `StringOutput` (binding).
+
+Voir l'exemple complet : [examples/example_io.mini](../examples/example_io.mini).

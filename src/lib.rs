@@ -33,5 +33,16 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/minilang/collection/HashSetIterator.mini"),  "\n",
     include_str!("../lib/std/minilang/collection/ArrayList.mini"),        "\n",
     include_str!("../lib/std/minilang/collection/HashSet.mini"),          "\n",
-    include_str!("../lib/std/minilang/collection/HashMap.mini"),
+    include_str!("../lib/std/minilang/collection/HashMap.mini"),          "\n",
+    // ── minilang.io ────────────────────────────────────────────────────────────
+    include_str!("../lib/std/minilang/io/Unit.mini"),           "\n",
+    include_str!("../lib/std/minilang/io/IoError.mini"),        "\n",
+    include_str!("../lib/std/minilang/io/Output.mini"),         "\n",
+    include_str!("../lib/std/minilang/io/Flushable.mini"),      "\n",
+    include_str!("../lib/std/minilang/io/BufferedOutput.mini"), "\n",
+    include_str!("../lib/std/minilang/io/Input.mini"),          "\n",
+    include_str!("../lib/std/minilang/io/StringOutput.mini"),   "\n",
+    // ── minilang.system ──────────────────────────────────────────────────────────
+    include_str!("../lib/std/minilang/system/StandardOutput.mini"), "\n",
+    include_str!("../lib/std/minilang/system/StandardError.mini"),
 );

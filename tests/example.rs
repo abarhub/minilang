@@ -20,3 +20,5 @@ mod example_optional_tests;
 mod example_collections_tests;
 #[path = "example/example_di_tests.rs"]
 mod example_di_tests;
+#[path = "example/example_io_tests.rs"]
+mod example_io_tests;

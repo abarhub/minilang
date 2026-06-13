@@ -1,0 +1,55 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : système d'entrée/sortie
+//
+//  - Hiérarchie unique orientée texte : Output / Flushable / BufferedOutput
+//    (package minilang.io). L'unité d'écriture est la string ; pas de flux
+//    d'octets séparé.
+//  - Chaque opération renvoie Result<Unit, IoError> : on peut ignorer le
+//    résultat (instruction simple) ou le traiter explicitement.
+//  - StandardOutput / StandardError (package minilang.system) sont des services
+//    injectables qui écrivent sur stdout / stderr.
+//  - StringOutput capture en mémoire — utile pour les tests (on binde Output
+//    dessus, puis on relit content()).
+// ─────────────────────────────────────────────────────────────────────────────
+
+import minilang.io.Unit;
+
+// Un service métier qui écrit via une sortie abstraite (Output) — il ne sait
+// pas s'il écrit sur la console ou dans un tampon mémoire.
+service class Greeter {
+    Output out;
+    Greeter(Output out) { this.out = out; }
+
+    void greet(string name) {
+        out.write("Bonjour ");
+        out.writeLine(name);
+    }
+}
+
+// En l'absence de module, on binde Output sur la sortie standard.
+module AppModule { bind Output to StandardOutput; }
+
+int main() {
+    // 1. Écriture directe sur stdout, avec gestion explicite du Result
+    StandardOutput out = inject StandardOutput;
+    Result<Unit, IoError> r = out.writeLine("=== Démo I/O ===");
+    if (r.isErr()) {
+        StandardError err = inject StandardError;
+        err.writeLine("échec d'écriture : " + r.getError().message());
+        return 1;
+    }
+
+    // 2. Un service qui écrit via Output (résolu sur StandardOutput par le module)
+    Greeter g = inject Greeter;
+    g.greet("Alice");
+
+    // 3. Capture en mémoire avec StringOutput
+    StringOutput buf = new StringOutput();
+    buf.writeLine("ligne capturée 1");
+    buf.write("ligne capturée 2");
+    out.writeLine("--- contenu capturé ---");
+    out.write(buf.content());
+    out.writeLine("");
+
+    return 0;
+}

@@ -1,0 +1,10 @@
+// ── Bibliothèque standard – BufferedOutput ───────────────────────────────────
+//  Sortie qui combine l'écriture (Output) et le vidage de tampon (Flushable).
+//  Démontre l'héritage d'interface : aucune méthode propre, tout est hérité.
+
+package minilang.io;
+
+import minilang.io.Output;
+import minilang.io.Flushable;
+
+mut interface BufferedOutput extends Output, Flushable {}

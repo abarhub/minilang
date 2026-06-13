@@ -4,6 +4,24 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Système d'entrée/sortie (phase 1 : sorties)
+
+Packages **`minilang.io`** (interfaces `Output`, `Flushable`, `BufferedOutput extends Output, Flushable`, `Input`, plus `IoError`, `Unit`, `StringOutput`) et **`minilang.system`** (`StandardOutput`, `StandardError`).
+
+- **Une seule hiérarchie, orientée texte** : l'unité d'I/O est la `string` (UTF-8), pas de flux d'octets séparé (binaire reporté à une phase ultérieure).
+- **Erreurs explicites** : écriture/flush → `Result<Unit, IoError>`, lecture → `Result<Option<string>, IoError>` (EOF = `Ok(None)`). Le `Result` peut être ignoré (instruction simple) ou traité.
+- **`StandardOutput` / `StandardError`** : services injectables écrivant sur stdout/stderr (méthodes natives).
+- **`StringOutput`** : capture en mémoire (équivalent `StringWriter`) — combinée aux modules de binding, elle rend le code d'I/O testable sans le modifier (`bind Output to StringOutput`).
+
+```java
+StandardOutput out = inject StandardOutput;
+out.writeLine("bonjour");
+```
+
+Documentation : `docs/io.md`, exemple : `examples/example_io.mini`. Phase 2 à venir : `StandardInput` (lecture stdin). `print` est conservé.
+
+---
+
 ## [13/06/2026] — Héritage d'interface (`interface Sub extends A, B`)
 
 Une interface peut désormais en étendre une ou plusieurs. Une classe (ou un record) qui implémente une interface doit fournir les méthodes de celle-ci **et de tous ses parents** (transitif) ; une sous-interface est un sous-type de ses parents ; la résolution de méthode remonte la chaîne des parents.

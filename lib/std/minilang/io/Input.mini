@@ -1,0 +1,15 @@
+// ── Bibliothèque standard – Input ────────────────────────────────────────────
+//  Flux d'entrée textuel. EOF est signalé par Ok(None) ; une vraie erreur d'I/O
+//  par Err(IoError). L'implémentation standard (StandardInput) arrive en phase 2.
+
+package minilang.io;
+
+import minilang.lang.Option;
+import minilang.lang.Result;
+import minilang.io.IoError;
+
+mut interface Input {
+    mutable Result<Option<string>, IoError> readLine();   // Ok(None) = EOF
+    mutable Result<Option<char>, IoError>   readChar();    // Ok(None) = EOF
+    mutable Result<string, IoError>         readAll();
+}
