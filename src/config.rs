@@ -18,6 +18,7 @@
 //  ```
 // ─────────────────────────────────────────────────────────────────────────────
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use crate::ast::Program;
@@ -39,6 +40,8 @@ pub struct ProjectConfig {
     pub di:      DiSection,
     #[serde(default)]
     pub tests:   TestsSection,
+    #[serde(default)]
+    pub files:   FilesSection,
     #[serde(default)]
     pub runtime: RuntimeSection,
 }
@@ -80,6 +83,35 @@ pub struct DiSection {
     pub modules: Option<Vec<String>>,
 }
 
+/// Mode d'accès d'une racine fichiers configurée.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileMode {
+    #[default]
+    Read,        // "read"        — lecture seule (défaut, sûr-par-défaut)
+    ReadWrite,   // "read-write"  — lecture/écriture
+}
+
+/// Une racine fichiers nommée : un chemin + son mode d'accès.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RootConfig {
+    /// Chemin du répertoire, relatif au minilang.toml (ou absolu).
+    pub path: String,
+    /// Mode d'accès (défaut : `read`).
+    #[serde(default)]
+    pub mode: FileMode,
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FilesSection {
+    /// Racines nommées octroyées au programme : nom → { path, mode }.
+    /// Une capacité de répertoire s'obtient via `FileSystem.root(nom)` /
+    /// `rootRW(nom)`. Les répertoires doivent exister au démarrage.
+    pub roots: Option<HashMap<String, RootConfig>>,
+}
+
 #[derive(Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeSection {
@@ -118,6 +150,36 @@ pub fn load(start_dir: &Path) -> Result<Option<(ProjectConfig, PathBuf)>, String
     let config = ProjectConfig::parse(&content)
         .map_err(|e| format!("{} : {}", path.display(), e))?;
     Ok(Some((config, path)))
+}
+
+/// Résout et valide les racines fichiers configurées (`[files.roots]`).
+/// - Chemins relatifs résolus par rapport au répertoire du minilang.toml.
+/// - Chaque répertoire doit **exister** (sinon erreur fatale) ; le chemin est
+///   canonicalisé (absolu, liens résolus) — c'est la racine de confinement.
+/// Retourne une map `nom → (chemin absolu, writable)`.
+pub fn resolve_roots(
+    files: &FilesSection, cfg_dir: Option<&Path>,
+) -> Result<HashMap<String, (String, bool)>, String> {
+    let mut out = HashMap::new();
+    let Some(roots) = &files.roots else { return Ok(out) };
+    let base = cfg_dir.unwrap_or(Path::new("."));
+    // Ordre déterministe pour des messages d'erreur stables.
+    let mut names: Vec<&String> = roots.keys().collect();
+    names.sort();
+    for name in names {
+        let rc = &roots[name];
+        let raw = Path::new(&rc.path);
+        let joined = if raw.is_absolute() { raw.to_path_buf() } else { base.join(raw) };
+        let canon = std::fs::canonicalize(&joined).map_err(|e| format!(
+            "racine '{}' : répertoire introuvable '{}' ({})", name, joined.display(), e))?;
+        if !canon.is_dir() {
+            return Err(format!("racine '{}' : '{}' n'est pas un répertoire",
+                name, canon.display()));
+        }
+        let writable = rc.mode == FileMode::ReadWrite;
+        out.insert(name.clone(), (canon.to_string_lossy().to_string(), writable));
+    }
+    Ok(out)
 }
 
 /// Restreint les modules de binding du programme à la liste `active`

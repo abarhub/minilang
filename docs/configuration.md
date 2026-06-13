@@ -77,12 +77,32 @@ Limitation actuelle : les fichiers étant concaténés (comme la stdlib), les po
 | `dir` | Répertoire des fichiers de tests (`.mini`, parcouru récursivement), relatif au `minilang.toml`. Utilisé par `mini_parser test` sans argument | `tests` |
 | `modules` | Modules de binding actifs **pendant les tests** — le profil de mocks | `[di] modules`, sinon tous |
 
+### `[files.roots]` — racines d'accès fichiers
+
+Octroie au programme des **racines nommées** : des répertoires auxquels il peut accéder via des capacités confinées (voir `docs/io.md`). Le code ne choisit jamais de chemin absolu — il demande une racine par son nom (`FileSystem.root(nom)` / `rootRW(nom)`).
+
+```toml
+[files.roots.data]
+path = "data"            # relatif au minilang.toml (ou absolu)
+mode = "read-write"
+
+[files.roots.assets]
+path = "assets"
+mode = "read"            # défaut
+```
+
+| Clé (par racine) | Effet | Défaut |
+|---|---|---|
+| `path` | Répertoire de la racine, relatif au `minilang.toml`. **Doit exister au démarrage** (sinon erreur fatale) ; canonicalisé | — (obligatoire) |
+| `mode` | `read` (lecture seule) ou `read-write`. `rootRW(nom)` échoue si la racine est `read` | `read` |
+
 ### `[runtime]`
 
 | Clé | Effet | Défaut |
 |---|---|---|
 | `log` | Niveau de log (`error`, `warn`, `info`, `debug`, `trace`). La variable d'environnement `RUST_LOG` reste prioritaire | `info` |
 
-## Exemple complet
+## Exemples complets
 
-Voir [examples/example_config/](../examples/example_config/) : un projet avec deux profils DI, lançable avec `mini_parser examples/example_config/app.mini` ou sans argument depuis son répertoire.
+- [examples/example_config/](../examples/example_config/) : un projet avec deux profils DI.
+- [examples/example_files_config/](../examples/example_files_config/) : racines fichiers nommées (`data` en lecture/écriture, `assets` en lecture seule).

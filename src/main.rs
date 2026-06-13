@@ -154,6 +154,13 @@ fn run_mode(args: &[String]) {
     }
     let program = program;
 
+    // ── Racines fichiers : [files.roots] (les répertoires doivent exister) ──
+    let cfg_dir = cfg_path.as_ref().and_then(|p| p.parent());
+    let file_roots = config::resolve_roots(&cfg.files, cfg_dir).unwrap_or_else(|e| {
+        error!("Configuration [files] — {}", e);
+        process::exit(1);
+    });
+
     // AST : n'afficher que les déclarations du fichier utilisateur — on masque
     // celles du préfixe (stdlib + includes) en comptant ses déclarations.
     let skip = mini_parser::parser::program_parser().parse(prefix.as_str())
@@ -172,6 +179,7 @@ fn run_mode(args: &[String]) {
 
     println!("\n{}\n  EXÉCUTION\n{}\n", "─".repeat(50), "─".repeat(50));
     let mut interp = Interpreter::new(&program);
+    interp.set_file_roots(file_roots);
     match interp.run(&program) {
         Ok(code) => { println!("\n{}", "─".repeat(50)); info!("Code de sortie : {}", code); }
         Err(e)   => { error!("{}", e); process::exit(1); }
