@@ -1,0 +1,44 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : le type byte et les conversions string <-> byte[]
+//
+//  - byte : octet non signé (0–255), type de stockage SANS arithmétique.
+//    On crée un byte via int.toByte() (-> Option<byte>, None si hors plage)
+//    et on relit via byte.toInt().
+//  - Bytes : classe utilitaire injectable, seul pont texte <-> binaire :
+//    encodeUtf8(string) -> byte[] et decodeUtf8(byte[]) -> Result<string, IoError>.
+//    Il n'y a pas de flux d'octets séparé (voir docs/io.md).
+// ─────────────────────────────────────────────────────────────────────────────
+
+int main() {
+    StandardOutput out = inject StandardOutput;
+    Bytes bytes        = inject Bytes;
+
+    // 1. int -> byte (avec contrôle de plage explicite)
+    int n = 200;
+    match n.toByte() {
+        Option::Some(b) => { out.writeLine("byte = " + b.toString()); }   // 200
+        Option::None    => { out.writeLine("hors plage"); }
+    }
+    out.writeLine("300 hors plage ? " + (300).toByte().isNone().toString()); // true
+
+    // 2. string -> byte[] (encodage UTF-8)
+    byte[] data = bytes.encodeUtf8("héllo");
+    out.writeLine("octets UTF-8 de \"héllo\" : " + data.length().toString()); // 6 ('é' = 2 octets)
+
+    // 3. byte[] -> string (décodage, peut échouer)
+    Result<string, IoError> decoded = bytes.decodeUtf8(data);
+    match decoded {
+        Result::Ok(s)  => { out.writeLine("décodé : " + s); }
+        Result::Err(e) => { out.writeLine("erreur : " + e.message()); }
+    }
+
+    // 4. octet invalide -> erreur de décodage
+    byte[] bad = new byte[1];
+    match bad.set(0) {
+        Option::Some(r) => { r.set((255).toByte().get()); }
+        Option::None    => {}
+    }
+    out.writeLine("0xFF valide ? " + bytes.decodeUtf8(bad).isOk().toString()); // false
+
+    return 0;
+}

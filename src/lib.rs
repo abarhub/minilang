@@ -21,6 +21,7 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/minilang/lang/Character.mini"), "\n",
     include_str!("../lib/std/minilang/lang/Boolean.mini"),   "\n",
     include_str!("../lib/std/minilang/lang/Integer.mini"),   "\n",
+    include_str!("../lib/std/minilang/lang/Byte.mini"),      "\n",
     include_str!("../lib/std/minilang/lang/Float.mini"),     "\n",
     include_str!("../lib/std/minilang/lang/Double.mini"),    "\n",
     // ── minilang.collection ────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ pub const STDLIB: &str = concat!(
     include_str!("../lib/std/minilang/io/StringOutput.mini"),   "\n",
     include_str!("../lib/std/minilang/io/StringInput.mini"),    "\n",
     include_str!("../lib/std/minilang/io/BufferedWriter.mini"), "\n",
+    include_str!("../lib/std/minilang/io/Bytes.mini"),          "\n",
     // ── minilang.system ──────────────────────────────────────────────────────────
     include_str!("../lib/std/minilang/system/StandardOutput.mini"), "\n",
     include_str!("../lib/std/minilang/system/StandardError.mini"),  "\n",

@@ -9,7 +9,27 @@ Toutes ces classes sont dans la bibliothèque standard : accessibles sans import
 
 ## Principe : une seule hiérarchie, orientée texte
 
-Contrairement à Java (flux d'octets `InputStream` **et** flux de caractères `Reader`), minilang a **une seule hiérarchie, orientée texte**. L'unité d'I/O est la `string` (UTF-8) ; il n'y a pas de flux d'octets séparé. Le binaire (type `byte`, fichiers) viendra plus tard via des conversions `string ↔ byte[]`, sans hiérarchie parallèle.
+Contrairement à Java (flux d'octets `InputStream` **et** flux de caractères `Reader`), minilang a **une seule hiérarchie, orientée texte**. L'unité d'I/O est la `string` (UTF-8) ; il n'y a pas de flux d'octets séparé. Le binaire passe par le type `byte` et des **conversions** `string ↔ byte[]`, sans hiérarchie parallèle.
+
+## Binaire : le type `byte` et les conversions
+
+`byte` est l'octet non signé (0–255), un type de **stockage** sans arithmétique. On le construit depuis un `int` et on le relit en `int` :
+
+```java
+byte b = (200).toByte().get();   // int.toByte() -> Option<byte> (None si hors 0..255)
+int  n = b.toInt();              // toujours valide
+```
+
+La classe utilitaire **injectable `Bytes`** est le seul pont texte ↔ binaire :
+
+```java
+Bytes bytes = inject Bytes;
+
+byte[] data = bytes.encodeUtf8("héllo");          // string -> octets UTF-8 (total)
+Result<string, IoError> r = bytes.decodeUtf8(data); // octets -> string (Err si UTF-8 invalide)
+```
+
+`byte[]` est un tableau ordinaire (`new byte[n]`, `get`/`set`…), distinct de `int[]`. Il n'y a **pas** de flux binaire : pour lire/écrire des octets en masse, on convertira depuis/vers `byte[]` (l'I/O fichiers binaire viendra dans une phase ultérieure).
 
 ## Result : les erreurs sont explicites
 
