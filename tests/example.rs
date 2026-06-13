@@ -22,3 +22,5 @@ mod example_collections_tests;
 mod example_di_tests;
 #[path = "example/example_io_tests.rs"]
 mod example_io_tests;
+#[path = "example/example_stdin_tests.rs"]
+mod example_stdin_tests;

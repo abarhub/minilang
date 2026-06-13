@@ -1,0 +1,70 @@
+// ── Bibliothèque standard – StringInput ──────────────────────────────────────
+//  Entrée en mémoire : lit depuis une string interne. Pendant des « StandardInput »
+//  des tests (on binde Input dessus, on alimente avec feed(), puis le code testé
+//  lit normalement). Écrite en minilang pur.
+
+package minilang.io;
+
+import minilang.lang.Option;
+import minilang.lang.Result;
+import minilang.io.Input;
+import minilang.io.IoError;
+
+service mut class StringInput implements Input {
+    string data;
+    int    pos;     // position courante (en nombre de caractères)
+
+    StringInput() { data = ""; pos = 0; }
+
+    // Ajoute du texte à lire ensuite.
+    mutable void feed(string s) { data = data + s; }
+
+    mutable Result<Option<string>, IoError> readLine() {
+        int len = data.length();
+        if (pos >= len) {
+            return Result<Option<string>, IoError>::Ok(Option<string>::None);
+        }
+        string rest = data.substring(pos, len);
+        Option<int> nl = rest.indexOf("\n");
+        match nl {
+            Option::Some(i) => {
+                string line = rest.substring(0, i);
+                // Cas '\r\n' : retire le '\r' final pour rester cohérent avec
+                // StandardInput (même politique de fin de ligne).
+                if (line.endsWith("\r")) {
+                    line = line.substring(0, line.length() - 1);
+                }
+                pos = pos + i + 1;          // saute aussi le '\n'
+                return Result<Option<string>, IoError>::Ok(Option<string>::Some(line));
+            }
+            Option::None => {
+                pos = len;                  // dernière ligne sans '\n' final
+                return Result<Option<string>, IoError>::Ok(Option<string>::Some(rest));
+            }
+        }
+    }
+
+    mutable Result<Option<char>, IoError> readChar() {
+        int len = data.length();
+        if (pos >= len) {
+            return Result<Option<char>, IoError>::Ok(Option<char>::None);
+        }
+        Option<char> c = data.charAt(pos);
+        pos = pos + 1;
+        match c {
+            Option::Some(ch) => {
+                return Result<Option<char>, IoError>::Ok(Option<char>::Some(ch));
+            }
+            Option::None => {
+                return Result<Option<char>, IoError>::Ok(Option<char>::None);
+            }
+        }
+    }
+
+    mutable Result<string, IoError> readAll() {
+        int len = data.length();
+        string rest = data.substring(pos, len);
+        pos = len;
+        return Result<string, IoError>::Ok(rest);
+    }
+}

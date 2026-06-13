@@ -67,7 +67,23 @@ StandardError err = inject StandardError;
 err.writeLine("attention");
 ```
 
-`StandardInput` (stdin) arrivera en phase 2.
+### Lecture sur l'entrée standard
+
+`StandardInput` (stdin) est aussi un service injectable :
+
+```java
+StandardInput in = inject StandardInput;
+bool fini = false;
+while (!fini) {
+    Result<Option<string>, IoError> r = in.readLine();
+    match r.getValue() {
+        Option::Some(ligne) => { /* traiter la ligne */ }
+        Option::None        => { fini = true; }   // EOF
+    }
+}
+```
+
+`readLine()` retire le saut de ligne final ; `readChar()` lit un caractère Unicode ; `readAll()` lit tout le reste. Voir l'exemple [examples/example_stdin.mini](../examples/example_stdin.mini) (à alimenter par un pipe).
 
 ## Capture en mémoire et testabilité
 
@@ -91,8 +107,12 @@ test void leRapportEcritDeuxLignes() {
 }
 ```
 
+Symétriquement, `StringInput` (dans `minilang.io`) est une entrée en mémoire : on l'alimente avec `feed(string)` puis le code testé lit normalement. En test on binde `Input` sur `StringInput`.
+
+`BufferedWriter` (dans `minilang.io`) est une sortie bufferisée concrète : elle enveloppe un `Output` quelconque, accumule les écritures et ne les transmet qu'au `flush()`. À construire explicitement (`new BufferedWriter(target)`).
+
 C'est le bénéfice combiné de l'injection de dépendances, des modules de binding et de l'héritage d'interface.
 
-> Note : `StandardOutput` / `StandardError` écrivent sur les vrais flux du processus ; leur sortie n'est pas capturée par `print`. En test, on passe par `StringOutput` (binding).
+> Note : `StandardOutput` / `StandardError` / `StandardInput` parlent aux vrais flux du processus ; leur sortie n'est pas capturée par `print`, et lire `StandardInput` bloque en attente d'entrée. En test, on passe par `StringOutput` / `StringInput` (binding).
 
-Voir l'exemple complet : [examples/example_io.mini](../examples/example_io.mini).
+Voir les exemples : [examples/example_io.mini](../examples/example_io.mini) (sorties) et [examples/example_stdin.mini](../examples/example_stdin.mini) (entrée).

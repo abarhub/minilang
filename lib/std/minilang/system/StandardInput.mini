@@ -1,0 +1,17 @@
+// ── Bibliothèque standard – StandardInput ────────────────────────────────────
+//  Entrée standard du processus (stdin). Service injectable.
+//  Les méthodes sont natives (builtin) : elles lisent réellement sur stdin.
+//  EOF est signalé par Ok(None) ; une vraie erreur d'I/O par Err(IoError).
+
+package minilang.system;
+
+import minilang.lang.Option;
+import minilang.lang.Result;
+import minilang.io.Input;
+import minilang.io.IoError;
+
+service mut class StandardInput implements Input {
+    mutable Result<Option<string>, IoError> readLine() builtin;
+    mutable Result<Option<char>, IoError>   readChar() builtin;
+    mutable Result<string, IoError>         readAll()  builtin;
+}

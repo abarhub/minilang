@@ -1,0 +1,40 @@
+// ── Bibliothèque standard – BufferedWriter ───────────────────────────────────
+//  Sortie bufferisée : accumule les écritures et ne les transmet à la sortie
+//  sous-jacente (un Output quelconque) qu'au moment du flush(). Démontre la
+//  composition d'Output. Écrite en minilang pur ; à construire explicitement
+//  (new BufferedWriter(target)) — ce n'est pas un service.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.Output;
+import minilang.io.BufferedOutput;
+import minilang.io.Unit;
+import minilang.io.IoError;
+
+mut class BufferedWriter implements BufferedOutput {
+    Output target;
+    string buffer;
+
+    BufferedWriter(Output target) {
+        this.target = target;
+        buffer = "";
+    }
+
+    mutable Result<Unit, IoError> write(string s) {
+        buffer = buffer + s;
+        return Result<Unit, IoError>::Ok(new Unit());
+    }
+
+    mutable Result<Unit, IoError> writeLine(string s) {
+        buffer = buffer + s + "\n";
+        return Result<Unit, IoError>::Ok(new Unit());
+    }
+
+    // Transmet le tampon à la sortie sous-jacente puis le vide.
+    mutable Result<Unit, IoError> flush() {
+        Result<Unit, IoError> r = target.write(buffer);
+        buffer = "";
+        return r;
+    }
+}

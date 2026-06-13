@@ -4,6 +4,24 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Système d'entrée/sortie (phase 2 : entrée + bufferisation)
+
+- **`StandardInput`** (`minilang.system`) : service injectable lisant le vrai stdin. `readLine()` (sans le saut de ligne, EOF = `Ok(None)`), `readChar()` (caractère Unicode), `readAll()` — builtins natifs.
+- **`StringInput`** (`minilang.io`) : entrée en mémoire (`feed(string)`), double de test pour `bind Input to StringInput`. Écrite en minilang pur.
+- **`BufferedWriter`** (`minilang.io`) : sortie bufferisée concrète enveloppant un `Output`, transmise au `flush()`. Écrite en minilang pur.
+
+```java
+StandardInput in = inject StandardInput;
+match in.readLine().getValue() {
+    Option::Some(ligne) => { /* ... */ }
+    Option::None        => { /* EOF */ }
+}
+```
+
+Exemple : `examples/example_stdin.mini` (alimenté par pipe). Doc : `docs/io.md`.
+
+---
+
 ## [13/06/2026] — Système d'entrée/sortie (phase 1 : sorties)
 
 Packages **`minilang.io`** (interfaces `Output`, `Flushable`, `BufferedOutput extends Output, Flushable`, `Input`, plus `IoError`, `Unit`, `StringOutput`) et **`minilang.system`** (`StandardOutput`, `StandardError`).
