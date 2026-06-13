@@ -127,6 +127,9 @@ pub struct Interpreter {
     /// Noms des interfaces — pour classifier les paramètres de constructeur
     /// des services (dépendance vs valeur de configuration)
     interfaces: std::collections::HashSet<String>,
+    /// Interface → ses interfaces parentes (pour la conformité transitive d'un
+    /// service à une interface lors de la résolution d'injection)
+    iface_parents: HashMap<String, Vec<String>>,
     /// Bindings explicites des modules : interface → service concret
     binds_to: HashMap<String, String>,
     /// Valeurs de configuration des modules : service → args du `with`
@@ -169,6 +172,8 @@ impl Interpreter {
             enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
             funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
             interfaces: program.interfaces.iter().map(|i| i.name.clone()).collect(),
+            iface_parents: program.interfaces.iter()
+                .map(|i| (i.name.clone(), i.parents.clone())).collect(),
             binds_to,
             with_values,
             singletons: HashMap::new(),
@@ -709,6 +714,13 @@ impl Interpreter {
                                     };
                                     Ok(arr.borrow()[idx].clone())
                                 }
+                                // ── Flux standard (minilang.system) ──────────
+                                ("StandardOutput", "write")     => io_write(&args, false, false),
+                                ("StandardOutput", "writeLine") => io_write(&args, true,  false),
+                                ("StandardOutput", "flush")     => io_flush(false),
+                                ("StandardError",  "write")     => io_write(&args, false, true),
+                                ("StandardError",  "writeLine") => io_write(&args, true,  true),
+                                ("StandardError",  "flush")     => io_flush(true),
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -1462,7 +1474,7 @@ impl Interpreter {
         }
         if let Some(s) = self.binds_to.get(name) { return Ok(s.clone()); }
         let mut impls: Vec<&String> = self.classes.values()
-            .filter(|c| c.is_service && c.implements.iter().any(|i| i == name))
+            .filter(|c| c.is_service && self.class_conforms(&c.name, name))
             .map(|c| &c.name)
             .collect();
         impls.sort();
@@ -1470,6 +1482,31 @@ impl Interpreter {
             Some(n) => Ok((*n).clone()),
             None    => err!("Aucun service pour '{}'", name),
         }
+    }
+
+    /// true si la classe `cn` est conforme à l'interface `iface` : elle
+    /// l'implémente directement, ou implémente une interface qui en hérite
+    /// (transitif), ou hérite d'une classe conforme.
+    fn class_conforms(&self, cn: &str, iface: &str) -> bool {
+        let Some(c) = self.classes.get(cn) else { return false };
+        for i in &c.implements {
+            if i == iface || self.iface_extends(i, iface) { return true; }
+        }
+        if let Some(p) = &c.parent {
+            if self.class_conforms(p, iface) { return true; }
+        }
+        false
+    }
+
+    /// true si l'interface `sub` étend (transitivement) `sup`.
+    fn iface_extends(&self, sub: &str, sup: &str) -> bool {
+        if sub == sup { return true; }
+        if let Some(parents) = self.iface_parents.get(sub) {
+            for p in parents {
+                if self.iface_extends(p, sup) { return true; }
+            }
+        }
+        false
     }
 
     /// Retourne l'instance du service `cn`, en l'instanciant (ainsi que ses
@@ -1624,6 +1661,76 @@ fn make_some(v: Value) -> Value {
         enum_name: "Option".to_string(), variant_name: "Some".to_string(),
         fields, field_order: vec!["value".to_string()],
     }))
+}
+
+// ── Helpers Result / I/O ────────────────────────────────────────────────────
+
+/// `Result::Ok(value)`
+fn make_ok(value: Value) -> Value {
+    let mut fields = HashMap::new();
+    fields.insert("value".to_string(), value);
+    Value::Enum(Rc::new(EnumData {
+        enum_name: "Result".to_string(), variant_name: "Ok".to_string(),
+        fields, field_order: vec!["value".to_string()],
+    }))
+}
+
+/// `Result<Unit, IoError>::Ok(new Unit())` — succès d'I/O sans valeur.
+fn ok_unit() -> Value {
+    let unit = Value::Object(Rc::new(RefCell::new(ObjectData {
+        class_name: "Unit".to_string(), fields: HashMap::new(),
+    })));
+    make_ok(unit)
+}
+
+/// `Result::Err(IoError::<variant>(message?))`
+fn io_err(variant: &str, message: Option<String>) -> Value {
+    let mut ife = HashMap::new();
+    let mut order = vec![];
+    if let Some(m) = message {
+        ife.insert("message".to_string(), Value::Str(m));
+        order.push("message".to_string());
+    }
+    let io = Value::Enum(Rc::new(EnumData {
+        enum_name: "IoError".to_string(), variant_name: variant.to_string(),
+        fields: ife, field_order: order,
+    }));
+    let mut fields = HashMap::new();
+    fields.insert("error".to_string(), io);
+    Value::Enum(Rc::new(EnumData {
+        enum_name: "Result".to_string(), variant_name: "Err".to_string(),
+        fields, field_order: vec!["error".to_string()],
+    }))
+}
+
+/// Écrit `args[0]` (une string) sur stdout/stderr, avec ou sans saut de ligne.
+/// Renvoie un `Result<Unit, IoError>` minilang (Ok, ou Err en cas d'échec réel).
+fn io_write(args: &[Value], newline: bool, to_stderr: bool) -> Result<Value, RuntimeError> {
+    use std::io::Write;
+    let s = match args.first() {
+        Some(Value::Str(s)) => s.clone(),
+        _ => return err!("write() requiert une string"),
+    };
+    let res = if to_stderr {
+        let mut h = std::io::stderr();
+        (if newline { writeln!(h, "{}", s) } else { write!(h, "{}", s) }).and_then(|_| h.flush())
+    } else {
+        let mut h = std::io::stdout();
+        (if newline { writeln!(h, "{}", s) } else { write!(h, "{}", s) }).and_then(|_| h.flush())
+    };
+    match res {
+        Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+    }
+}
+
+fn io_flush(to_stderr: bool) -> Result<Value, RuntimeError> {
+    use std::io::Write;
+    let res = if to_stderr { std::io::stderr().flush() } else { std::io::stdout().flush() };
+    match res {
+        Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+    }
 }
 
 // ── Hachage de valeurs ────────────────────────────────────────────────────────

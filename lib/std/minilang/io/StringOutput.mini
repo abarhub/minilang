@@ -1,0 +1,34 @@
+// ── Bibliothèque standard – StringOutput ─────────────────────────────────────
+//  Sortie en mémoire : accumule le texte écrit dans une string interne.
+//  Sert d'« écran de capture » pour les tests (on binde Output dessus, puis on
+//  lit content()), équivalent du StringWriter de Java. Écrite en minilang pur.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.BufferedOutput;
+import minilang.io.Unit;
+import minilang.io.IoError;
+
+service mut class StringOutput implements BufferedOutput {
+    string buffer;
+
+    StringOutput() { buffer = ""; }
+
+    mutable Result<Unit, IoError> write(string s) {
+        buffer = buffer + s;
+        return Result<Unit, IoError>::Ok(new Unit());
+    }
+
+    mutable Result<Unit, IoError> writeLine(string s) {
+        buffer = buffer + s + "\n";
+        return Result<Unit, IoError>::Ok(new Unit());
+    }
+
+    mutable Result<Unit, IoError> flush() {
+        return Result<Unit, IoError>::Ok(new Unit());
+    }
+
+    // Contenu accumulé jusqu'ici.
+    string content() { return buffer; }
+}

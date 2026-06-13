@@ -599,10 +599,12 @@ impl TypeChecker {
         if self.interfaces.contains_key(name) {
             // Binding explicite d'un module — prioritaire sur la règle d'unicité
             if let Some(s) = self.binds_to.get(name) { return Ok(s.clone()); }
+            // Services conformes à l'interface, héritage d'interface inclus
             let mut impls: Vec<String> = self.classes.values()
-                .filter(|c| c.is_service && c.implements.iter().any(|i| i == name))
+                .filter(|c| c.is_service)
                 .map(|c| c.name.clone())
                 .collect();
+            impls.retain(|cn| self.is_subclass(cn, name));
             impls.sort();
             return match impls.len() {
                 0 => type_err!(
@@ -652,43 +654,38 @@ impl TypeChecker {
                 // ── bind Iface to Service ─────────────────────────────────
                 let concrete: Option<String> = match &b.to {
                     Some(to) => {
+                        // Pré-calcul pour éviter les conflits d'emprunt avec is_subclass
+                        let known      = self.classes.contains_key(to);
+                        let is_service = self.classes.get(to).map(|c| c.is_service).unwrap_or(false);
+                        let conforms   = self.is_subclass(to, &b.target);
                         if !target_is_iface {
                             self.err(format!(
                                 "Module '{}' : bind {} to {} — la cible d'un `to` doit \
                                  être une interface", m.name, b.target, to));
                             None
+                        } else if !known {
+                            self.err(format!(
+                                "Module '{}' : bind {} to {} — classe '{}' inconnue",
+                                m.name, b.target, to, to));
+                            None
+                        } else if !is_service {
+                            self.err(format!(
+                                "Module '{}' : bind {} to {} — '{}' doit être \
+                                 déclarée `service`", m.name, b.target, to, to));
+                            None
+                        } else if !conforms {
+                            self.err(format!(
+                                "Module '{}' : bind {} to {} — '{}' n'implémente \
+                                 pas '{}'", m.name, b.target, to, to, b.target));
+                            None
+                        } else if self.binds_to.contains_key(&b.target) {
+                            self.err(format!(
+                                "Binding dupliqué pour '{}' : déjà lié à '{}'",
+                                b.target, self.binds_to[&b.target]));
+                            None
                         } else {
-                            match self.classes.get(to) {
-                                None => {
-                                    self.err(format!(
-                                        "Module '{}' : bind {} to {} — classe '{}' inconnue",
-                                        m.name, b.target, to, to));
-                                    None
-                                }
-                                Some(c) if !c.is_service => {
-                                    self.err(format!(
-                                        "Module '{}' : bind {} to {} — '{}' doit être \
-                                         déclarée `service`", m.name, b.target, to, to));
-                                    None
-                                }
-                                Some(c) if !c.implements.iter().any(|i| i == &b.target) => {
-                                    self.err(format!(
-                                        "Module '{}' : bind {} to {} — '{}' n'implémente \
-                                         pas '{}'", m.name, b.target, to, to, b.target));
-                                    None
-                                }
-                                Some(_) => {
-                                    if self.binds_to.contains_key(&b.target) {
-                                        self.err(format!(
-                                            "Binding dupliqué pour '{}' : déjà lié à '{}'",
-                                            b.target, self.binds_to[&b.target]));
-                                        None
-                                    } else {
-                                        self.binds_to.insert(b.target.clone(), to.clone());
-                                        Some(to.clone())
-                                    }
-                                }
-                            }
+                            self.binds_to.insert(b.target.clone(), to.clone());
+                            Some(to.clone())
                         }
                     }
                     None if target_is_service => Some(b.target.clone()),

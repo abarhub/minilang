@@ -1,0 +1,21 @@
+// ── Bibliothèque standard – IoError ──────────────────────────────────────────
+//  Erreur d'entrée/sortie, transportée par Result<_, IoError>.
+
+package minilang.io;
+
+enum IoError {
+    BrokenPipe,
+    WriteFailed(string message),
+    ReadFailed(string message),
+    Other(string message);
+
+    // Message lisible de l'erreur.
+    string message() {
+        match this {
+            IoError::BrokenPipe     => { return "broken pipe"; }
+            IoError::WriteFailed(m) => { return m; }
+            IoError::ReadFailed(m)  => { return m; }
+            IoError::Other(m)       => { return m; }
+        }
+    }
+}

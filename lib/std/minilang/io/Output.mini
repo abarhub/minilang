@@ -1,0 +1,15 @@
+// ── Bibliothèque standard – Output ───────────────────────────────────────────
+//  Flux de sortie textuel. L'unité d'écriture est la string (UTF-8) ; il n'y a
+//  pas de flux d'octets séparé (voir la doc d'I/O). Chaque opération renvoie un
+//  Result<Unit, IoError> : succès sans valeur, ou erreur d'I/O.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.Unit;
+import minilang.io.IoError;
+
+mut interface Output {
+    mutable Result<Unit, IoError> write(string s);      // sans saut de ligne
+    mutable Result<Unit, IoError> writeLine(string s);  // avec saut de ligne
+}

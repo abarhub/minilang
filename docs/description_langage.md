@@ -221,6 +221,15 @@ Animal a = p;                          // Pet est sous-type d'Animal
 
 L'héritage multiple et le diamant sont autorisés (`interface D extends B, C`) ; un cycle d'héritage est une erreur de compilation. Limitation actuelle : les arguments de type sur un parent générique (`extends Base<int>`) sont ignorés.
 
+### Entrées/sorties
+
+Les entrées/sorties sont fournies par les packages `minilang.io` (interfaces `Output`, `Flushable`, `BufferedOutput`, `Input` ; erreurs via `Result<Unit, IoError>`) et `minilang.system` (`StandardOutput`, `StandardError`, services injectables). Hiérarchie unique orientée texte (pas de flux d'octets séparé). Détails et exemples : voir `docs/io.md`.
+
+```java
+StandardOutput out = inject StandardOutput;
+out.writeLine("bonjour");
+```
+
 ### Enum
 
 Exemple :

@@ -1,0 +1,16 @@
+// ── Bibliothèque standard – StandardError ────────────────────────────────────
+//  Sortie d'erreur standard du processus (stderr). Service injectable.
+//  Les méthodes sont natives (builtin) : elles écrivent réellement sur stderr.
+
+package minilang.system;
+
+import minilang.lang.Result;
+import minilang.io.BufferedOutput;
+import minilang.io.Unit;
+import minilang.io.IoError;
+
+service mut class StandardError implements BufferedOutput {
+    mutable Result<Unit, IoError> write(string s)     builtin;
+    mutable Result<Unit, IoError> writeLine(string s) builtin;
+    mutable Result<Unit, IoError> flush()             builtin;
+}

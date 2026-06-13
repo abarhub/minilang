@@ -1,0 +1,12 @@
+// ── Bibliothèque standard – Flushable ────────────────────────────────────────
+//  Capacité à vider un tampon vers la destination sous-jacente.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.Unit;
+import minilang.io.IoError;
+
+mut interface Flushable {
+    mutable Result<Unit, IoError> flush();
+}
