@@ -1,0 +1,17 @@
+// ── Bibliothèque standard – FileSystem ───────────────────────────────────────
+//  Fabrique privilégiée de capacités de répertoire. Service injectable : c'est
+//  le SEUL moyen d'obtenir une racine. Le code utilisateur ne peut ensuite que
+//  restreindre cette racine (sub / subRW), jamais en créer une pointant où il
+//  veut — pas d'autorité ambiante.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.IoError;
+import minilang.io.ReadWriteDir;
+
+service class FileSystem {
+    // Crée un nouveau répertoire temporaire (vide) et renvoie une capacité
+    // lecture/écriture confinée à celui-ci. Un nouveau à chaque appel.
+    Result<ReadWriteDir, IoError> tempDir() builtin;
+}

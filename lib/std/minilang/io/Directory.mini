@@ -1,0 +1,34 @@
+// ── Bibliothèque standard – Directory ────────────────────────────────────────
+//  Implémentation concrète d'une capacité de répertoire (native).
+//
+//  Une instance porte un chemin absolu privé (_path) et son mode (_writable).
+//  Ces champs ne sont JAMAIS positionnés par du code utilisateur : seules les
+//  fabriques natives (FileSystem.tempDir, sub/subRW) les renseignent. Un
+//  `new Directory()` direct a un _path vide et est donc INERTE — toute
+//  opération renvoie une erreur. C'est ce qui rend la racine non-forgeable.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.Unit;
+import minilang.io.IoError;
+import minilang.io.ReadDir;
+import minilang.io.ReadWriteDir;
+
+class Directory implements ReadWriteDir {
+    string _path;       // chemin absolu de la racine ("" = capacité inerte)
+    bool   _writable;   // false = lecture seule (backstop à la garantie de type)
+
+    Result<byte[], IoError> readBytes(string child)               builtin;
+    Result<string, IoError> readText(string child)                builtin;
+    bool                    exists(string child)                  builtin;
+    ReadDir                 sub(string name)                      builtin;
+    string                  name()                                builtin;
+
+    Result<Unit, IoError>   writeBytes(string child, byte[] data)    builtin;
+    Result<Unit, IoError>   writeText(string child, string content)  builtin;
+    Result<Unit, IoError>   appendBytes(string child, byte[] data)   builtin;
+    Result<Unit, IoError>   appendText(string child, string content) builtin;
+    Result<Unit, IoError>   delete(string child)                  builtin;
+    ReadWriteDir            subRW(string name)                    builtin;
+}

@@ -1,0 +1,29 @@
+// ── Bibliothèque standard – ReadWriteDir ─────────────────────────────────────
+//  Capacité d'accès fichiers en LECTURE/ÉCRITURE, confinée à un sous-arbre.
+//  Hérite de ReadDir (donc utilisable partout où une lecture suffit). Une
+//  fonction qui reçoit un ReadDir ne peut pas compiler une écriture : la
+//  restriction de droits est garantie à la compilation.
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.Unit;
+import minilang.io.IoError;
+import minilang.io.ReadDir;
+
+interface ReadWriteDir extends ReadDir {
+    // Écrit un fichier enfant (écrase). Crée les répertoires parents au besoin.
+    Result<Unit, IoError> writeBytes(string child, byte[] data);
+    Result<Unit, IoError> writeText(string child, string content);
+
+    // Ajoute en fin de fichier (le crée s'il n'existe pas).
+    Result<Unit, IoError> appendBytes(string child, byte[] data);
+    Result<Unit, IoError> appendText(string child, string content);
+
+    // Supprime un fichier enfant.
+    Result<Unit, IoError> delete(string child);
+
+    // Dérive une capacité LECTURE/ÉCRITURE sur un sous-répertoire
+    // (jamais plus de droits que le parent).
+    ReadWriteDir subRW(string name);
+}
