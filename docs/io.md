@@ -91,7 +91,7 @@ root.readText("../secret");                       // → Err : hors de la capaci
 
 ### Sources de racine
 
-- **`FileSystem.tempDir()`** → `Result<ReadWriteDir, IoError>` : un répertoire temporaire frais (un par appel).
+- **`FileSystem.tempDir()`** → `Result<ReadWriteDir, IoError>` : un répertoire temporaire frais (un par appel). Son nettoyage est piloté par `[files] temp` (voir ci-dessous).
 - **`FileSystem.root(nom)` / `rootRW(nom)`** : une racine **nommée** configurée dans le `minilang.toml` (`[files.roots]`). `root` donne une vue lecture seule ; `rootRW` échoue si la racine est en lecture seule ou inconnue.
 
 ```toml
@@ -113,7 +113,19 @@ fs.rootRW("assets");     // → Err : racine en lecture seule
 
 Les répertoires configurés doivent **exister au démarrage** (sinon erreur de configuration fatale) ; leur chemin est canonicalisé. C'est la config — hors du programme — qui octroie les racines : le code ne peut pas en forger une.
 
-Les évasions par `..`, chemin absolu **et lien symbolique/jonction** (la cible canonique est vérifiée comme restant sous la racine) sont bloquées. Reste une fenêtre **TOCTOU** théorique (un lien échangé entre la vérification et l'ouverture) — acceptable pour le modèle de menace actuel (évasions accidentelles, code coopératif) ; une étanchéité adversariale demanderait du confinement niveau OS (`openat`/`RESOLVE_BENEATH`, p. ex. via `cap-std`). Encore à venir : le nettoyage des répertoires temporaires (marqueur `.minilang-temp` pour un processus externe).
+Les évasions par `..`, chemin absolu **et lien symbolique/jonction** (la cible canonique est vérifiée comme restant sous la racine) sont bloquées. Reste une fenêtre **TOCTOU** théorique (un lien échangé entre la vérification et l'ouverture) — acceptable pour le modèle de menace actuel (évasions accidentelles, code coopératif) ; une étanchéité adversariale demanderait du confinement niveau OS (`openat`/`RESOLVE_BENEATH`, p. ex. via `cap-std`).
+
+### Nettoyage des répertoires temporaires
+
+Piloté par `[files] temp` dans le `minilang.toml` :
+
+| Valeur | Effet |
+|---|---|
+| `mark` (défaut) | Pose un fichier marqueur `.minilang-temp` **à la création** ; un processus externe (cron…) peut supprimer les répertoires marqués selon leur âge. |
+| `delete` | Supprime les répertoires temp créés **en fin de programme** (best-effort) ; le marqueur reste posé comme filet en cas d'arrêt anormal. |
+| `none` | Ne rien faire — pas de marqueur, pas de suppression. |
+
+Le marqueur est posé **dès la création** (et non en fin de programme) : c'est robuste face à un arrêt brutal, où le code de fin ne s'exécuterait pas.
 
 Voir l'exemple : [examples/example_file_capabilities.mini](../examples/example_file_capabilities.mini).
 
