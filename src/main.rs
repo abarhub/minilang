@@ -186,6 +186,7 @@ fn run_mode(args: &[String]) {
         config::TempCleanup::Delete => (true,  true),
     };
     interp.set_temp_policy(mark, del);
+    interp.set_files_unrestricted(cfg.files.unrestricted);
     match interp.run(&program) {
         Ok(code) => { println!("\n{}", "─".repeat(50)); info!("Code de sortie : {}", code); }
         Err(e)   => { error!("{}", e); process::exit(1); }

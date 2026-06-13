@@ -3,8 +3,12 @@
 //! Les chemins sont en slashs avant (acceptés par std::fs, y compris Windows)
 //! pour pouvoir être insérés tels quels dans une string literal minilang.
 
-use mini_parser::typechecker::check_source;
-use mini_parser::interpreter::{run_source, run_source_with_output};
+use mini_parser::typechecker::{check_source, TypeChecker};
+use mini_parser::interpreter::{Interpreter, run_source};
+use chumsky::Parser;
+use mini_parser::parser::program_parser;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -19,18 +23,47 @@ fn temp_path(tag: &str) -> String {
 
 fn cleanup(path: &str) { let _ = std::fs::remove_file(path); }
 
-fn run_ok(src: &str) -> i64 {
-    if let Err(e) = check_source(src) {
-        panic!("Typecheck should pass:\n{}\n---\n{}", src, e.join("\n"));
-    }
-    run_source(src).unwrap_or_else(|e| panic!("Run failed:\n{}\n---\n{}", src, e))
-}
-
+/// Exécute `src` avec l'accès fichiers brut autorisé ([files] unrestricted) —
+/// la classe `Files` est gardée par défaut.
 fn run_output(src: &str) -> (i64, Vec<String>) {
     if let Err(e) = check_source(src) {
         panic!("Typecheck should pass:\n{}\n---\n{}", src, e.join("\n"));
     }
-    run_source_with_output(src).unwrap_or_else(|e| panic!("Run failed:\n{}", e))
+    let full = format!("{}\n{}", mini_parser::STDLIB, src);
+    let program = program_parser().parse(full.as_str()).expect("parse");
+    assert!(TypeChecker::new(&program).check(&program).is_empty());
+    let captured = Rc::new(RefCell::new(Vec::<String>::new()));
+    let cap = captured.clone();
+    let mut interp = Interpreter::new_with_print(&program,
+        Box::new(move |l: &str| cap.borrow_mut().push(l.to_string())));
+    interp.set_files_unrestricted(true);
+    let ret = interp.run(&program).unwrap_or_else(|e| panic!("Run failed:\n{}", e));
+    drop(interp);
+    (ret, Rc::try_unwrap(captured).unwrap().into_inner())
+}
+
+fn run_ok(src: &str) -> i64 {
+    run_output(src).0
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Garde : Files brut interdit par défaut (sûr par défaut)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn files_denied_without_unrestricted() {
+    // Le typecheck passe (le garde est au runtime), mais l'exécution échoue
+    // tant que [files] unrestricted = true n'est pas activé.
+    let src = r#"
+        int main() {
+            Files files = inject Files;
+            files.writeText("ne_devrait_pas_exister.txt", "x");
+            return 0;
+        }
+    "#;
+    assert!(check_source(src).is_ok());
+    let err = run_source(src).unwrap_err();   // run_source = défaut (gardé)
+    assert!(err.contains("non autorisé"), "message inattendu : {}", err);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

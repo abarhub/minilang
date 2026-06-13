@@ -31,9 +31,16 @@ Result<string, IoError> r = bytes.decodeUtf8(data); // octets -> string (Err si 
 
 `byte[]` est un tableau ordinaire (`new byte[n]`, `get`/`set`…), distinct de `int[]`. Il n'y a **pas** de flux binaire : on lit/écrit les octets en masse (voir `Files` ci-dessous) et on convertit vers/depuis `string` avec `Bytes`.
 
-## Fichiers : la classe `Files`
+## Fichiers : la classe `Files` (accès brut, désactivé par défaut)
 
-`Files` (injectable, `minilang.io`) lit et écrit des fichiers **en bloc** — pas de flux, pas de handle à fermer (donc aucune fuite de ressource possible). Modèle cohérent avec le reste : les **octets sont la donnée primitive**, la string en est un décodage UTF-8 faillible.
+`Files` (injectable, `minilang.io`) lit et écrit des fichiers **en bloc** sur des **chemins bruts**, sans aucun confinement. Comme c'est une autorité totale sur le système de fichiers, **c'est interdit par défaut** : toute opération échoue tant que la configuration ne l'autorise pas explicitement.
+
+```toml
+[files]
+unrestricted = true     # défaut : false → seules les capacités confinées sont permises
+```
+
+Pour un accès **sûr/confiné**, préférer les **capacités de répertoire** (section suivante) ; `Files` est l'échappatoire bas-niveau pour des outils de confiance. Modèle cohérent avec le reste : les **octets sont la donnée primitive**, la string en est un décodage UTF-8 faillible.
 
 ```java
 Files files = inject Files;
@@ -60,7 +67,7 @@ files.delete("notes.txt");
 | `exists(path)` | `bool` |
 | `delete(path)` | `Result<Unit, IoError>` |
 
-> Note : `Files` travaille sur des chemins **bruts**, sans garde-fou. Pour un accès **confiné**, préférer les capacités de répertoire (ci-dessous). Le streaming de fichiers (ligne par ligne via `Input`/`Output`) n'est pas fourni.
+> Note : le streaming de fichiers (ligne par ligne via `Input`/`Output`) n'est pas fourni — `Files` couvre la lecture/écriture en bloc, et les capacités le confinement.
 
 ## Accès confiné : les capacités de répertoire
 

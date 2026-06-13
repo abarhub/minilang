@@ -140,6 +140,8 @@ pub struct Interpreter {
     /// Racines fichiers configurées : nom → (chemin absolu canonique, writable).
     /// Renseignées depuis [files.roots] du minilang.toml ; vide par défaut.
     file_roots: HashMap<String, (String, bool)>,
+    /// Autorise l'accès fichiers brut (classe `Files`). Sûr par défaut : false.
+    files_unrestricted: bool,
     /// Pose un marqueur `.minilang-temp` à la création des répertoires temp.
     create_temp_marker: bool,
     /// Supprime les répertoires temp créés en fin de `run()`.
@@ -191,11 +193,18 @@ impl Interpreter {
             with_values,
             singletons: HashMap::new(),
             file_roots: HashMap::new(),
+            files_unrestricted: false,  // sûr par défaut : Files brut interdit
             create_temp_marker: true,   // défaut = "mark"
             delete_temp_at_end: false,
             temp_dirs: Vec::new(),
             print_fn,
         }
+    }
+
+    /// Autorise (ou non) l'accès fichiers brut via la classe `Files`
+    /// (issu de `[files] unrestricted`). Sûr par défaut : false.
+    pub fn set_files_unrestricted(&mut self, allowed: bool) {
+        self.files_unrestricted = allowed;
     }
 
     /// Politique de nettoyage des répertoires temporaires (issue de [files] temp).
@@ -837,6 +846,10 @@ impl Interpreter {
                                     }
                                 }
                                 // ── Fichiers en bloc (minilang.io.Files) ──────
+                                // Accès brut gardé : interdit sauf [files] unrestricted = true.
+                                ("Files", _) if !self.files_unrestricted => err!(
+                                    "accès fichiers brut non autorisé : ajoutez `[files] unrestricted = true` \
+                                     au minilang.toml, ou utilisez une capacité confinée (FileSystem)"),
                                 ("Files", "readBytes")  if args.len() == 1 => file_read_bytes(&args),
                                 ("Files", "readText")   if args.len() == 1 => file_read_text(&args),
                                 ("Files", "writeBytes") if args.len() == 2 => {

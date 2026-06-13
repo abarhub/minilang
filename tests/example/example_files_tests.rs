@@ -8,7 +8,7 @@ use mini_parser::typechecker::check_source;
 
 #[test]
 fn example_files_typechecks() {
-    let src = include_str!("../../examples/example_files.mini");
+    let src = include_str!("../../examples/example_files/app.mini");
     if let Err(e) = check_source(src) {
         panic!("Typecheck failed:\n{}", e.join("\n"));
     }

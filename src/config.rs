@@ -129,6 +129,11 @@ pub struct FilesSection {
     /// Nettoyage des répertoires temporaires (`tempDir()`). Défaut : `mark`.
     #[serde(default)]
     pub temp: TempCleanup,
+    /// Autorise l'accès fichiers BRUT (classe `Files`, chemins arbitraires, sans
+    /// confinement). Sûr par défaut : `false` → seules les capacités confinées
+    /// (`FileSystem` / racines) sont utilisables.
+    #[serde(default)]
+    pub unrestricted: bool,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
