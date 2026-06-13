@@ -4,6 +4,16 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Garde-fou symlink pour les capacités fichiers
+
+Le confinement des capacités de répertoire ne se limite plus au rejet lexical de `..`/chemins absolus : la cible réelle est **canonicalisée** (liens symboliques et jonctions Windows résolus) et vérifiée comme restant **sous la racine canonique**. Un lien pointant hors de la capacité est donc bloqué (`chemin hors de la capacité`) ; un lien interne reste autorisé.
+
+Détail : `cap_resolve` compare le plus profond ancêtre *existant* de la cible à celui de la racine (`canonicalize` exige l'existence — un fichier à créer n'existe pas encore), la racine octroyée existant toujours. Reste une fenêtre TOCTOU théorique, acceptable pour le modèle coopératif (étanchéité adversariale → confinement OS type `cap-std`, non retenu).
+
+Tests : escapade via symlink bloquée / lien interne autorisé (`#[cfg(unix)]`) ; vérifié sur Windows via une jonction. À venir : nettoyage des temp.
+
+---
+
 ## [13/06/2026] — Racines fichiers configurées (`[files.roots]`)
 
 Les capacités de répertoire peuvent désormais être **octroyées par le `minilang.toml`** (en plus de `FileSystem.tempDir()`) : des **racines nommées**, avec un mode d'accès.

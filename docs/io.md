@@ -67,7 +67,7 @@ files.delete("notes.txt");
 Plutôt que des chemins bruts, on peut travailler avec des **capacités** : un objet qui représente l'autorité d'accéder à un sous-arbre, et rien au-dessus. C'est le modèle des *object-capabilities* (cf. preopens de WASI, Capsicum).
 
 - On n'écrit jamais de chemin absolu : on obtient une racine via `FileSystem` (seul à pouvoir en créer une — pas d'autorité ambiante), puis on accède à des **enfants relatifs**.
-- On ne peut que **restreindre** : `sub`/`subRW` dérivent une capacité sur un sous-répertoire, jamais au-dessus. `..` et les chemins absolus sont rejetés.
+- On ne peut que **restreindre** : `sub`/`subRW` dérivent une capacité sur un sous-répertoire, jamais au-dessus. `..` et les chemins absolus sont rejetés (rejet lexical) ; et la cible réelle est **canonicalisée** puis vérifiée comme restant sous la racine, ce qui bloque aussi les **liens symboliques** (ou jonctions Windows) pointant hors de la capacité. Un lien interne qui reste dans la racine est autorisé.
 - Le **mode est dans le type** : `ReadDir` (lecture) vs `ReadWriteDir extends ReadDir` (+ écriture). Une fonction qui reçoit un `ReadDir` ne peut **pas compiler** une écriture — la restriction de droits est garantie à la compilation.
 
 ```java
@@ -113,7 +113,7 @@ fs.rootRW("assets");     // → Err : racine en lecture seule
 
 Les répertoires configurés doivent **exister au démarrage** (sinon erreur de configuration fatale) ; leur chemin est canonicalisé. C'est la config — hors du programme — qui octroie les racines : le code ne peut pas en forger une.
 
-Encore à venir : un garde-fou contre les symlinks, et le nettoyage des répertoires temporaires (marqueur `.minilang-temp` pour un processus externe). Modèle de menace actuel : prévention des évasions accidentelles et code coopératif — pas la défense contre un programme qui planterait un lien symbolique.
+Les évasions par `..`, chemin absolu **et lien symbolique/jonction** (la cible canonique est vérifiée comme restant sous la racine) sont bloquées. Reste une fenêtre **TOCTOU** théorique (un lien échangé entre la vérification et l'ouverture) — acceptable pour le modèle de menace actuel (évasions accidentelles, code coopératif) ; une étanchéité adversariale demanderait du confinement niveau OS (`openat`/`RESOLVE_BENEATH`, p. ex. via `cap-std`). Encore à venir : le nettoyage des répertoires temporaires (marqueur `.minilang-temp` pour un processus externe).
 
 Voir l'exemple : [examples/example_file_capabilities.mini](../examples/example_file_capabilities.mini).
 

@@ -213,3 +213,58 @@ fn configured_root_still_confines() {
     assert_eq!(lines, vec!["bloqué"]);
     std::fs::remove_dir_all(&dir).ok();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Garde-fou symlink (Unix uniquement : créer un symlink sous Windows exige des
+//  privilèges). Le code de confinement est lui multi-plateforme.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(unix)]
+#[test]
+fn symlink_escaping_root_is_blocked() {
+    use std::os::unix::fs::symlink;
+    let root = unique_dir("symesc_root");
+    let outside = unique_dir("symesc_out");
+    std::fs::write(outside.join("secret.txt"), "TOPSECRET").expect("write secret");
+    // root/link -> outside (symlink qui pointe HORS de la capacité)
+    symlink(&outside, root.join("link")).expect("symlink");
+
+    let (ret, lines) = run_with_roots(r#"
+        int main() {
+            FileSystem fs = inject FileSystem;
+            ReadWriteDir data = fs.rootRW("data").getValue();
+            Result<string, IoError> r = data.readText("link/secret.txt");
+            if (r.isErr()) { print("bloqué"); } else { print("FUITE: " + r.getValue()); }
+            return 0;
+        }
+    "#, root_map("data", &root, true));
+    assert_eq!(ret, 0);
+    assert_eq!(lines, vec!["bloqué"]);   // le symlink ne permet pas de sortir
+
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_dir_all(&outside).ok();
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_within_root_is_allowed() {
+    use std::os::unix::fs::symlink;
+    let root = unique_dir("syminr_root");
+    std::fs::create_dir_all(root.join("real")).expect("mkdir real");
+    std::fs::write(root.join("real/data.txt"), "OK").expect("write");
+    // root/alias -> root/real (symlink interne, reste dans la capacité)
+    symlink(root.join("real"), root.join("alias")).expect("symlink");
+
+    let (ret, lines) = run_with_roots(r#"
+        int main() {
+            FileSystem fs = inject FileSystem;
+            ReadDir data = fs.root("data").getValue();
+            print(data.readText("alias/data.txt").getValue());
+            return 0;
+        }
+    "#, root_map("data", &root, false));
+    assert_eq!(ret, 0);
+    assert_eq!(lines, vec!["OK"]);   // symlink interne autorisé
+
+    std::fs::remove_dir_all(&root).ok();
+}
