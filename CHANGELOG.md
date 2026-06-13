@@ -4,6 +4,19 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Accès fichiers brut (`Files`) désactivé par défaut
+
+La classe `Files` (chemins bruts, sans confinement) donne une autorité totale sur le système de fichiers, ce qui contournait le modèle de capacités. Elle est désormais **interdite par défaut** : toute opération `Files` échoue tant que `[files] unrestricted = true` n'est pas explicitement positionné.
+
+```toml
+[files]
+unrestricted = true     # défaut : false
+```
+
+Conséquence : les capacités confinées (`FileSystem` / racines configurées) sont le **mode par défaut** ; l'accès brut devient un opt-in explicite et auditable (échappatoire bas-niveau pour outils de confiance). L'exemple `examples/example_files/` active le drapeau dans son `minilang.toml`.
+
+---
+
 ## [13/06/2026] — Nettoyage des répertoires temporaires (`[files] temp`)
 
 Politique configurable pour les répertoires créés par `FileSystem.tempDir()` :

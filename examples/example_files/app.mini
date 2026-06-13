@@ -7,6 +7,11 @@
 //    - binaire : writeBytes / readBytes (byte[])
 //  Le pont texte <-> binaire reste la classe Bytes.
 //
+//  ATTENTION : Files manipule des chemins BRUTS, sans confinement. C'est interdit
+//  par défaut ; le minilang.toml de ce dossier l'active (`[files] unrestricted`).
+//  Pour un accès sûr/confiné, préférer les capacités (example_file_capabilities).
+//
+//  Lancer depuis ce dossier :  mini_parser
 //  Cet exemple crée puis supprime un fichier temporaire "demo_files.txt".
 // ─────────────────────────────────────────────────────────────────────────────
 

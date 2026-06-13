@@ -96,13 +96,12 @@ mode = "read"            # défaut
 | `path` | Répertoire de la racine, relatif au `minilang.toml`. **Doit exister au démarrage** (sinon erreur fatale) ; canonicalisé | — (obligatoire) |
 | `mode` | `read` (lecture seule) ou `read-write`. `rootRW(nom)` échoue si la racine est `read` | `read` |
 
-La clé `[files] temp` règle le nettoyage des répertoires temporaires de `FileSystem.tempDir()` :
+Autres clés de `[files]` :
 
-| `temp` | Effet | Défaut |
+| Clé | Effet | Défaut |
 |---|---|---|
-| `mark` | Pose un marqueur `.minilang-temp` à la création (nettoyage externe par âge) | ✓ (défaut) |
-| `delete` | Supprime les répertoires temp en fin de programme (marqueur posé en filet) | |
-| `none` | Ne rien faire (ni marqueur, ni suppression) | |
+| `unrestricted` | Autorise l'accès fichiers **brut** (classe `Files`, chemins arbitraires sans confinement). `false` → seules les capacités confinées (`FileSystem` / racines) sont utilisables ; toute opération `Files` échoue | `false` (sûr par défaut) |
+| `temp` | Nettoyage des répertoires de `FileSystem.tempDir()` : `mark` (marqueur `.minilang-temp` à la création, nettoyage externe par âge) / `delete` (suppression en fin de programme, marqueur en filet) / `none` (rien) | `mark` |
 
 ### `[runtime]`
 

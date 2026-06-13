@@ -1,0 +1,12 @@
+# L'accès fichiers BRUT (classe Files, chemins arbitraires) est interdit par
+# défaut. Cet exemple l'active explicitement. Pour un accès confiné (recommandé),
+# voir example_file_capabilities / example_files_config.
+
+[project]
+main = "app.mini"
+
+[files]
+unrestricted = true
+
+[runtime]
+log = "warn"
