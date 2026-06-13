@@ -4,6 +4,26 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — I/O fichiers en bloc (I/O phase 3b)
+
+Classe utilitaire **injectable `Files`** (`minilang.io`) pour lire/écrire des fichiers **en bloc** — pas de flux, pas de handle à fermer. Les octets sont la donnée primitive ; la string est un décodage UTF-8 faillible.
+
+```java
+Files files = inject Files;
+files.writeText("notes.txt", "bonjour");
+Result<string, IoError> txt = files.readText("notes.txt");   // Err si UTF-8 invalide
+Result<byte[], IoError> raw = files.readBytes("photo.png");
+files.appendText("log.txt", "...");
+bool present = files.exists("notes.txt");
+files.delete("notes.txt");
+```
+
+Méthodes : `readBytes`/`readText`, `writeBytes`/`writeText` (écrasent), `appendBytes`/`appendText` (créent si absent), `exists` (→ `bool`), `delete`. Toutes (sauf `exists`) renvoient un `Result<_, IoError>`.
+
+Choix : bloc seul (pas de streaming de fichiers — couvre l'essentiel sans gestion de ressources) ; accès disque libre pour l'instant (garde-fou de sûreté repoussé). Doc : `docs/io.md`, exemple : `examples/example_files.mini`.
+
+---
+
 ## [13/06/2026] — Type `byte` et conversions string ↔ byte[] (I/O phase 3a)
 
 Nouveau primitif **`byte`** : octet non signé (0–255), type de **stockage sans arithmétique** (seuls `==`/`!=` et les conversions). On crée un byte via `int.toByte()` (→ `Option<byte>`, `None` hors plage) et on le relit via `byte.toInt()`. `byte[]` est un tableau ordinaire, distinct de `int[]` (type-safe).

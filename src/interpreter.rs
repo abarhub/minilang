@@ -756,6 +756,26 @@ impl Interpreter {
                                         _ => err!("decodeUtf8() requiert un byte[]"),
                                     }
                                 }
+                                // ── Fichiers en bloc (minilang.io.Files) ──────
+                                ("Files", "readBytes")  if args.len() == 1 => file_read_bytes(&args),
+                                ("Files", "readText")   if args.len() == 1 => file_read_text(&args),
+                                ("Files", "writeBytes") if args.len() == 2 => {
+                                    let data = bytes_arg(&args, 1)?; file_write(&args, data)
+                                }
+                                ("Files", "writeText")  if args.len() == 2 => {
+                                    let data = str_arg(&args, 1)?.into_bytes(); file_write(&args, data)
+                                }
+                                ("Files", "appendBytes") if args.len() == 2 => {
+                                    let data = bytes_arg(&args, 1)?; file_append(&args, data)
+                                }
+                                ("Files", "appendText")  if args.len() == 2 => {
+                                    let data = str_arg(&args, 1)?.into_bytes(); file_append(&args, data)
+                                }
+                                ("Files", "exists") if args.len() == 1 => {
+                                    let path = str_arg(&args, 0)?;
+                                    Ok(Value::Bool(std::path::Path::new(&path).exists()))
+                                }
+                                ("Files", "delete") if args.len() == 1 => file_delete(&args),
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -1851,6 +1871,83 @@ fn io_read_char() -> Result<Value, RuntimeError> {
             }
             Err(e) => return Ok(io_err("ReadFailed", Some(e.to_string()))),
         }
+    }
+}
+
+// ── Fichiers (minilang.io.Files) ───────────────────────────────────────────────
+
+/// Extrait l'argument `i` comme string.
+fn str_arg(args: &[Value], i: usize) -> Result<String, RuntimeError> {
+    match args.get(i) {
+        Some(Value::Str(s)) => Ok(s.clone()),
+        _ => err!("argument {} : string attendue", i + 1),
+    }
+}
+
+/// Extrait l'argument `i` comme byte[] → Vec<u8>.
+fn bytes_arg(args: &[Value], i: usize) -> Result<Vec<u8>, RuntimeError> {
+    match args.get(i) {
+        Some(Value::Array(a)) => {
+            let mut buf = Vec::with_capacity(a.borrow().len());
+            for v in a.borrow().iter() {
+                match v {
+                    Value::Byte(b) => buf.push(*b),
+                    _ => return err!("argument {} : byte[] attendu", i + 1),
+                }
+            }
+            Ok(buf)
+        }
+        _ => err!("argument {} : byte[] attendu", i + 1),
+    }
+}
+
+/// Construit une valeur byte[] à partir d'octets bruts.
+fn byte_array_value(bytes: Vec<u8>) -> Value {
+    Value::Array(Rc::new(RefCell::new(bytes.into_iter().map(Value::Byte).collect())))
+}
+
+fn file_read_bytes(args: &[Value]) -> Result<Value, RuntimeError> {
+    let path = str_arg(args, 0)?;
+    match std::fs::read(&path) {
+        Ok(b)  => Ok(make_ok(byte_array_value(b))),
+        Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
+    }
+}
+
+fn file_read_text(args: &[Value]) -> Result<Value, RuntimeError> {
+    let path = str_arg(args, 0)?;
+    match std::fs::read_to_string(&path) {
+        Ok(s)  => Ok(make_ok(Value::Str(s))),   // InvalidData si UTF-8 invalide
+        Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
+    }
+}
+
+fn file_write(args: &[Value], data: Vec<u8>) -> Result<Value, RuntimeError> {
+    let path = str_arg(args, 0)?;
+    match std::fs::write(&path, data) {
+        Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+    }
+}
+
+fn file_append(args: &[Value], data: Vec<u8>) -> Result<Value, RuntimeError> {
+    use std::io::Write;
+    let path = str_arg(args, 0)?;
+    let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        Ok(f)  => f,
+        Err(e) => return Ok(io_err("WriteFailed", Some(e.to_string()))),
+    };
+    match f.write_all(&data) {
+        Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+    }
+}
+
+fn file_delete(args: &[Value]) -> Result<Value, RuntimeError> {
+    let path = str_arg(args, 0)?;
+    match std::fs::remove_file(&path) {
+        Ok(())  => Ok(ok_unit()),
+        Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
     }
 }
 
