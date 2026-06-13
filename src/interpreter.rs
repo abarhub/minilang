@@ -2046,9 +2046,10 @@ fn dir_name(path: &str) -> String {
 /// contient un segment `..` (évasion lexicale). Pas de résolution de symlink
 /// (hors périmètre).
 fn cap_resolve(root: &str, child: &str) -> Option<std::path::PathBuf> {
-    use std::path::Component;
+    use std::path::{Component, Path};
     if root.is_empty() { return None; }
-    let p = std::path::Path::new(child);
+    let p = Path::new(child);
+    // 1. Rejet lexical : pas de chemin absolu ni de composant `..`.
     if p.is_absolute() { return None; }
     for c in p.components() {
         match c {
@@ -2056,7 +2057,32 @@ fn cap_resolve(root: &str, child: &str) -> Option<std::path::PathBuf> {
             _ => {}
         }
     }
-    Some(std::path::Path::new(root).join(child))
+    let full = Path::new(root).join(child);
+    // 2. Confinement réel : la cible canonique doit rester sous la racine
+    //    canonique — ce qui bloque les symlinks pointant hors de la capacité.
+    //    `canonicalize` exige l'existence ; un fichier/répertoire à créer n'existe
+    //    pas encore, donc on compare le plus profond ancêtre EXISTANT de chaque
+    //    côté (la racine octroyée existe toujours, donc l'ancre ne remonte jamais
+    //    au-dessus d'elle). Les composants restants (déjà sans `..`) ne peuvent
+    //    pas s'échapper. TOCTOU : un symlink échangé juste après reste possible
+    //    (modèle de menace coopératif — voir docs/io.md).
+    let root_anchor = canonical_existing(Path::new(root))?;
+    let full_anchor = canonical_existing(&full)?;
+    if !full_anchor.starts_with(&root_anchor) { return None; }
+    Some(full)
+}
+
+/// Canonicalise le plus profond ancêtre existant de `p` (résout les symlinks).
+/// None si aucun ancêtre n'existe ou si la canonicalisation échoue.
+fn canonical_existing(p: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut cur: Option<&std::path::Path> = Some(p);
+    while let Some(c) = cur {
+        if c.exists() {
+            return std::fs::canonicalize(c).ok();
+        }
+        cur = c.parent();
+    }
+    None
 }
 
 fn cap_read(path: &str, args: &[Value], as_text: bool) -> Result<Value, RuntimeError> {
