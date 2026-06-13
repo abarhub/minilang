@@ -255,6 +255,9 @@ pub struct InterfaceDef {
     pub is_mut: bool,
     pub name: String, pub type_params: Vec<String>,
     pub type_param_constraints: Vec<(String, Qualifier)>,
+    /// Interfaces étendues (`interface Sub extends A, B`). Une classe qui
+    /// implémente Sub doit fournir les méthodes de Sub et de ses parents.
+    pub parents: Vec<String>,
     pub methods: Vec<MethodSig>,
 }
 
