@@ -1,0 +1,35 @@
+// ── Bibliothèque standard – Files ────────────────────────────────────────────
+//  Accès fichiers en bloc (pas de flux, pas de handle à fermer). Classe
+//  utilitaire injectable. Toute opération renvoie un Result : Err(IoError) en
+//  cas d'échec (fichier absent, droits, UTF-8 invalide en lecture texte…).
+//
+//  Modèle : les octets sont la donnée primitive.
+//    - binaire : readBytes / writeBytes / appendBytes manipulent des byte[].
+//    - texte   : readText / writeText / appendText lisent/écrivent en UTF-8
+//                (readText échoue si le contenu n'est pas de l'UTF-8 valide).
+//  Le pont texte <-> binaire reste la classe Bytes (encodeUtf8 / decodeUtf8).
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.Unit;
+import minilang.io.IoError;
+
+service class Files {
+
+    // ── Lecture ─────────────────────────────────────────────────────────────
+    Result<byte[], IoError> readBytes(string path) builtin;
+    Result<string, IoError> readText(string path)  builtin;
+
+    // ── Écriture (écrase le fichier) ────────────────────────────────────────
+    Result<Unit, IoError> writeBytes(string path, byte[] data)    builtin;
+    Result<Unit, IoError> writeText(string path, string content)  builtin;
+
+    // ── Ajout en fin de fichier (créé s'il n'existe pas) ────────────────────
+    Result<Unit, IoError> appendBytes(string path, byte[] data)   builtin;
+    Result<Unit, IoError> appendText(string path, string content) builtin;
+
+    // ── Divers ──────────────────────────────────────────────────────────────
+    bool                  exists(string path) builtin;
+    Result<Unit, IoError> delete(string path) builtin;
+}

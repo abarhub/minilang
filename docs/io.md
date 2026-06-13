@@ -29,7 +29,38 @@ byte[] data = bytes.encodeUtf8("héllo");          // string -> octets UTF-8 (to
 Result<string, IoError> r = bytes.decodeUtf8(data); // octets -> string (Err si UTF-8 invalide)
 ```
 
-`byte[]` est un tableau ordinaire (`new byte[n]`, `get`/`set`…), distinct de `int[]`. Il n'y a **pas** de flux binaire : pour lire/écrire des octets en masse, on convertira depuis/vers `byte[]` (l'I/O fichiers binaire viendra dans une phase ultérieure).
+`byte[]` est un tableau ordinaire (`new byte[n]`, `get`/`set`…), distinct de `int[]`. Il n'y a **pas** de flux binaire : on lit/écrit les octets en masse (voir `Files` ci-dessous) et on convertit vers/depuis `string` avec `Bytes`.
+
+## Fichiers : la classe `Files`
+
+`Files` (injectable, `minilang.io`) lit et écrit des fichiers **en bloc** — pas de flux, pas de handle à fermer (donc aucune fuite de ressource possible). Modèle cohérent avec le reste : les **octets sont la donnée primitive**, la string en est un décodage UTF-8 faillible.
+
+```java
+Files files = inject Files;
+
+// Texte (UTF-8)
+files.writeText("notes.txt", "bonjour\n");
+files.appendText("notes.txt", "monde\n");
+Result<string, IoError> txt = files.readText("notes.txt");   // Err si UTF-8 invalide
+
+// Binaire (byte[])
+Result<byte[], IoError> raw = files.readBytes("photo.png");
+files.writeBytes("copie.png", raw.getValue());
+
+// Divers
+bool present = files.exists("notes.txt");
+files.delete("notes.txt");
+```
+
+| Méthode | Retour |
+|---|---|
+| `readBytes(path)` / `readText(path)` | `Result<byte[], IoError>` / `Result<string, IoError>` |
+| `writeBytes(path, data)` / `writeText(path, s)` | `Result<Unit, IoError>` (écrase) |
+| `appendBytes(path, data)` / `appendText(path, s)` | `Result<Unit, IoError>` (crée si absent) |
+| `exists(path)` | `bool` |
+| `delete(path)` | `Result<Unit, IoError>` |
+
+> Note : l'accès au système de fichiers est libre pour l'instant (aucun garde-fou de chemin). Le streaming de fichiers (lecture ligne par ligne via `Input`/`Output`) n'est pas fourni — `Files` couvre la lecture/écriture en bloc.
 
 ## Result : les erreurs sont explicites
 

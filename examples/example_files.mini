@@ -1,0 +1,37 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Exemple : I/O fichiers en bloc (classe injectable Files)
+//
+//  Pas de flux ni de handle à fermer : tout est lu/écrit d'un coup, chaque
+//  opération renvoie un Result<_, IoError>.
+//    - texte   : writeText / readText / appendText (UTF-8)
+//    - binaire : writeBytes / readBytes (byte[])
+//  Le pont texte <-> binaire reste la classe Bytes.
+//
+//  Cet exemple crée puis supprime un fichier temporaire "demo_files.txt".
+// ─────────────────────────────────────────────────────────────────────────────
+
+int main() {
+    StandardOutput out = inject StandardOutput;
+    Files files        = inject Files;
+
+    string path = "demo_files.txt";
+
+    // 1. Écriture puis lecture en texte
+    files.writeText(path, "ligne 1\n");
+    files.appendText(path, "ligne 2\n");
+    match files.readText(path) {
+        Result::Ok(s)  => { out.write(s); }
+        Result::Err(e) => { out.writeLine("erreur : " + e.message()); }
+    }
+
+    // 2. Relecture du même fichier en octets
+    byte[] raw = files.readBytes(path).getValue();
+    out.writeLine("taille : " + raw.length().toString() + " octets");
+
+    // 3. exists / delete
+    out.writeLine("existe ? " + files.exists(path).toString());   // true
+    files.delete(path);
+    out.writeLine("existe après delete ? " + files.exists(path).toString()); // false
+
+    return 0;
+}

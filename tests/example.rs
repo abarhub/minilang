@@ -26,3 +26,5 @@ mod example_io_tests;
 mod example_stdin_tests;
 #[path = "example/example_byte_tests.rs"]
 mod example_byte_tests;
+#[path = "example/example_files_tests.rs"]
+mod example_files_tests;
