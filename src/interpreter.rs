@@ -25,7 +25,7 @@ pub struct EnumData {
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Int(i64), Float(f64), Bool(bool), Str(String), Char(char),
+    Int(i64), Byte(u8), Float(f64), Bool(bool), Str(String), Char(char),
     Array(Rc<RefCell<Vec<Value>>>),
     HashMap(Rc<RefCell<Vec<(Value, Value)>>>),
     Object(Rc<RefCell<ObjectData>>),
@@ -39,6 +39,7 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Int(n)    => write!(f, "{}", n),
+            Value::Byte(b)   => write!(f, "{}", b),
             Value::Float(n)  => write!(f, "{}", n),
             Value::Bool(b)   => write!(f, "{}", b),
             Value::Str(s)    => write!(f, "{}", s),
@@ -211,6 +212,7 @@ impl Interpreter {
     fn default_value(ty: &Type) -> Value {
         match ty {
             Type::Int            => Value::Int(0),
+            Type::Byte           => Value::Byte(0),
             Type::Bool           => Value::Bool(false),
             Type::Float | Type::Double => Value::Float(0.0),
             Type::Str            => Value::Str(String::new()),
@@ -724,6 +726,36 @@ impl Interpreter {
                                 ("StandardInput",  "readLine")  => io_read_line(),
                                 ("StandardInput",  "readChar")  => io_read_char(),
                                 ("StandardInput",  "readAll")   => io_read_all(),
+                                // ── Conversions string <-> byte[] (minilang.io) ──
+                                ("Bytes", "encodeUtf8") if args.len() == 1 => {
+                                    match &args[0] {
+                                        Value::Str(s) => {
+                                            let bytes: Vec<Value> = s.as_bytes().iter()
+                                                .map(|b| Value::Byte(*b)).collect();
+                                            Ok(Value::Array(Rc::new(RefCell::new(bytes))))
+                                        }
+                                        _ => err!("encodeUtf8() requiert une string"),
+                                    }
+                                }
+                                ("Bytes", "decodeUtf8") if args.len() == 1 => {
+                                    match &args[0] {
+                                        Value::Array(a) => {
+                                            let mut buf = Vec::with_capacity(a.borrow().len());
+                                            for v in a.borrow().iter() {
+                                                match v {
+                                                    Value::Byte(b) => buf.push(*b),
+                                                    _ => return err!("decodeUtf8() requiert un byte[]"),
+                                                }
+                                            }
+                                            match String::from_utf8(buf) {
+                                                Ok(s)  => Ok(make_ok(Value::Str(s))),
+                                                Err(_) => Ok(io_err("Other",
+                                                    Some("séquence UTF-8 invalide".to_string()))),
+                                            }
+                                        }
+                                        _ => err!("decodeUtf8() requiert un byte[]"),
+                                    }
+                                }
                                 _ => Err(RuntimeError(format!(
                                     "Méthode builtin inconnue '{}.{}()'", cn, method))),
                             }
@@ -1008,6 +1040,10 @@ impl Interpreter {
                             "isOdd"          => Ok(Value::Bool(n % 2 != 0)),
                             "toFloat"        => Ok(Value::Float(n as f64)),
                             "toDouble"       => Ok(Value::Float(n as f64)),
+                            "toByte"         => {
+                                if n >= 0 && n <= 255 { Ok(make_some(Value::Byte(n as u8))) }
+                                else { Ok(make_none()) }
+                            }
                             "min" => {
                                 if args.len() != 1 { return err!("min() attend 1 argument"); }
                                 match &args[0] {
@@ -1046,6 +1082,21 @@ impl Interpreter {
                             }
                             "hashCode" => Ok(Value::Int(n)),
                             _ => err!("Méthode inconnue '{}' sur int", method),
+                        }
+                    }
+                    Value::Byte(b) => {
+                        match method.as_str() {
+                            "toInt"    => Ok(Value::Int(b as i64)),
+                            "toString" => Ok(Value::Str(b.to_string())),
+                            "equals" => {
+                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                match &args[0] {
+                                    Value::Byte(o) => Ok(Value::Bool(b == *o)),
+                                    _ => Ok(Value::Bool(false)),
+                                }
+                            }
+                            "hashCode" => Ok(Value::Int(b as i64)),
+                            _ => err!("Méthode inconnue '{}' sur byte", method),
                         }
                     }
                     Value::Float(f) => {
@@ -1812,6 +1863,7 @@ pub fn val_hash(v: &Value) -> i64 {
     use std::hash::{Hash, Hasher};
     match v {
         Value::Int(n)   => *n,
+        Value::Byte(b)  => *b as i64,
         Value::Bool(b)  => if *b { 1 } else { 0 },
         Value::Char(c)  => *c as i64,
         Value::Str(s)   => {
@@ -1904,6 +1956,7 @@ fn cmp(l: &Value, r: &Value,
 fn val_eq(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Int(x),   Value::Int(y))   => x == y,
+        (Value::Byte(x),  Value::Byte(y))  => x == y,
         (Value::Float(x), Value::Float(y)) => (x-y).abs() < 1e-12,
         (Value::Bool(x),  Value::Bool(y))  => x == y,
         (Value::Str(x),   Value::Str(y))   => x == y,

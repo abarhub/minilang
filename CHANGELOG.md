@@ -4,6 +4,22 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [13/06/2026] — Type `byte` et conversions string ↔ byte[] (I/O phase 3a)
+
+Nouveau primitif **`byte`** : octet non signé (0–255), type de **stockage sans arithmétique** (seuls `==`/`!=` et les conversions). On crée un byte via `int.toByte()` (→ `Option<byte>`, `None` hors plage) et on le relit via `byte.toInt()`. `byte[]` est un tableau ordinaire, distinct de `int[]` (type-safe).
+
+Conversions texte ↔ binaire via la classe utilitaire **injectable `Bytes`** (`minilang.io`), seul pont entre les deux mondes — pas de flux d'octets séparé :
+
+```java
+Bytes bytes = inject Bytes;
+byte[] data = bytes.encodeUtf8("héllo");            // string -> octets UTF-8
+Result<string, IoError> r = bytes.decodeUtf8(data); // octets -> string (Err si invalide)
+```
+
+Choix de design : pas d'arithmétique sur `byte` (calculs via `int`, narrowing explicite par `Option`), pas de littéral byte. L'I/O fichiers (texte + binaire en bloc) reste à faire (phase 3b). Doc : `docs/io.md`, exemple : `examples/example_byte.mini`.
+
+---
+
 ## [13/06/2026] — Système d'entrée/sortie (phase 2 : entrée + bufferisation)
 
 - **`StandardInput`** (`minilang.system`) : service injectable lisant le vrai stdin. `readLine()` (sans le saut de ligne, EOF = `Ok(None)`), `readChar()` (caractère Unicode), `readAll()` — builtins natifs.

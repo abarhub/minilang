@@ -1,0 +1,18 @@
+// ── Bibliothèque standard – Bytes ────────────────────────────────────────────
+//  Classe utilitaire injectable pour les conversions string <-> byte[].
+//  C'est le seul pont entre le texte et le binaire : il n'y a pas de flux
+//  d'octets séparé (voir docs/io.md).
+
+package minilang.io;
+
+import minilang.lang.Result;
+import minilang.io.IoError;
+
+service class Bytes {
+
+    // Encode une string en ses octets UTF-8 (toujours valide).
+    byte[] encodeUtf8(string s) builtin;
+
+    // Décode des octets UTF-8 en string : Err(IoError) si la séquence est invalide.
+    Result<string, IoError> decodeUtf8(byte[] data) builtin;
+}

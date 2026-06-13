@@ -6,6 +6,7 @@
 package minilang.lang;
 
 import minilang.lang.HashCode;
+import minilang.lang.Option;
 
 mut class Integer implements HashCode {
 
@@ -47,6 +48,9 @@ mut class Integer implements HashCode {
 
     // Convertit en double.
     double toDouble() builtin;
+
+    // Convertit en byte : Some(b) si 0 <= this <= 255, None sinon.
+    Option<byte> toByte() builtin;
 
     // Retourne -1, 0 ou 1 selon que this est <, == ou > other.
     int compareTo(int other) builtin;

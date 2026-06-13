@@ -50,6 +50,7 @@ fn type_parser() -> impl Parser<char, Type, Error = Simple<char>> + Clone {
 
         let base = choice((
             kw("int")   .to(Type::Int),
+            kw("byte")  .to(Type::Byte),
             kw("bool")  .to(Type::Bool),
             kw("string").to(Type::Str),
             kw("char")  .to(Type::Char),
@@ -464,6 +465,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
 
     let kw_type = choice((
         kw("int")   .to(Type::Int),
+        kw("byte")  .to(Type::Byte),
         kw("bool")  .to(Type::Bool),
         kw("string").to(Type::Str),
         kw("char")  .to(Type::Char),

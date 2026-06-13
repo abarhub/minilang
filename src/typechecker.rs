@@ -1708,6 +1708,7 @@ impl TypeChecker {
             Type::Char             => ("Character".to_string(), vec![]),
             Type::Bool             => ("Boolean".to_string(),   vec![]),
             Type::Int              => ("Integer".to_string(),   vec![]),
+            Type::Byte             => ("Byte".to_string(),      vec![]),
             Type::Float            => ("Float".to_string(),     vec![]),
             Type::Double           => ("Double".to_string(),    vec![]),
             _ => return type_err!("Appel '{}' sur type non-objet {}", method, obj_ty),
@@ -1870,7 +1871,7 @@ impl TypeChecker {
     /// Les types valeur ne propagent pas les qualificateurs :
     /// appeler `.size()` sur un `readonly List` retourne un `int` mutable.
     fn is_value_type(ty: &Type) -> bool {
-        matches!(ty, Type::Int | Type::Bool | Type::Str | Type::Char
+        matches!(ty, Type::Int | Type::Byte | Type::Bool | Type::Str | Type::Char
                    | Type::Float | Type::Double | Type::Void
                    | Type::Fn | Type::FnType(_, _))
     }
@@ -1927,6 +1928,7 @@ impl TypeChecker {
         match class_name {
             "String"    => Some(Type::Str),
             "Integer"   => Some(Type::Int),
+            "Byte"      => Some(Type::Byte),
             "Boolean"   => Some(Type::Bool),
             "Character" => Some(Type::Char),
             "Float"     => Some(Type::Float),
@@ -1940,7 +1942,7 @@ impl TypeChecker {
     fn check_type_is_mut(&mut self, ty: &Type, var_name: &str, qualifier: &Qualifier) {
         let cn = match ty {
             // Les primitifs sont des types valeur — toujours OK
-            Type::Int | Type::Bool | Type::Str | Type::Char
+            Type::Int | Type::Byte | Type::Bool | Type::Str | Type::Char
             | Type::Float | Type::Double | Type::Void => return,
             // Arrays et lambdas → on laisse passer pour l'instant
             Type::Array(_) | Type::Fn | Type::FnType(_, _) => return,
@@ -2012,7 +2014,7 @@ impl TypeChecker {
             // L'argument de type doit être `mut` (classe ou interface auditée)
             let is_ok = match type_arg {
                 // Types valeur — toujours acceptés
-                Type::Int | Type::Bool | Type::Str | Type::Char
+                Type::Int | Type::Byte | Type::Bool | Type::Str | Type::Char
                 | Type::Float | Type::Double => true,
                 // Paramètre de type générique en cours de résolution — on fait confiance
                 Type::UserDefined(n) if self.type_params.contains(n.as_str()) => true,

@@ -9,6 +9,7 @@ Il est conçu pour être sécurisé, tout en permettant de créer des programmes
 
 * bool: le type booléen
 * int: le type entier 32 bits
+* byte: l'octet non signé (0–255). Type de **stockage**, sans arithmétique : on convertit via `int.toByte()` (→ `Option<byte>`, `None` si hors plage) et `byte.toInt()`
 * float: le type flottant 32 bits
 * double: le type double
 * string: le type chaîne de caractères

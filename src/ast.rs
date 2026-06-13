@@ -64,6 +64,8 @@ pub struct Import { pub path: String, pub wildcard: bool }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int, Bool, Str, Char, Float, Double, Void,
+    /// Octet non signé (0–255). Type de stockage, sans arithmétique.
+    Byte,
     Array(Box<Type>),
     Generic(String, Vec<Type>),
     UserDefined(String),
@@ -77,6 +79,7 @@ impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Int            => write!(f, "int"),
+            Type::Byte           => write!(f, "byte"),
             Type::Bool           => write!(f, "bool"),
             Type::Str            => write!(f, "string"),
             Type::Char           => write!(f, "char"),

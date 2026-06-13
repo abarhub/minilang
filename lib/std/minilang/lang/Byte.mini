@@ -1,0 +1,24 @@
+// ── Bibliothèque standard – Byte ─────────────────────────────────────────────
+//  Méthodes sur le type primitif byte (octet non signé, 0–255).
+//  Type de stockage : pas d'arithmétique. Pour calculer, passer par int
+//  (b.toInt(), puis n.toByte() qui renvoie Option<byte>).
+//  Accessible sans import dans tout fichier minilang.
+
+package minilang.lang;
+
+import minilang.lang.HashCode;
+
+mut class Byte implements HashCode {
+
+    // Valeur entière de l'octet (0–255).
+    int toInt() builtin;
+
+    // Représentation décimale.
+    string toString() builtin;
+
+    // Égalité d'octets.
+    bool equals(Object other) builtin;
+
+    // Code de hachage (la valeur elle-même).
+    int hashCode() builtin;
+}
