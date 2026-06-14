@@ -545,7 +545,12 @@ fn print_class(c: &ClassDef) {
     let svc = if c.is_service { "service " } else { "" };
     println!("{}{}class {}{}{}{} {{", tr, svc, c.name, tps, ext, imp);
     for f in &c.fields {
-        println!("{}  {} {};", pad(0), f.ty, f.name);
+        let vis = if f.visibility == Visibility::Protected {
+            "protected "
+        } else {
+            ""
+        };
+        println!("{}  {}{} {};", pad(0), vis, f.ty, f.name);
     }
     for ctor in &c.constructors {
         let ps: Vec<String> = ctor
@@ -610,6 +615,10 @@ fn print_stmt(s: &Stmt, d: usize) {
             field,
             value,
         } => println!("{}{}.{} = {};", pad(d), object, field, fmt_expr(value)),
+        Stmt::SuperCall(args) => {
+            let a: Vec<String> = args.iter().map(fmt_expr).collect();
+            println!("{}super({});", pad(d), a.join(", "));
+        }
         Stmt::Print(args) => {
             let a: Vec<String> = args.iter().map(fmt_expr).collect();
             println!("{}print({});", pad(d), a.join(", "));

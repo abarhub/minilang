@@ -1,7 +1,9 @@
 //! Tests du système de visibilité — minilang.
-//! Champs toujours privés, méthodes : public (défaut) / protected / private.
+//! Champs : private (défaut) / protected. Méthodes : public (défaut) / protected
+//! / private. Inclut les appels `super(...)` au constructeur parent.
 
 use chumsky::Parser;
+use mini_parser::interpreter::run_source_with_output;
 use mini_parser::parser::program_parser;
 use mini_parser::typechecker::check_source;
 
@@ -386,5 +388,189 @@ fn tc_inheritance_protected_getter() {
             return s.area();
         }
     "#,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Champs protected
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn run_output(src: &str) -> (i64, Vec<String>) {
+    assert_tc_ok(src);
+    run_source_with_output(src).unwrap_or_else(|e| panic!("Run failed:\n{}", e))
+}
+
+#[test]
+fn parse_protected_field() {
+    parses_ok(
+        r#"
+        mut class A { protected int x; }
+        int main() { return 0; }
+    "#,
+    );
+}
+
+#[test]
+fn tc_protected_field_accessible_in_subclass() {
+    // Champ protected hérité : lisible via this et par nom nu dans la sous-classe
+    assert_tc_ok(
+        r#"
+        mut class Base { protected int val; }
+        mut class Sub extends Base {
+            int viaThis() { return this.val; }
+            int viaBare() { return val; }
+        }
+        int main() { return 0; }
+    "#,
+    );
+}
+
+#[test]
+fn tc_err_private_field_not_in_subclass_via_this() {
+    // Champ privé hérité : inaccessible même via this depuis une sous-classe
+    assert_tc_err(
+        r#"
+        mut class Base { int secret; }
+        mut class Sub extends Base {
+            int leak() { return this.secret; }
+        }
+        int main() { return 0; }
+    "#,
+        "privé",
+    );
+}
+
+#[test]
+fn tc_err_private_field_not_in_subclass_bare() {
+    assert_tc_err(
+        r#"
+        mut class Base { int secret; }
+        mut class Sub extends Base {
+            int leak() { return secret; }
+        }
+        int main() { return 0; }
+    "#,
+        "privé",
+    );
+}
+
+#[test]
+fn tc_err_protected_field_from_outside() {
+    // protected ne donne pas l'accès externe
+    assert_tc_err(
+        r#"
+        mut class A { protected int x; }
+        int main() {
+            A a = new A();
+            return a.x;
+        }
+    "#,
+        "protected",
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  super(...) — appel du constructeur parent
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn run_super_initializes_parent_fields() {
+    let (ret, lines) = run_output(
+        r#"
+        mut class Animal {
+            protected string name;
+            Animal(string n) { this.name = n; }
+            string describe() { return name; }
+        }
+        mut class Dog extends Animal {
+            string breed;
+            Dog(string n, string b) { super(n); this.breed = b; }
+            string full() { return name + " (" + breed + ")"; }
+        }
+        int main() {
+            Dog d = new Dog("Rex", "Husky");
+            print(d.describe());
+            print(d.full());
+            return 0;
+        }
+    "#,
+    );
+    assert_eq!(ret, 0);
+    assert_eq!(lines, vec!["Rex", "Rex (Husky)"]);
+}
+
+#[test]
+fn run_super_nested_three_levels() {
+    let (ret, lines) = run_output(
+        r#"
+        mut class A { protected int a; A(int x) { this.a = x; } }
+        mut class B extends A { protected int b; B(int x, int y) { super(x); this.b = y; } }
+        mut class C extends B {
+            int c;
+            C(int x, int y, int z) { super(x, y); this.c = z; }
+            int sum() { return a + b + c; }
+        }
+        int main() {
+            C obj = new C(1, 2, 3);
+            print(obj.sum());
+            return 0;
+        }
+    "#,
+    );
+    assert_eq!(ret, 0);
+    assert_eq!(lines, vec!["6"]);
+}
+
+#[test]
+fn tc_err_super_missing_when_parent_has_ctor() {
+    assert_tc_err(
+        r#"
+        mut class A { int x; A(int v) { this.x = v; } }
+        mut class B extends A { int y; B(int v) { this.y = v; } }
+        int main() { return 0; }
+    "#,
+        "super(...)",
+    );
+}
+
+#[test]
+fn tc_err_super_not_first_statement() {
+    assert_tc_err(
+        r#"
+        mut class A { int x; A(int v) { this.x = v; } }
+        mut class B extends A {
+            int y;
+            B(int v) { this.y = v; super(v); }
+        }
+        int main() { return 0; }
+    "#,
+        "première instruction",
+    );
+}
+
+#[test]
+fn tc_err_super_wrong_arity() {
+    assert_tc_err(
+        r#"
+        mut class A { int x; A(int v) { this.x = v; } }
+        mut class B extends A { B() { super(); } }
+        int main() { return 0; }
+    "#,
+        "aucun constructeur",
+    );
+}
+
+#[test]
+fn tc_err_super_outside_constructor() {
+    assert_tc_err(
+        r#"
+        mut class A { int x; A(int v) { this.x = v; } }
+        mut class B extends A {
+            B(int v) { super(v); }
+            void oops() { super(1); }
+        }
+        int main() { return 0; }
+    "#,
+        "constructeur",
     );
 }

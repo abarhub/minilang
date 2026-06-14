@@ -327,6 +327,9 @@ pub enum Stmt {
         field: String,
         value: Expr,
     },
+    /// `super(args);` — appel du constructeur de la classe parente.
+    /// Autorisé uniquement comme première instruction d'un constructeur.
+    SuperCall(Vec<Expr>),
     Print(Vec<Expr>),
     Return(Option<Expr>),
     ExprStmt(Expr),
@@ -370,6 +373,10 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub struct Field {
+    /// Visibilité du champ. Défaut : `Private` (accessible uniquement depuis la
+    /// classe déclarante). `Protected` ouvre l'accès aux sous-classes. Un champ
+    /// n'est jamais `Public`.
+    pub visibility: Visibility,
     pub ty: Type,
     pub name: String,
 }

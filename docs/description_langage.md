@@ -87,10 +87,17 @@ int y;
 
 ### Visibilité des membres d'une classe
 
-#### Champs — toujours privés
+#### Champs — privés par défaut, `protected` optionnel
 
-Les champs d'une classe sont **toujours privés** : aucun mot-clé n'est nécessaire ni autorisé.
-L'accès est permis depuis n'importe quelle méthode de la même classe (y compris sur une autre instance du même type), mais interdit depuis l'extérieur.
+Un champ est **privé par défaut** : accessible uniquement depuis la classe qui le
+déclare (y compris sur une autre instance du même type), jamais depuis une
+sous-classe ni depuis l'extérieur. Le préfixe `protected` ouvre l'accès aux
+sous-classes. Il n'existe pas de champ `public`.
+
+| Modificateur | Placement | Accessible depuis |
+|---|---|---|
+| _(aucun)_ | — | La classe déclarante uniquement |
+| `protected` | avant le type | La classe déclarante et ses sous-classes |
 
 ```java
 mut class Counter {
@@ -100,6 +107,15 @@ mut class Counter {
     bool equals(Counter other) {
         return this.value == other.value;  // OK — même classe, autre instance
     }
+}
+
+mut class Base {
+    int secret;          // privé
+    protected int shared;  // accessible aux sous-classes
+}
+mut class Sub extends Base {
+    int readShared() { return shared; }  // OK — protected hérité
+    int readSecret() { return secret; }  // ERREUR — privé hérité, inaccessible
 }
 
 int main() {
@@ -156,6 +172,30 @@ mut class Counter {
     private mutable void reset()  { value = 0; }       // private + mutable
     mutable void increment()      { value = value + 1; }
     int getValue()                { return value; }
+}
+```
+
+#### Constructeur parent — `super(...)`
+
+Une sous-classe appelle le constructeur de sa classe parente avec `super(args)`,
+qui doit être la **première instruction** du constructeur. Si le parent possède un
+constructeur, l'appel `super(...)` est **obligatoire** (les arguments doivent
+correspondre, par nombre et par type, à un constructeur du parent). Comme les
+champs du parent sont privés, `super(...)` est la façon normale de les initialiser.
+
+```java
+mut class Animal {
+    protected string name;
+    Animal(string n) { this.name = n; }
+}
+
+mut class Dog extends Animal {
+    string breed;
+    Dog(string n, string b) {
+        super(n);          // initialise name via le constructeur d'Animal
+        this.breed = b;
+    }
+    string full() { return name + " (" + breed + ")"; }  // name : protected hérité
 }
 ```
 

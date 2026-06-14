@@ -206,6 +206,9 @@ pub struct Interpreter {
     delete_temp_at_end: bool,
     /// Répertoires temporaires créés par `tempDir()` (pour la suppression finale).
     temp_dirs: Vec<String>,
+    /// Pile des classes dont le constructeur s'exécute, pour résoudre `super(...)`
+    /// (le sommet est la classe du constructeur courant).
+    ctor_stack: Vec<String>,
     print_fn: Box<dyn FnMut(&str)>,
 }
 
@@ -285,6 +288,7 @@ impl Interpreter {
             create_temp_marker: true,  // défaut = "mark"
             delete_temp_at_end: false,
             temp_dirs: Vec::new(),
+            ctor_stack: Vec::new(),
             print_fn,
         }
     }
@@ -497,6 +501,21 @@ impl Interpreter {
         Ok(Flow::Next)
     }
 
+    /// Exécute le corps d'un constructeur de `class_name` en empilant son
+    /// contexte (pour que `super(...)` résolve le bon parent, y compris imbriqué).
+    fn run_ctor_body(
+        &mut self,
+        class_name: &str,
+        body: &[Stmt],
+        env: &mut Env,
+        rc: Rc<RefCell<ObjectData>>,
+    ) -> Result<(), RuntimeError> {
+        self.ctor_stack.push(class_name.to_string());
+        let r = self.exec_body(body, env, Some(rc));
+        self.ctor_stack.pop();
+        r.map(|_| ())
+    }
+
     // ── Instructions ──────────────────────────────────────────────────────────
 
     fn exec_stmt(
@@ -567,6 +586,46 @@ impl Interpreter {
                     }
                 };
                 rc.borrow_mut().fields.insert(field.clone(), val);
+            }
+
+            Stmt::SuperCall(args) => {
+                // Classe du constructeur courant → constructeur du parent.
+                let cur = self
+                    .ctor_stack
+                    .last()
+                    .cloned()
+                    .ok_or_else(|| RuntimeError("super(...) hors constructeur".into()))?;
+                let parent = self.classes.get(&cur).and_then(|c| c.parent.clone());
+                let Some(parent) = parent else {
+                    return err!("super(...) sans classe parente");
+                };
+                let pn = parent.ref_name().unwrap_or("").to_string();
+                let pctor = self.classes.get(&pn).and_then(|c| {
+                    c.constructors
+                        .iter()
+                        .find(|c| c.params.len() == args.len())
+                        .cloned()
+                });
+                let Some(pctor) = pctor else {
+                    return err!(
+                        "super(...) : pas de constructeur de '{}' à {} arg(s)",
+                        pn,
+                        args.len()
+                    );
+                };
+                let eargs: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval(a, env, this.clone()))
+                    .collect::<Result<_, _>>()?;
+                let rc = this
+                    .clone()
+                    .ok_or_else(|| RuntimeError("super(...) sans 'this'".into()))?;
+                let mut ce = Env::new();
+                ce.push();
+                for (p, v) in pctor.params.iter().zip(eargs) {
+                    ce.declare(p.name.clone(), v);
+                }
+                self.run_ctor_body(&pn, &pctor.body, &mut ce, rc)?;
             }
 
             Stmt::Print(args) => {
@@ -1854,7 +1913,7 @@ impl Interpreter {
                     for (p, v) in ctor.params.iter().zip(eargs) {
                         ce.declare(p.name.clone(), v);
                     }
-                    self.exec_body(&ctor.body, &mut ce, Some(rc))?;
+                    self.run_ctor_body(class_name, &ctor.body, &mut ce, rc)?;
                 }
                 Ok(obj)
             }
@@ -2204,7 +2263,7 @@ impl Interpreter {
             for (p, v) in ctor.params.iter().zip(arg_vals) {
                 ce.declare(p.name.clone(), v);
             }
-            self.exec_body(&ctor.body, &mut ce, Some(rc))?;
+            self.run_ctor_body(cn, &ctor.body, &mut ce, rc)?;
         }
         if !is_transient {
             self.singletons.insert(cn.to_string(), obj.clone());

@@ -4,6 +4,35 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [14/06/2026] — `super(...)` et champs `protected`
+
+Deux limitations connues de l'héritage de classes sont levées.
+
+**`super(...)`** — une sous-classe peut appeler le constructeur de sa classe parente :
+
+```java
+mut class Dog extends Animal {
+    string breed;
+    Dog(string n, string b) { super(n); this.breed = b; }
+}
+```
+
+`super(...)` doit être la **première instruction** du constructeur ; il est **obligatoire** dès que le parent possède un constructeur (arguments vérifiés par nombre et par type). Permet enfin d'initialiser proprement les champs hérités.
+
+**Champs `protected`** — un champ est **privé par défaut** (accessible uniquement depuis la classe déclarante) ; le préfixe `protected` ouvre l'accès aux sous-classes :
+
+```java
+mut class Base { int secret;  protected int shared; }
+mut class Sub extends Base {
+    int a() { return shared; }   // OK
+    int b() { return secret; }   // ERREUR — privé hérité
+}
+```
+
+⚠️ **Changement de comportement** : auparavant une sous-classe pouvait lire n'importe quel champ hérité (le « privé » n'était pas appliqué à travers l'héritage). Désormais l'accès à un champ hérité privé — même via `this` — est une erreur ; il faut le déclarer `protected`. La stdlib n'est pas affectée (aucune classe à champs hérités). Clôt les deux limitations correspondantes du backlog.
+
+---
+
 ## [14/06/2026] — Généricité de l'héritage de types
 
 Les arguments de type passés à un supertype générique sont désormais **conservés et substitués** le long de la chaîne d'héritage, au lieu d'être ignorés. Cela vaut pour les trois clauses :

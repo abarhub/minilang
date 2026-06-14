@@ -345,13 +345,13 @@ fn run_class_extends_generic_parent() {
     let (ret, lines) = run_output(
         r#"
         mut class Base<T> {
-            T val;
+            protected T val;
             T getVal() { return val; }
             mutable void setVal(T v) { val = v; }
         }
         mut class IntCell extends Base<int> {
             int doubled() {
-                int z = val;               // champ hérité, T=int
+                int z = val;               // champ hérité protected, T=int
                 return this.getVal() * 2;  // méthode héritée, retour int
             }
         }
