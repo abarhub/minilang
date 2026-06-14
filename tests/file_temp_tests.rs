@@ -4,11 +4,11 @@
 //! Filtrés par PID (isolation entre binaires de test) + sérialisés par verrou
 //! (CAP_SEQ partagé dans le process), avec nettoyage.
 
-use mini_parser::config::{ProjectConfig, TempCleanup, FilesSection};
-use mini_parser::interpreter::Interpreter;
-use mini_parser::typechecker::TypeChecker;
 use chumsky::Parser;
+use mini_parser::config::{FilesSection, ProjectConfig, TempCleanup};
+use mini_parser::interpreter::Interpreter;
 use mini_parser::parser::program_parser;
+use mini_parser::typechecker::TypeChecker;
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -17,7 +17,9 @@ use std::sync::Mutex;
 static TEMP_LOCK: Mutex<()> = Mutex::new(());
 const MARKER: &str = ".minilang-temp";
 
-fn cap_prefix() -> String { format!("minilang_cap_{}_", std::process::id()) }
+fn cap_prefix() -> String {
+    format!("minilang_cap_{}_", std::process::id())
+}
 
 /// Répertoires temp de CE processus présents actuellement.
 fn snapshot() -> HashSet<PathBuf> {
@@ -59,7 +61,9 @@ fn run_tempdir_with_policy(create_marker: bool, delete_at_end: bool) -> Vec<Path
 }
 
 fn cleanup(dirs: &[PathBuf]) {
-    for d in dirs { let _ = std::fs::remove_dir_all(d); }
+    for d in dirs {
+        let _ = std::fs::remove_dir_all(d);
+    }
 }
 
 // ── Comportement runtime ────────────────────────────────────────────────────
@@ -68,7 +72,10 @@ fn cleanup(dirs: &[PathBuf]) {
 fn mark_creates_marker() {
     let created = run_tempdir_with_policy(true, false);
     assert_eq!(created.len(), 1, "un répertoire temp créé");
-    assert!(created[0].join(MARKER).is_file(), "marqueur .minilang-temp présent");
+    assert!(
+        created[0].join(MARKER).is_file(),
+        "marqueur .minilang-temp présent"
+    );
     cleanup(&created);
 }
 
@@ -76,7 +83,10 @@ fn mark_creates_marker() {
 fn none_creates_no_marker() {
     let created = run_tempdir_with_policy(false, false);
     assert_eq!(created.len(), 1);
-    assert!(!created[0].join(MARKER).exists(), "aucun marqueur en mode none");
+    assert!(
+        !created[0].join(MARKER).exists(),
+        "aucun marqueur en mode none"
+    );
     cleanup(&created);
 }
 
@@ -84,7 +94,10 @@ fn none_creates_no_marker() {
 fn delete_removes_dir_at_end() {
     let created = run_tempdir_with_policy(true, true);
     // Le répertoire a été créé puis supprimé en fin de run() : le diff est vide.
-    assert!(created.is_empty(), "le répertoire temp doit être supprimé en fin de programme");
+    assert!(
+        created.is_empty(),
+        "le répertoire temp doit être supprimé en fin de programme"
+    );
 }
 
 // ── Parsing de la config ────────────────────────────────────────────────────

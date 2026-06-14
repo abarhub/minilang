@@ -3,10 +3,10 @@
 //! Les chemins sont en slashs avant (acceptés par std::fs, y compris Windows)
 //! pour pouvoir être insérés tels quels dans une string literal minilang.
 
-use mini_parser::typechecker::{check_source, TypeChecker};
-use mini_parser::interpreter::{Interpreter, run_source};
 use chumsky::Parser;
+use mini_parser::interpreter::{Interpreter, run_source};
 use mini_parser::parser::program_parser;
+use mini_parser::typechecker::{TypeChecker, check_source};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -16,12 +16,18 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// Crée un chemin temporaire unique (slashs avant) sans créer le fichier.
 fn temp_path(tag: &str) -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let p = std::env::temp_dir()
-        .join(format!("minilang_files_{}_{}_{}.tmp", std::process::id(), tag, n));
+    let p = std::env::temp_dir().join(format!(
+        "minilang_files_{}_{}_{}.tmp",
+        std::process::id(),
+        tag,
+        n
+    ));
     p.to_string_lossy().replace('\\', "/")
 }
 
-fn cleanup(path: &str) { let _ = std::fs::remove_file(path); }
+fn cleanup(path: &str) {
+    let _ = std::fs::remove_file(path);
+}
 
 /// Exécute `src` avec l'accès fichiers brut autorisé ([files] unrestricted) —
 /// la classe `Files` est gardée par défaut.
@@ -34,10 +40,14 @@ fn run_output(src: &str) -> (i64, Vec<String>) {
     assert!(TypeChecker::new(&program).check(&program).is_empty());
     let captured = Rc::new(RefCell::new(Vec::<String>::new()));
     let cap = captured.clone();
-    let mut interp = Interpreter::new_with_print(&program,
-        Box::new(move |l: &str| cap.borrow_mut().push(l.to_string())));
+    let mut interp = Interpreter::new_with_print(
+        &program,
+        Box::new(move |l: &str| cap.borrow_mut().push(l.to_string())),
+    );
     interp.set_files_unrestricted(true);
-    let ret = interp.run(&program).unwrap_or_else(|e| panic!("Run failed:\n{}", e));
+    let ret = interp
+        .run(&program)
+        .unwrap_or_else(|e| panic!("Run failed:\n{}", e));
     drop(interp);
     (ret, Rc::try_unwrap(captured).unwrap().into_inner())
 }
@@ -62,7 +72,7 @@ fn files_denied_without_unrestricted() {
         }
     "#;
     assert!(check_source(src).is_ok());
-    let err = run_source(src).unwrap_err();   // run_source = défaut (gardé)
+    let err = run_source(src).unwrap_err(); // run_source = défaut (gardé)
     assert!(err.contains("non autorisé"), "message inattendu : {}", err);
 }
 
@@ -73,7 +83,8 @@ fn files_denied_without_unrestricted() {
 #[test]
 fn write_then_read_text() {
     let path = temp_path("rwtext");
-    let (ret, lines) = run_output(&format!(r#"
+    let (ret, lines) = run_output(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             files.writeText("{p}", "bonjour\nmonde");
@@ -81,7 +92,9 @@ fn write_then_read_text() {
             print(r.getValue());
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["bonjour\nmonde"]);
     cleanup(&path);
@@ -90,14 +103,17 @@ fn write_then_read_text() {
 #[test]
 fn write_overwrites() {
     let path = temp_path("overwrite");
-    run_ok(&format!(r#"
+    run_ok(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             files.writeText("{p}", "premier");
             files.writeText("{p}", "second");
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     let content = std::fs::read_to_string(&path).expect("fichier écrit");
     assert_eq!(content, "second");
     cleanup(&path);
@@ -106,7 +122,8 @@ fn write_overwrites() {
 #[test]
 fn append_text_accumulates() {
     let path = temp_path("append");
-    run_ok(&format!(r#"
+    run_ok(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             files.appendText("{p}", "a");      // crée le fichier
@@ -114,7 +131,9 @@ fn append_text_accumulates() {
             files.appendText("{p}", "c");
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     let content = std::fs::read_to_string(&path).expect("fichier écrit");
     assert_eq!(content, "abc");
     cleanup(&path);
@@ -122,15 +141,18 @@ fn append_text_accumulates() {
 
 #[test]
 fn read_text_missing_file_is_err() {
-    let path = temp_path("missing");   // jamais créé
-    let ret = run_ok(&format!(r#"
+    let path = temp_path("missing"); // jamais créé
+    let ret = run_ok(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             Result<string, IoError> r = files.readText("{p}");
             if (r.isErr()) {{ return 1; }}
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 1);
 }
 
@@ -138,7 +160,8 @@ fn read_text_missing_file_is_err() {
 fn read_text_invalid_utf8_is_err() {
     // On écrit un octet 0xFF brut en bytes, puis readText doit échouer.
     let path = temp_path("badutf8");
-    let (ret, lines) = run_output(&format!(r#"
+    let (ret, lines) = run_output(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             byte[] bad = new byte[1];
@@ -148,7 +171,9 @@ fn read_text_invalid_utf8_is_err() {
             if (r.isErr()) {{ print("err"); }} else {{ print("ok"); }}
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["err"]);
     cleanup(&path);
@@ -161,7 +186,8 @@ fn read_text_invalid_utf8_is_err() {
 #[test]
 fn write_then_read_bytes_roundtrip() {
     let path = temp_path("rwbytes");
-    let ret = run_ok(&format!(r#"
+    let ret = run_ok(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             byte[] data = new byte[3];
@@ -177,7 +203,9 @@ fn write_then_read_bytes_roundtrip() {
             sum = sum + back.get(2).get().toInt();   // 128
             return sum;                               // 383
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 383);
     // Vérifie aussi les octets bruts côté Rust
     let raw = std::fs::read(&path).expect("fichier écrit");
@@ -189,14 +217,17 @@ fn write_then_read_bytes_roundtrip() {
 fn text_written_then_read_as_bytes() {
     // "AB" écrit en texte → relu en octets = [65, 66]
     let path = temp_path("textbytes");
-    let ret = run_ok(&format!(r#"
+    let ret = run_ok(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             files.writeText("{p}", "AB");
             byte[] data = files.readBytes("{p}").getValue();
             return data.get(0).get().toInt() + data.get(1).get().toInt();  // 131
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 131);
     cleanup(&path);
 }
@@ -208,7 +239,8 @@ fn text_written_then_read_as_bytes() {
 #[test]
 fn exists_and_delete() {
     let path = temp_path("existsdel");
-    let (ret, lines) = run_output(&format!(r#"
+    let (ret, lines) = run_output(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             print(files.exists("{p}").toString());   // false
@@ -218,7 +250,9 @@ fn exists_and_delete() {
             print(files.exists("{p}").toString());   // false
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["false", "true", "false"]);
     cleanup(&path);
@@ -227,13 +261,16 @@ fn exists_and_delete() {
 #[test]
 fn delete_missing_file_is_err() {
     let path = temp_path("delmissing");
-    let ret = run_ok(&format!(r#"
+    let ret = run_ok(&format!(
+        r#"
         int main() {{
             Files files = inject Files;
             Result<Unit, IoError> r = files.delete("{p}");
             if (r.isErr()) {{ return 1; }}
             return 0;
         }}
-    "#, p = path));
+    "#,
+        p = path
+    ));
     assert_eq!(ret, 1);
 }

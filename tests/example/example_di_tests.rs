@@ -12,7 +12,7 @@ fn run_example() -> (i64, Vec<String>) {
     }
     match run_source_with_output(src) {
         Ok(result) => result,
-        Err(e)     => panic!("Erreur d'exécution :\n{}", e),
+        Err(e) => panic!("Erreur d'exécution :\n{}", e),
     }
 }
 

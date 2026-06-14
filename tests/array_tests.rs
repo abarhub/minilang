@@ -1,16 +1,22 @@
 //! Tests du type Array<T> — minilang stdlib.
 
-use mini_parser::interpreter::run_source;
-use mini_parser::typechecker::check_source;
 use chumsky::Parser;
+use mini_parser::interpreter::run_source;
 use mini_parser::parser::program_parser;
+use mini_parser::typechecker::check_source;
 
 fn parses_ok(src: &str) {
     let full = format!("{}\n{}", mini_parser::STDLIB, src);
     match program_parser().parse(full.as_str()) {
         Ok(_) => {}
-        Err(e) => panic!("Parse failed:\n{}\n---\n{}",
-            src, e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")),
+        Err(e) => panic!(
+            "Parse failed:\n{}\n---\n{}",
+            src,
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
     }
 }
 
@@ -25,15 +31,19 @@ fn assert_tc_err(src: &str, fragment: &str) {
         Ok(()) => panic!("Should have failed (expected '{}'):\n{}", fragment, src),
         Err(e) => {
             let all = e.join("\n");
-            assert!(all.contains(fragment),
-                "Expected '{}' in:\n{}", fragment, all);
+            assert!(
+                all.contains(fragment),
+                "Expected '{}' in:\n{}",
+                fragment,
+                all
+            );
         }
     }
 }
 
 fn run_ok(src: &str) -> i64 {
     match run_source(src) {
-        Ok(n)  => n,
+        Ok(n) => n,
         Err(e) => panic!("Runtime error:\n{}\n---\n{}", src, e),
     }
 }
@@ -42,106 +52,130 @@ fn run_ok(src: &str) -> i64 {
 
 #[test]
 fn parse_array_lit() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int[] a = new int[]{1, 2, 3};
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_array_new_size() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int[] a = new int[5];
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_array_new_with_fill() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int[] a = new int[5](0);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_array_index_access() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int[] a = new int[]{10, 20};
             int x = a[0];
             return x;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_array_index_assign_rejected() {
     // arr[i] = val n'est plus une syntaxe valide — il faut utiliser arr.set(i)
-    let full = format!("{}\n{}", mini_parser::STDLIB, r#"
+    let full = format!(
+        "{}\n{}",
+        mini_parser::STDLIB,
+        r#"
         int main() {
             int[] a = new int[2];
             a[0] = 42;
             return 0;
         }
-    "#);
-    assert!(program_parser().parse(full.as_str()).is_err(),
-        "arr[i]=val should no longer parse");
+    "#
+    );
+    assert!(
+        program_parser().parse(full.as_str()).is_err(),
+        "arr[i]=val should no longer parse"
+    );
 }
 
 // ── Typecheck ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn tc_array_lit_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             int[] a = new int[]{1, 2, 3};
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_array_new_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             bool[] a = new bool[10];
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_array_index_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             int[] a = new int[]{7};
             Option<int> x = a[0];
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_array_wrong_elem_type() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             int[] a = new int[]{true};
             return 0;
         }
-    "#, "incompatible");
+    "#,
+        "incompatible",
+    );
 }
 
 #[test]
 fn tc_array_set_wrong_type() {
     // set(i) retourne Option<RefArray<int>> ; appeler r.set(true) sur un int[] doit échouer
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             int[] a = new int[2];
             match a.set(0) {
@@ -150,67 +184,83 @@ fn tc_array_set_wrong_type() {
             }
             return 0;
         }
-    "#, "incompatible");
+    "#,
+        "incompatible",
+    );
 }
 
 #[test]
 fn tc_array_new_with_fill_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             int[] a = new int[5](42);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_array_new_with_fill_wrong_type() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             int[] a = new int[5](true);
             return 0;
         }
-    "#, "incompatible");
+    "#,
+        "incompatible",
+    );
 }
 
 #[test]
 fn tc_array_index_must_be_int() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             int[] a = new int[]{1};
             int x = a[true];
             return x;
         }
-    "#, "int");
+    "#,
+        "int",
+    );
 }
 
 #[test]
 fn tc_array_length_returns_int() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             int[] a = new int[]{1, 2, 3};
             int n = a.length();
             return n;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_array_contains_returns_bool() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             int[] a = new int[]{1, 2};
             bool b = a.contains(1);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Interprétation ────────────────────────────────────────────────────────────
 
 #[test]
 fn interp_array_new_with_fill() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[4](7);
             int sum = 0;
@@ -224,12 +274,17 @@ fn interp_array_new_with_fill() {
             }
             return sum;
         }
-    "#), 28);
+    "#
+        ),
+        28
+    );
 }
 
 #[test]
 fn interp_array_new_with_fill_bool() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             bool[] flags = new bool[3](true);
             match flags[0] {
@@ -238,12 +293,17 @@ fn interp_array_new_with_fill_bool() {
             }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn interp_array_lit_get() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{10, 20, 30};
             match a[1] {
@@ -251,12 +311,17 @@ fn interp_array_lit_get() {
                 Option::None    => { return -1; }
             }
         }
-    "#), 20);
+    "#
+        ),
+        20
+    );
 }
 
 #[test]
 fn interp_array_new_default_int() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[3];
             match a[2] {
@@ -264,12 +329,17 @@ fn interp_array_new_default_int() {
                 Option::None    => { return -1; }
             }
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn interp_array_assign() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[3];
             match a.set(1) {
@@ -281,44 +351,64 @@ fn interp_array_assign() {
                 Option::None    => { return -1; }
             }
         }
-    "#), 99);
+    "#
+        ),
+        99
+    );
 }
 
 #[test]
 fn interp_array_length() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{5, 6, 7, 8};
             return a.length();
         }
-    "#), 4);
+    "#
+        ),
+        4
+    );
 }
 
 #[test]
 fn interp_array_contains_true() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{1, 2, 3};
             if (a.contains(2)) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn interp_array_contains_false() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{1, 2, 3};
             if (a.contains(9)) { return 1; }
             return 0;
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn interp_array_fill() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{1, 2, 3};
             a.fill(7);
@@ -333,33 +423,48 @@ fn interp_array_fill() {
             }
             return sum;
         }
-    "#), 21);
+    "#
+        ),
+        21
+    );
 }
 
 #[test]
 fn interp_array_get_method() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{100, 200};
             return a.get(0).get();
         }
-    "#), 100);
+    "#
+        ),
+        100
+    );
 }
 
 #[test]
 fn interp_array_get_method_none() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{100, 200};
             if (a.get(99).isNone()) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn interp_array_set_method() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[2];
             match a.set(0) {
@@ -368,12 +473,17 @@ fn interp_array_set_method() {
             }
             return a.get(0).get();
         }
-    "#), 42);
+    "#
+        ),
+        42
+    );
 }
 
 #[test]
 fn interp_array_set_oob_returns_none() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[2];
             match a.set(99) {
@@ -381,12 +491,17 @@ fn interp_array_set_oob_returns_none() {
                 Option::None    => { return 0; }
             }
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn interp_array_set_ref_get() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{10, 20, 30};
             match a.set(1) {
@@ -397,12 +512,17 @@ fn interp_array_set_ref_get() {
                 Option::None => { return -1; }
             }
         }
-    "#), 99);
+    "#
+        ),
+        99
+    );
 }
 
 #[test]
 fn interp_array_oob_returns_none() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{1};
             match a[5] {
@@ -410,12 +530,17 @@ fn interp_array_oob_returns_none() {
                 Option::None    => { return -1; }
             }
         }
-    "#), -1);
+    "#
+        ),
+        -1
+    );
 }
 
 #[test]
 fn interp_array_negative_index_returns_none() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{1, 2};
             match a[-1] {
@@ -423,12 +548,17 @@ fn interp_array_negative_index_returns_none() {
                 Option::None    => { return -1; }
             }
         }
-    "#), -1);
+    "#
+        ),
+        -1
+    );
 }
 
 #[test]
 fn interp_array_loop_sum() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{1, 2, 3, 4, 5};
             int sum = 0;
@@ -442,12 +572,17 @@ fn interp_array_loop_sum() {
             }
             return sum;
         }
-    "#), 15);
+    "#
+        ),
+        15
+    );
 }
 
 #[test]
 fn interp_array_bool_type() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             bool[] flags = new bool[]{true, false, true};
             match flags[0] {
@@ -456,12 +591,17 @@ fn interp_array_bool_type() {
             }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn interp_array_in_result() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int[] a = new int[]{42};
             Result<int[], string> r = Result<int[], string>::Ok(a);
@@ -471,5 +611,8 @@ fn interp_array_in_result() {
                 Option::None    => { return -1; }
             }
         }
-    "#), 42);
+    "#
+        ),
+        42
+    );
 }

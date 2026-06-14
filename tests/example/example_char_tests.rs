@@ -6,7 +6,7 @@ fn run_example() -> (i64, Vec<String>) {
     let src = include_str!("../../examples/example_char.mini");
     match run_source_with_output(src) {
         Ok(result) => result,
-        Err(e)     => panic!("Erreur d'exécution :\n{}", e),
+        Err(e) => panic!("Erreur d'exécution :\n{}", e),
     }
 }
 
@@ -53,10 +53,19 @@ fn example_char_output_lines() {
         "fin de l'exemple char",
     ];
 
-    assert_eq!(lines.len(), expected.len(),
+    assert_eq!(
+        lines.len(),
+        expected.len(),
         "Nombre de lignes attendu : {}, obtenu : {}\nLignes réelles :\n{}",
-        expected.len(), lines.len(),
-        lines.iter().enumerate().map(|(i,l)| format!("[{}] {:?}", i, l)).collect::<Vec<_>>().join("\n"));
+        expected.len(),
+        lines.len(),
+        lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| format!("[{}] {:?}", i, l))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 
     for (i, (got, exp)) in lines.iter().zip(expected.iter()).enumerate() {
         assert_eq!(got, exp, "Ligne {} incorrecte", i);

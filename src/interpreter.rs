@@ -13,55 +13,91 @@ use crate::ast::*;
 // ── Valeurs runtime ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct ObjectData { pub class_name: String, pub fields: HashMap<String, Value> }
+pub struct ObjectData {
+    pub class_name: String,
+    pub fields: HashMap<String, Value>,
+}
 
 #[derive(Debug, Clone)]
 pub struct EnumData {
-    pub enum_name:    String,
+    pub enum_name: String,
     pub variant_name: String,
-    pub fields:       HashMap<String, Value>,
-    pub field_order:  Vec<String>,
+    pub fields: HashMap<String, Value>,
+    pub field_order: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Int(i64), Byte(u8), Float(f64), Bool(bool), Str(String), Char(char),
+    Int(i64),
+    Byte(u8),
+    Float(f64),
+    Bool(bool),
+    Str(String),
+    Char(char),
     Array(Rc<RefCell<Vec<Value>>>),
     HashMap(Rc<RefCell<Vec<(Value, Value)>>>),
     Object(Rc<RefCell<ObjectData>>),
     Enum(Rc<EnumData>),
     /// Fermeture : paramètres nommés, corps, variables capturées au moment de la création
-    Lambda { params: Vec<String>, body: LambdaBody, captured: HashMap<String, Value> },
-    Null, Void,
+    Lambda {
+        params: Vec<String>,
+        body: LambdaBody,
+        captured: HashMap<String, Value>,
+    },
+    Null,
+    Void,
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Int(n)    => write!(f, "{}", n),
-            Value::Byte(b)   => write!(f, "{}", b),
-            Value::Float(n)  => write!(f, "{}", n),
-            Value::Bool(b)   => write!(f, "{}", b),
-            Value::Str(s)    => write!(f, "{}", s),
-            Value::Char(c)   => write!(f, "{}", c),
-            Value::Null      => write!(f, "null"),
-            Value::Void      => write!(f, ""),
-            Value::Array(v)  => {
-                write!(f, "[{}]", v.borrow().iter()
-                    .map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+            Value::Int(n) => write!(f, "{}", n),
+            Value::Byte(b) => write!(f, "{}", b),
+            Value::Float(n) => write!(f, "{}", n),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Str(s) => write!(f, "{}", s),
+            Value::Char(c) => write!(f, "{}", c),
+            Value::Null => write!(f, "null"),
+            Value::Void => write!(f, ""),
+            Value::Array(v) => {
+                write!(
+                    f,
+                    "[{}]",
+                    v.borrow()
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Value::HashMap(v) => {
-                write!(f, "HashMap{{{}}}", v.borrow().iter()
-                    .map(|(k, val)| format!("{}={}", k, val))
-                    .collect::<Vec<_>>().join(", "))
+                write!(
+                    f,
+                    "HashMap{{{}}}",
+                    v.borrow()
+                        .iter()
+                        .map(|(k, val)| format!("{}={}", k, val))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Value::Object(o) => write!(f, "<{}>", o.borrow().class_name),
-            Value::Enum(e)   => {
+            Value::Enum(e) => {
                 if e.field_order.is_empty() {
                     write!(f, "{}::{}", e.enum_name, e.variant_name)
                 } else {
-                    let vals: Vec<_> = e.field_order.iter().map(|k| e.fields[k].to_string()).collect();
-                    write!(f, "{}::{}({})", e.enum_name, e.variant_name, vals.join(", "))
+                    let vals: Vec<_> = e
+                        .field_order
+                        .iter()
+                        .map(|k| e.fields[k].to_string())
+                        .collect();
+                    write!(
+                        f,
+                        "{}::{}({})",
+                        e.enum_name,
+                        e.variant_name,
+                        vals.join(", ")
+                    )
                 }
             }
             Value::Lambda { params, .. } => write!(f, "<fn({})>", params.join(", ")),
@@ -84,19 +120,34 @@ macro_rules! err { ($($a:tt)*) => { Err(RuntimeError(format!($($a)*))) }; }
 
 // ── Environnement (pile de scopes) ────────────────────────────────────────────
 
-pub struct Env { scopes: Vec<HashMap<String, Value>> }
+pub struct Env {
+    scopes: Vec<HashMap<String, Value>>,
+}
 
 impl Env {
-    pub fn new() -> Self { Self { scopes: vec![HashMap::new()] } }
-    pub fn push(&mut self) { self.scopes.push(HashMap::new()); }
-    pub fn pop(&mut self)  { if self.scopes.len() > 1 { self.scopes.pop(); } }
+    pub fn new() -> Self {
+        Self {
+            scopes: vec![HashMap::new()],
+        }
+    }
+    pub fn push(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
+    pub fn pop(&mut self) {
+        if self.scopes.len() > 1 {
+            self.scopes.pop();
+        }
+    }
 
     pub fn get(&self, name: &str) -> Option<Value> {
         self.scopes.iter().rev().find_map(|s| s.get(name).cloned())
     }
     pub fn set(&mut self, name: String, val: Value) {
         for s in self.scopes.iter_mut().rev() {
-            if s.contains_key(&name) { s.insert(name, val); return; }
+            if s.contains_key(&name) {
+                s.insert(name, val);
+                return;
+            }
         }
         self.scopes.last_mut().unwrap().insert(name, val);
     }
@@ -108,7 +159,9 @@ impl Env {
     pub fn snapshot(&self) -> HashMap<String, Value> {
         let mut snap = HashMap::new();
         for scope in &self.scopes {
-            for (k, v) in scope { snap.insert(k.clone(), v.clone()); }
+            for (k, v) in scope {
+                snap.insert(k.clone(), v.clone());
+            }
         }
         snap
     }
@@ -117,14 +170,19 @@ impl Env {
 // ── Flux de contrôle ─────────────────────────────────────────────────────────
 
 #[derive(Debug)]
-enum Flow { Next, Break, Continue, Return(Value) }
+enum Flow {
+    Next,
+    Break,
+    Continue,
+    Return(Value),
+}
 
 // ── Interpréteur ─────────────────────────────────────────────────────────────
 
 pub struct Interpreter {
-    classes:  HashMap<String, ClassDef>,
-    enums:    HashMap<String, EnumDef>,
-    funcs:    HashMap<String, FuncDef>,
+    classes: HashMap<String, ClassDef>,
+    enums: HashMap<String, EnumDef>,
+    funcs: HashMap<String, FuncDef>,
     /// Noms des interfaces — pour classifier les paramètres de constructeur
     /// des services (dépendance vs valeur de configuration)
     interfaces: std::collections::HashSet<String>,
@@ -165,38 +223,66 @@ impl Interpreter {
         // Records en premier, puis classes — les classes utilisateur ont priorité
         // (permet à un fichier de redéfinir une classe stdlib même si la stdlib
         // expose un record du même nom, comme Pair).
-        let mut classes: HashMap<String, ClassDef> = program.records.iter()
-            .map(|rd| (rd.name.clone(), crate::typechecker::TypeChecker::record_to_class_pub(rd)))
+        let mut classes: HashMap<String, ClassDef> = program
+            .records
+            .iter()
+            .map(|rd| {
+                (
+                    rd.name.clone(),
+                    crate::typechecker::TypeChecker::record_to_class_pub(rd),
+                )
+            })
             .collect();
         for c in &program.classes {
             classes.insert(c.name.clone(), c.clone());
         }
         // Bindings et valeurs de configuration des modules — la validation
         // (cibles connues, doublons, types) a déjà été faite par le typechecker.
-        let mut binds_to:    HashMap<String, String>    = HashMap::new();
+        let mut binds_to: HashMap<String, String> = HashMap::new();
         let mut with_values: HashMap<String, Vec<Expr>> = HashMap::new();
         for m in &program.modules {
             for b in &m.binds {
                 let concrete = b.to.clone().unwrap_or_else(|| b.target.clone());
-                if b.to.is_some() { binds_to.insert(b.target.clone(), concrete.clone()); }
-                if !b.with.is_empty() { with_values.insert(concrete, b.with.clone()); }
+                if b.to.is_some() {
+                    binds_to.insert(b.target.clone(), concrete.clone());
+                }
+                if !b.with.is_empty() {
+                    with_values.insert(concrete, b.with.clone());
+                }
             }
         }
         Self {
             classes,
-            enums:    program.enums  .iter().map(|e| (e.name.clone(), e.clone())).collect(),
-            funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
+            enums: program
+                .enums
+                .iter()
+                .map(|e| (e.name.clone(), e.clone()))
+                .collect(),
+            funcs: program
+                .funcs
+                .iter()
+                .map(|f| (f.name.clone(), f.clone()))
+                .collect(),
             interfaces: program.interfaces.iter().map(|i| i.name.clone()).collect(),
-            iface_parents: program.interfaces.iter()
-                .map(|i| (i.name.clone(),
-                    i.parents.iter().filter_map(|p| p.ref_name().map(|s| s.to_string())).collect()))
+            iface_parents: program
+                .interfaces
+                .iter()
+                .map(|i| {
+                    (
+                        i.name.clone(),
+                        i.parents
+                            .iter()
+                            .filter_map(|p| p.ref_name().map(|s| s.to_string()))
+                            .collect(),
+                    )
+                })
                 .collect(),
             binds_to,
             with_values,
             singletons: HashMap::new(),
             file_roots: HashMap::new(),
-            files_unrestricted: false,  // sûr par défaut : Files brut interdit
-            create_temp_marker: true,   // défaut = "mark"
+            files_unrestricted: false, // sûr par défaut : Files brut interdit
+            create_temp_marker: true,  // défaut = "mark"
             delete_temp_at_end: false,
             temp_dirs: Vec::new(),
             print_fn,
@@ -228,10 +314,16 @@ impl Interpreter {
     fn fs_root(&self, args: &[Value], writable_requested: bool) -> Result<Value, RuntimeError> {
         let name = str_arg(args, 0)?;
         match self.file_roots.get(&name) {
-            None => Ok(io_err("Other", Some(format!("racine '{}' non configurée", name)))),
+            None => Ok(io_err(
+                "Other",
+                Some(format!("racine '{}' non configurée", name)),
+            )),
             Some((path, writable)) => {
                 if writable_requested && !writable {
-                    Ok(io_err("Other", Some(format!("racine '{}' est en lecture seule", name))))
+                    Ok(io_err(
+                        "Other",
+                        Some(format!("racine '{}' est en lecture seule", name)),
+                    ))
                 } else {
                     Ok(make_ok(make_directory(path.clone(), writable_requested)))
                 }
@@ -245,14 +337,20 @@ impl Interpreter {
     /// Préfixe "minilang_cap_" pour repérage/nettoyage externe.
     fn fs_temp_dir(&mut self) -> Result<Value, RuntimeError> {
         let mut p = std::env::temp_dir();
-        p.push(format!("minilang_cap_{}_{}", std::process::id(), next_temp_seq()));
+        p.push(format!(
+            "minilang_cap_{}_{}",
+            std::process::id(),
+            next_temp_seq()
+        ));
         if let Err(e) = std::fs::create_dir_all(&p) {
             return Ok(io_err("Other", Some(e.to_string())));
         }
         let path = p.to_string_lossy().to_string();
         if self.create_temp_marker {
-            let _ = std::fs::write(p.join(TEMP_MARKER),
-                "Répertoire temporaire minilang — réclamable si aucun processus ne l'utilise.\n");
+            let _ = std::fs::write(
+                p.join(TEMP_MARKER),
+                "Répertoire temporaire minilang — réclamable si aucun processus ne l'utilise.\n",
+            );
         }
         if self.delete_temp_at_end {
             self.temp_dirs.push(path.clone());
@@ -276,14 +374,25 @@ impl Interpreter {
     fn run_main(&mut self, program: &Program) -> Result<i64, RuntimeError> {
         info!("▶ Exécution");
         let Some(main) = &program.main else {
-            return err!("Aucune fonction main — rien à exécuter \
-                         (utilisez `mini_parser test` pour un fichier de tests)");
+            return err!(
+                "Aucune fonction main — rien à exécuter \
+                         (utilisez `mini_parser test` pour un fichier de tests)"
+            );
         };
         let mut env = Env::new();
         match self.exec_body(&main.body.clone(), &mut env, None)? {
-            Flow::Return(Value::Int(n)) => { info!("✓ main → {}", n); Ok(n) }
-            Flow::Return(v) => { warn!("main valeur non-int : {}", v); Ok(0) }
-            _ => { warn!("main sans return"); Ok(0) }
+            Flow::Return(Value::Int(n)) => {
+                info!("✓ main → {}", n);
+                Ok(n)
+            }
+            Flow::Return(v) => {
+                warn!("main valeur non-int : {}", v);
+                Ok(0)
+            }
+            _ => {
+                warn!("main sans return");
+                Ok(0)
+            }
         }
     }
 
@@ -291,7 +400,10 @@ impl Interpreter {
     /// neuf. Utilisé par le runner de tests — chaque test tourne dans un
     /// interpréteur fraîchement créé (singletons DI réinitialisés).
     pub fn run_test(&mut self, name: &str) -> Result<(), RuntimeError> {
-        let func = self.funcs.get(name).cloned()
+        let func = self
+            .funcs
+            .get(name)
+            .cloned()
             .ok_or_else(|| RuntimeError(format!("Fonction de test inconnue '{}'", name)))?;
         let mut env = Env::new();
         self.exec_body(&func.body, &mut env, None)?;
@@ -302,14 +414,14 @@ impl Interpreter {
 
     fn default_value(ty: &Type) -> Value {
         match ty {
-            Type::Int            => Value::Int(0),
-            Type::Byte           => Value::Byte(0),
-            Type::Bool           => Value::Bool(false),
+            Type::Int => Value::Int(0),
+            Type::Byte => Value::Byte(0),
+            Type::Bool => Value::Bool(false),
             Type::Float | Type::Double => Value::Float(0.0),
-            Type::Str            => Value::Str(String::new()),
-            Type::Char           => Value::Char('\0'),
-            Type::Array(_)       => Value::Array(Rc::new(RefCell::new(vec![]))),
-            _                    => Value::Null,
+            Type::Str => Value::Str(String::new()),
+            Type::Char => Value::Char('\0'),
+            Type::Array(_) => Value::Array(Rc::new(RefCell::new(vec![]))),
+            _ => Value::Null,
         }
     }
 
@@ -319,30 +431,51 @@ impl Interpreter {
         if !self.classes.contains_key(class_name) {
             return err!("Classe inconnue : '{}'", class_name);
         }
-        let fields = self.all_fields(class_name).iter()
-            .map(|f| (f.name.clone(), Self::default_value(&f.ty))).collect();
+        let fields = self
+            .all_fields(class_name)
+            .iter()
+            .map(|f| (f.name.clone(), Self::default_value(&f.ty)))
+            .collect();
         Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
-            class_name: class_name.to_string(), fields
+            class_name: class_name.to_string(),
+            fields,
         }))))
     }
 
     fn all_fields(&self, cn: &str) -> Vec<Field> {
-        let Some(c) = self.classes.get(cn) else { return vec![]; };
-        let mut fs = c.parent.as_ref().and_then(|p| p.ref_name())
-            .map(|p| self.all_fields(p)).unwrap_or_default();
-        for f in &c.fields { fs.retain(|pf: &Field| pf.name != f.name); fs.push(f.clone()); }
+        let Some(c) = self.classes.get(cn) else {
+            return vec![];
+        };
+        let mut fs = c
+            .parent
+            .as_ref()
+            .and_then(|p| p.ref_name())
+            .map(|p| self.all_fields(p))
+            .unwrap_or_default();
+        for f in &c.fields {
+            fs.retain(|pf: &Field| pf.name != f.name);
+            fs.push(f.clone());
+        }
         fs
     }
 
     fn find_method(&self, cn: &str, mn: &str) -> Option<Method> {
         if let Some(c) = self.classes.get(cn) {
-            if let Some(m) = c.methods.iter().find(|m| m.name == mn) { return Some(m.clone()); }
-            if let Some(p) = &c.parent { return self.find_method(p.ref_name().unwrap_or(""), mn); }
+            if let Some(m) = c.methods.iter().find(|m| m.name == mn) {
+                return Some(m.clone());
+            }
+            if let Some(p) = &c.parent {
+                return self.find_method(p.ref_name().unwrap_or(""), mn);
+            }
             // Fallback vers Object si pas de parent explicite
-            if cn != "Object" { return self.find_method("Object", mn); }
+            if cn != "Object" {
+                return self.find_method("Object", mn);
+            }
         }
         if let Some(e) = self.enums.get(cn) {
-            if let Some(m) = e.methods.iter().find(|m| m.name == mn) { return Some(m.clone()); }
+            if let Some(m) = e.methods.iter().find(|m| m.name == mn) {
+                return Some(m.clone());
+            }
         }
         None
     }
@@ -350,13 +483,15 @@ impl Interpreter {
     // ── Corps ─────────────────────────────────────────────────────────────────
 
     fn exec_body(
-        &mut self, stmts: &[Stmt], env: &mut Env,
+        &mut self,
+        stmts: &[Stmt],
+        env: &mut Env,
         this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Flow, RuntimeError> {
         for s in stmts {
             match self.exec_stmt(s, env, this.clone())? {
                 Flow::Next => {}
-                other      => return Ok(other),
+                other => return Ok(other),
             }
         }
         Ok(Flow::Next)
@@ -365,16 +500,26 @@ impl Interpreter {
     // ── Instructions ──────────────────────────────────────────────────────────
 
     fn exec_stmt(
-        &mut self, stmt: &Stmt, env: &mut Env,
+        &mut self,
+        stmt: &Stmt,
+        env: &mut Env,
         this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Flow, RuntimeError> {
         match stmt {
-            Stmt::VarDecl { qualifier: _, ty, name, init } => {
+            Stmt::VarDecl {
+                qualifier: _,
+                ty,
+                name,
+                init,
+            } => {
                 let val = if let Some(e) = init {
                     self.eval(e, env, this)?
                 } else if let Type::UserDefined(cn) = ty {
-                    if self.enums.contains_key(cn) { Value::Null }
-                    else { self.instantiate(cn)? }
+                    if self.enums.contains_key(cn) {
+                        Value::Null
+                    } else {
+                        self.instantiate(cn)?
+                    }
                 } else if let Type::Generic(cn, _) = ty {
                     self.instantiate(cn)?
                 } else {
@@ -385,73 +530,105 @@ impl Interpreter {
 
             Stmt::Assign { target, value } => {
                 let val = self.eval(value, env, this.clone())?;
-                let is_field = this.as_ref()
-                    .map(|t| t.borrow().fields.contains_key(target)).unwrap_or(false);
-                if is_field { this.unwrap().borrow_mut().fields.insert(target.clone(), val); }
-                else { env.set(target.clone(), val); }
+                let is_field = this
+                    .as_ref()
+                    .map(|t| t.borrow().fields.contains_key(target))
+                    .unwrap_or(false);
+                if is_field {
+                    this.unwrap()
+                        .borrow_mut()
+                        .fields
+                        .insert(target.clone(), val);
+                } else {
+                    env.set(target.clone(), val);
+                }
             }
 
-            Stmt::FieldAssign { object, field, value } => {
+            Stmt::FieldAssign {
+                object,
+                field,
+                value,
+            } => {
                 let val = self.eval(value, env, this.clone())?;
                 let rc = if object == "this" {
-                    this.clone().ok_or_else(|| RuntimeError("'this' hors méthode".into()))?
+                    this.clone()
+                        .ok_or_else(|| RuntimeError("'this' hors méthode".into()))?
                 } else {
-                    let v = env.get(object)
-                        .or_else(|| this.as_ref().and_then(|t| t.borrow().fields.get(object).cloned()))
+                    let v = env
+                        .get(object)
+                        .or_else(|| {
+                            this.as_ref()
+                                .and_then(|t| t.borrow().fields.get(object).cloned())
+                        })
                         .ok_or_else(|| RuntimeError(format!("Variable inconnue '{}'", object)))?;
-                    match v { Value::Object(rc) => rc, _ => return err!("'{}' non-objet", object) }
+                    match v {
+                        Value::Object(rc) => rc,
+                        _ => return err!("'{}' non-objet", object),
+                    }
                 };
                 rc.borrow_mut().fields.insert(field.clone(), val);
             }
 
             Stmt::Print(args) => {
-                let parts: Vec<String> = args.iter()
+                let parts: Vec<String> = args
+                    .iter()
                     .map(|e| self.eval(e, env, this.clone()).map(|v| v.to_string()))
                     .collect::<Result<_, _>>()?;
                 (self.print_fn)(&parts.join(" "));
             }
 
             Stmt::Return(e) => {
-                let v = match e { Some(e) => self.eval(e, env, this)?, None => Value::Void };
+                let v = match e {
+                    Some(e) => self.eval(e, env, this)?,
+                    None => Value::Void,
+                };
                 return Ok(Flow::Return(v));
             }
 
-            Stmt::ExprStmt(e) => { self.eval(e, env, this)?; }
+            Stmt::ExprStmt(e) => {
+                self.eval(e, env, this)?;
+            }
 
-            Stmt::If { condition, then_body, else_body } => {
-                match self.eval(condition, env, this.clone())? {
-                    Value::Bool(true) => {
-                        env.push();
-                        let f = self.exec_body(then_body, env, this)?;
-                        env.pop();
-                        if !matches!(f, Flow::Next) { return Ok(f); }
+            Stmt::If {
+                condition,
+                then_body,
+                else_body,
+            } => match self.eval(condition, env, this.clone())? {
+                Value::Bool(true) => {
+                    env.push();
+                    let f = self.exec_body(then_body, env, this)?;
+                    env.pop();
+                    if !matches!(f, Flow::Next) {
+                        return Ok(f);
                     }
-                    Value::Bool(false) => {
-                        if let Some(eb) = else_body {
-                            env.push();
-                            let f = self.exec_body(eb, env, this)?;
-                            env.pop();
-                            if !matches!(f, Flow::Next) { return Ok(f); }
+                }
+                Value::Bool(false) => {
+                    if let Some(eb) = else_body {
+                        env.push();
+                        let f = self.exec_body(eb, env, this)?;
+                        env.pop();
+                        if !matches!(f, Flow::Next) {
+                            return Ok(f);
                         }
                     }
-                    _ => return err!("Condition if non-bool"),
                 }
-            }
+                _ => return err!("Condition if non-bool"),
+            },
 
             Stmt::While { condition, body } => loop {
                 match self.eval(condition, env, this.clone())? {
                     Value::Bool(false) => break,
-                    Value::Bool(true)  => {}
+                    Value::Bool(true) => {}
                     _ => return err!("Condition while non-bool"),
                 }
                 env.push();
                 let f = self.exec_body(body, env, this.clone())?;
                 env.pop();
                 match f {
-                    Flow::Break    => break,
+                    Flow::Break => break,
                     Flow::Continue => continue,
                     Flow::Return(v) => return Ok(Flow::Return(v)),
-                    Flow::Next     => {}
+                    Flow::Next => {}
                 }
             },
 
@@ -460,18 +637,23 @@ impl Interpreter {
                 let f = self.exec_body(body, env, this.clone())?;
                 env.pop();
                 match f {
-                    Flow::Break    => break,
+                    Flow::Break => break,
                     Flow::Return(v) => return Ok(Flow::Return(v)),
                     Flow::Continue | Flow::Next => {}
                 }
                 match self.eval(condition, env, this.clone())? {
                     Value::Bool(false) => break,
-                    Value::Bool(true)  => {}
+                    Value::Bool(true) => {}
                     _ => return err!("Condition do-while non-bool"),
                 }
             },
 
-            Stmt::ForIn { var_name, iter_expr, body, .. } => {
+            Stmt::ForIn {
+                var_name,
+                iter_expr,
+                body,
+                ..
+            } => {
                 let iterable = self.eval(iter_expr, env, this.clone())?;
                 match iterable {
                     // ── Tableau natif : itération directe ──────────────────────
@@ -483,8 +665,8 @@ impl Interpreter {
                             let f = self.exec_body(body, env, this.clone())?;
                             env.pop();
                             match f {
-                                Flow::Break         => break 'arr,
-                                Flow::Return(v)     => return Ok(Flow::Return(v)),
+                                Flow::Break => break 'arr,
+                                Flow::Return(v) => return Ok(Flow::Return(v)),
                                 Flow::Continue | Flow::Next => {}
                             }
                         }
@@ -492,9 +674,12 @@ impl Interpreter {
                     // ── Objet : appel de iterator() puis next() en boucle ──────
                     Value::Object(rc) => {
                         let cn = rc.borrow().class_name.clone();
-                        let iter_m = self.find_method(&cn, "iterator")
-                            .ok_or_else(|| RuntimeError(format!(
-                                "'{}' n'est pas Iterable : méthode iterator() absente", cn)))?;
+                        let iter_m = self.find_method(&cn, "iterator").ok_or_else(|| {
+                            RuntimeError(format!(
+                                "'{}' n'est pas Iterable : méthode iterator() absente",
+                                cn
+                            ))
+                        })?;
                         let iterator = self.call_method(&iter_m, vec![], rc)?;
                         let iter_rc = match iterator {
                             Value::Object(r) => r,
@@ -502,25 +687,30 @@ impl Interpreter {
                         };
                         'obj: loop {
                             let iter_cn = iter_rc.borrow().class_name.clone();
-                            let next_m = self.find_method(&iter_cn, "next")
-                                .ok_or_else(|| RuntimeError(format!(
-                                    "Iterator '{}' n'a pas de méthode next()", iter_cn)))?;
+                            let next_m = self.find_method(&iter_cn, "next").ok_or_else(|| {
+                                RuntimeError(format!(
+                                    "Iterator '{}' n'a pas de méthode next()",
+                                    iter_cn
+                                ))
+                            })?;
                             let next_val = self.call_method(&next_m, vec![], iter_rc.clone())?;
                             match next_val {
                                 Value::Enum(ref ed)
-                                    if ed.enum_name == "Option" && ed.variant_name == "None"
-                                    => break 'obj,
+                                    if ed.enum_name == "Option" && ed.variant_name == "None" =>
+                                {
+                                    break 'obj;
+                                }
                                 Value::Enum(ref ed)
-                                    if ed.enum_name == "Option" && ed.variant_name == "Some"
-                                    => {
-                                    let item = ed.fields.get("value")
-                                        .cloned().unwrap_or(Value::Null);
+                                    if ed.enum_name == "Option" && ed.variant_name == "Some" =>
+                                {
+                                    let item =
+                                        ed.fields.get("value").cloned().unwrap_or(Value::Null);
                                     env.push();
                                     env.declare(var_name.clone(), item);
                                     let f = self.exec_body(body, env, this.clone())?;
                                     env.pop();
                                     match f {
-                                        Flow::Break     => break 'obj,
+                                        Flow::Break => break 'obj,
                                         Flow::Return(v) => return Ok(Flow::Return(v)),
                                         Flow::Continue | Flow::Next => {}
                                     }
@@ -533,14 +723,21 @@ impl Interpreter {
                 }
             }
 
-            Stmt::For { init, condition, update, body } => {
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
                 env.push();
-                if let Some(s) = init { self.exec_stmt(s, env, this.clone())?; }
+                if let Some(s) = init {
+                    self.exec_stmt(s, env, this.clone())?;
+                }
                 'lp: loop {
                     if let Some(ce) = condition {
                         match self.eval(ce, env, this.clone())? {
                             Value::Bool(false) => break,
-                            Value::Bool(true)  => {}
+                            Value::Bool(true) => {}
                             _ => return err!("Condition for non-bool"),
                         }
                     }
@@ -548,18 +745,24 @@ impl Interpreter {
                     let f = self.exec_body(body, env, this.clone())?;
                     env.pop();
                     match f {
-                        Flow::Break    => break 'lp,
-                        Flow::Return(v) => { env.pop(); return Ok(Flow::Return(v)); }
+                        Flow::Break => break 'lp,
+                        Flow::Return(v) => {
+                            env.pop();
+                            return Ok(Flow::Return(v));
+                        }
                         Flow::Continue | Flow::Next => {}
                     }
-                    if let Some(u) = update { self.exec_stmt(u, env, this.clone())?; }
+                    if let Some(u) = update {
+                        self.exec_stmt(u, env, this.clone())?;
+                    }
                 }
                 env.pop();
             }
 
-            Stmt::Builtin => { /* méthode native — ne devrait pas être exécutée directement */ }
+            Stmt::Builtin => { /* méthode native — ne devrait pas être exécutée directement */
+            }
 
-            Stmt::Break    => return Ok(Flow::Break),
+            Stmt::Break => return Ok(Flow::Break),
             Stmt::Continue => return Ok(Flow::Continue),
 
             Stmt::Match { expr, arms } => {
@@ -580,10 +783,14 @@ impl Interpreter {
                     };
                     if matched {
                         let need_scope = !matches!(&arm.pattern, Pattern::Variant { .. } if matches!(&val, Value::Enum(_)));
-                        if need_scope { env.push(); }
+                        if need_scope {
+                            env.push();
+                        }
                         let f = self.exec_body(&arm.body, env, this.clone())?;
                         env.pop();
-                        if !matches!(f, Flow::Next) { return Ok(f); }
+                        if !matches!(f, Flow::Next) {
+                            return Ok(f);
+                        }
                         break;
                     }
                 }
@@ -595,26 +802,33 @@ impl Interpreter {
     // ── Évaluation d'expression ───────────────────────────────────────────────
 
     fn eval(
-        &mut self, expr: &Expr, env: &mut Env,
+        &mut self,
+        expr: &Expr,
+        env: &mut Env,
         this: Option<Rc<RefCell<ObjectData>>>,
     ) -> Result<Value, RuntimeError> {
         match expr {
-            Expr::IntLit(n)    => Ok(Value::Int(*n)),
-            Expr::FloatLit(f)  => Ok(Value::Float(*f)),
-            Expr::BoolLit(b)   => Ok(Value::Bool(*b)),
+            Expr::IntLit(n) => Ok(Value::Int(*n)),
+            Expr::FloatLit(f) => Ok(Value::Float(*f)),
+            Expr::BoolLit(b) => Ok(Value::Bool(*b)),
             Expr::StringLit(s) => Ok(Value::Str(s.clone())),
-            Expr::CharLit(c)   => Ok(Value::Char(*c)),
+            Expr::CharLit(c) => Ok(Value::Char(*c)),
 
             Expr::Ident(name) => {
                 // env en premier : permet aux méthodes d'enum de stocker `this = Value::Enum`
-                if let Some(v) = env.get(name) { return Ok(v); }
+                if let Some(v) = env.get(name) {
+                    return Ok(v);
+                }
                 if name == "this" {
-                    return this.as_ref()
+                    return this
+                        .as_ref()
                         .map(|rc| Value::Object(rc.clone()))
                         .ok_or_else(|| RuntimeError("'this' hors méthode".into()));
                 }
                 if let Some(obj) = &this {
-                    if let Some(v) = obj.borrow().fields.get(name) { return Ok(v.clone()); }
+                    if let Some(v) = obj.borrow().fields.get(name) {
+                        return Ok(v.clone());
+                    }
                 }
                 err!("Variable inconnue '{}'", name)
             }
@@ -623,7 +837,7 @@ impl Interpreter {
                 let v = self.eval(expr, env, this)?;
                 match op {
                     UnaryOp::Neg => match v {
-                        Value::Int(n)   => Ok(Value::Int(-n)),
+                        Value::Int(n) => Ok(Value::Int(-n)),
                         Value::Float(f) => Ok(Value::Float(-f)),
                         _ => err!("- non applicable"),
                     },
@@ -640,26 +854,37 @@ impl Interpreter {
                 eval_binop(lv, op, rv)
             }
 
-            Expr::FieldAccess { object, field } => {
-                match self.eval(object, env, this)? {
-                    Value::Object(rc) => rc.borrow().fields.get(field).cloned()
-                        .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field))),
-                    Value::Enum(ed)   => ed.fields.get(field).cloned()
-                        .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field))),
-                    _ => err!("Accès champ sur non-objet"),
-                }
-            }
+            Expr::FieldAccess { object, field } => match self.eval(object, env, this)? {
+                Value::Object(rc) => rc
+                    .borrow()
+                    .fields
+                    .get(field)
+                    .cloned()
+                    .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field))),
+                Value::Enum(ed) => ed
+                    .fields
+                    .get(field)
+                    .cloned()
+                    .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field))),
+                _ => err!("Accès champ sur non-objet"),
+            },
 
-            Expr::MethodCall { object, method, args } => {
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 let obj = self.eval(object, env, this.clone())?;
-                let args: Vec<Value> = args.iter()
+                let args: Vec<Value> = args
+                    .iter()
                     .map(|a| self.eval(a, env, this.clone()))
                     .collect::<Result<_, _>>()?;
                 match obj {
                     Value::Object(rc) => {
                         let cn = rc.borrow().class_name.clone();
-                        let m = self.find_method(&cn, method)
-                            .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method)))?;
+                        let m = self.find_method(&cn, method).ok_or_else(|| {
+                            RuntimeError(format!("Méthode inconnue '{}.{}()'", cn, method))
+                        })?;
                         if matches!(m.body.as_slice(), [Stmt::Builtin]) {
                             match (cn.as_str(), method.as_str()) {
                                 (_, "equals") if args.len() == 1 => {
@@ -723,7 +948,8 @@ impl Interpreter {
                                         Some(Value::Array(a)) => a,
                                         _ => return err!("ArrayList: champ 'data' introuvable"),
                                     };
-                                    let found = (0..count).any(|i| val_eq(&data.borrow()[i], needle));
+                                    let found =
+                                        (0..count).any(|i| val_eq(&data.borrow()[i], needle));
                                     Ok(Value::Bool(found))
                                 }
                                 ("ArrayList", "indexOf") if args.len() == 1 => {
@@ -737,7 +963,8 @@ impl Interpreter {
                                         _ => return err!("ArrayList: champ 'data' introuvable"),
                                     };
                                     let arr = data.borrow();
-                                    if let Some(pos) = (0..count).find(|&i| val_eq(&arr[i], needle)) {
+                                    if let Some(pos) = (0..count).find(|&i| val_eq(&arr[i], needle))
+                                    {
                                         Ok(make_some(Value::Int(pos as i64)))
                                     } else {
                                         Ok(make_none())
@@ -754,7 +981,8 @@ impl Interpreter {
                                         _ => return err!("ArrayList: champ 'data' introuvable"),
                                     };
                                     let arr = data.borrow();
-                                    if let Some(pos) = (0..count).find(|&i| val_eq(&arr[i], needle)) {
+                                    if let Some(pos) = (0..count).find(|&i| val_eq(&arr[i], needle))
+                                    {
                                         Ok(make_some(arr[pos].clone()))
                                     } else {
                                         Ok(make_none())
@@ -769,9 +997,8 @@ impl Interpreter {
                                         Some(Value::Array(a)) => a,
                                         _ => return err!("ArrayList: champ 'data' introuvable"),
                                     };
-                                    let parts: Vec<String> = (0..count)
-                                        .map(|i| data.borrow()[i].to_string())
-                                        .collect();
+                                    let parts: Vec<String> =
+                                        (0..count).map(|i| data.borrow()[i].to_string()).collect();
                                     Ok(Value::Str(format!("ArrayList[{}]", parts.join(", "))))
                                 }
                                 ("HashSet", "toString") if args.is_empty() => {
@@ -779,9 +1006,14 @@ impl Interpreter {
                                         Some(Value::HashMap(m)) => m,
                                         _ => return err!("HashSet: champ 'map' introuvable"),
                                     };
-                                    let s = format!("HashSet{{{}}}", map.borrow().iter()
-                                        .map(|(k, _)| k.to_string())
-                                        .collect::<Vec<_>>().join(", "));
+                                    let s = format!(
+                                        "HashSet{{{}}}",
+                                        map.borrow()
+                                            .iter()
+                                            .map(|(k, _)| k.to_string())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    );
                                     Ok(Value::Str(s))
                                 }
                                 // ── RefArray<T> ───────────────────────────────
@@ -809,63 +1041,68 @@ impl Interpreter {
                                     Ok(arr.borrow()[idx].clone())
                                 }
                                 // ── Flux standard (minilang.system) ──────────
-                                ("StandardOutput", "write")     => io_write(&args, false, false),
-                                ("StandardOutput", "writeLine") => io_write(&args, true,  false),
-                                ("StandardOutput", "flush")     => io_flush(false),
-                                ("StandardError",  "write")     => io_write(&args, false, true),
-                                ("StandardError",  "writeLine") => io_write(&args, true,  true),
-                                ("StandardError",  "flush")     => io_flush(true),
-                                ("StandardInput",  "readLine")  => io_read_line(),
-                                ("StandardInput",  "readChar")  => io_read_char(),
-                                ("StandardInput",  "readAll")   => io_read_all(),
+                                ("StandardOutput", "write") => io_write(&args, false, false),
+                                ("StandardOutput", "writeLine") => io_write(&args, true, false),
+                                ("StandardOutput", "flush") => io_flush(false),
+                                ("StandardError", "write") => io_write(&args, false, true),
+                                ("StandardError", "writeLine") => io_write(&args, true, true),
+                                ("StandardError", "flush") => io_flush(true),
+                                ("StandardInput", "readLine") => io_read_line(),
+                                ("StandardInput", "readChar") => io_read_char(),
+                                ("StandardInput", "readAll") => io_read_all(),
                                 // ── Conversions string <-> byte[] (minilang.io) ──
-                                ("Bytes", "encodeUtf8") if args.len() == 1 => {
-                                    match &args[0] {
-                                        Value::Str(s) => {
-                                            let bytes: Vec<Value> = s.as_bytes().iter()
-                                                .map(|b| Value::Byte(*b)).collect();
-                                            Ok(Value::Array(Rc::new(RefCell::new(bytes))))
-                                        }
-                                        _ => err!("encodeUtf8() requiert une string"),
+                                ("Bytes", "encodeUtf8") if args.len() == 1 => match &args[0] {
+                                    Value::Str(s) => {
+                                        let bytes: Vec<Value> =
+                                            s.as_bytes().iter().map(|b| Value::Byte(*b)).collect();
+                                        Ok(Value::Array(Rc::new(RefCell::new(bytes))))
                                     }
-                                }
-                                ("Bytes", "decodeUtf8") if args.len() == 1 => {
-                                    match &args[0] {
-                                        Value::Array(a) => {
-                                            let mut buf = Vec::with_capacity(a.borrow().len());
-                                            for v in a.borrow().iter() {
-                                                match v {
-                                                    Value::Byte(b) => buf.push(*b),
-                                                    _ => return err!("decodeUtf8() requiert un byte[]"),
+                                    _ => err!("encodeUtf8() requiert une string"),
+                                },
+                                ("Bytes", "decodeUtf8") if args.len() == 1 => match &args[0] {
+                                    Value::Array(a) => {
+                                        let mut buf = Vec::with_capacity(a.borrow().len());
+                                        for v in a.borrow().iter() {
+                                            match v {
+                                                Value::Byte(b) => buf.push(*b),
+                                                _ => {
+                                                    return err!("decodeUtf8() requiert un byte[]");
                                                 }
                                             }
-                                            match String::from_utf8(buf) {
-                                                Ok(s)  => Ok(make_ok(Value::Str(s))),
-                                                Err(_) => Ok(io_err("Other",
-                                                    Some("séquence UTF-8 invalide".to_string()))),
-                                            }
                                         }
-                                        _ => err!("decodeUtf8() requiert un byte[]"),
+                                        match String::from_utf8(buf) {
+                                            Ok(s) => Ok(make_ok(Value::Str(s))),
+                                            Err(_) => Ok(io_err(
+                                                "Other",
+                                                Some("séquence UTF-8 invalide".to_string()),
+                                            )),
+                                        }
                                     }
-                                }
+                                    _ => err!("decodeUtf8() requiert un byte[]"),
+                                },
                                 // ── Fichiers en bloc (minilang.io.Files) ──────
                                 // Accès brut gardé : interdit sauf [files] unrestricted = true.
                                 ("Files", _) if !self.files_unrestricted => err!(
                                     "accès fichiers brut non autorisé : ajoutez `[files] unrestricted = true` \
-                                     au minilang.toml, ou utilisez une capacité confinée (FileSystem)"),
-                                ("Files", "readBytes")  if args.len() == 1 => file_read_bytes(&args),
-                                ("Files", "readText")   if args.len() == 1 => file_read_text(&args),
+                                     au minilang.toml, ou utilisez une capacité confinée (FileSystem)"
+                                ),
+                                ("Files", "readBytes") if args.len() == 1 => file_read_bytes(&args),
+                                ("Files", "readText") if args.len() == 1 => file_read_text(&args),
                                 ("Files", "writeBytes") if args.len() == 2 => {
-                                    let data = bytes_arg(&args, 1)?; file_write(&args, data)
+                                    let data = bytes_arg(&args, 1)?;
+                                    file_write(&args, data)
                                 }
-                                ("Files", "writeText")  if args.len() == 2 => {
-                                    let data = str_arg(&args, 1)?.into_bytes(); file_write(&args, data)
+                                ("Files", "writeText") if args.len() == 2 => {
+                                    let data = str_arg(&args, 1)?.into_bytes();
+                                    file_write(&args, data)
                                 }
                                 ("Files", "appendBytes") if args.len() == 2 => {
-                                    let data = bytes_arg(&args, 1)?; file_append(&args, data)
+                                    let data = bytes_arg(&args, 1)?;
+                                    file_append(&args, data)
                                 }
-                                ("Files", "appendText")  if args.len() == 2 => {
-                                    let data = str_arg(&args, 1)?.into_bytes(); file_append(&args, data)
+                                ("Files", "appendText") if args.len() == 2 => {
+                                    let data = str_arg(&args, 1)?.into_bytes();
+                                    file_append(&args, data)
                                 }
                                 ("Files", "exists") if args.len() == 1 => {
                                     let path = str_arg(&args, 0)?;
@@ -874,25 +1111,33 @@ impl Interpreter {
                                 ("Files", "delete") if args.len() == 1 => file_delete(&args),
                                 // ── Capacités de répertoire (minilang.io) ─────
                                 ("FileSystem", "tempDir") => self.fs_temp_dir(),
-                                ("FileSystem", "root")   if args.len() == 1 => self.fs_root(&args, false),
-                                ("FileSystem", "rootRW") if args.len() == 1 => self.fs_root(&args, true),
-                                ("Directory", "readBytes")  if args.len() == 1 =>
-                                    cap_read(&dir_path(&rc), &args, false),
-                                ("Directory", "readText")   if args.len() == 1 =>
-                                    cap_read(&dir_path(&rc), &args, true),
-                                ("Directory", "exists")     if args.len() == 1 =>
-                                    cap_exists(&dir_path(&rc), &args),
-                                ("Directory", "name")       =>
-                                    Ok(Value::Str(dir_name(&dir_path(&rc)))),
-                                ("Directory", "sub")        if args.len() == 1 =>
-                                    cap_sub(&dir_path(&rc), &args, false),
-                                ("Directory", "subRW")      if args.len() == 1 =>
-                                    cap_sub(&dir_path(&rc), &args, dir_writable(&rc)),
+                                ("FileSystem", "root") if args.len() == 1 => {
+                                    self.fs_root(&args, false)
+                                }
+                                ("FileSystem", "rootRW") if args.len() == 1 => {
+                                    self.fs_root(&args, true)
+                                }
+                                ("Directory", "readBytes") if args.len() == 1 => {
+                                    cap_read(&dir_path(&rc), &args, false)
+                                }
+                                ("Directory", "readText") if args.len() == 1 => {
+                                    cap_read(&dir_path(&rc), &args, true)
+                                }
+                                ("Directory", "exists") if args.len() == 1 => {
+                                    cap_exists(&dir_path(&rc), &args)
+                                }
+                                ("Directory", "name") => Ok(Value::Str(dir_name(&dir_path(&rc)))),
+                                ("Directory", "sub") if args.len() == 1 => {
+                                    cap_sub(&dir_path(&rc), &args, false)
+                                }
+                                ("Directory", "subRW") if args.len() == 1 => {
+                                    cap_sub(&dir_path(&rc), &args, dir_writable(&rc))
+                                }
                                 ("Directory", "writeBytes") if args.len() == 2 => {
                                     let d = bytes_arg(&args, 1)?;
                                     cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, false)
                                 }
-                                ("Directory", "writeText")  if args.len() == 2 => {
+                                ("Directory", "writeText") if args.len() == 2 => {
                                     let d = str_arg(&args, 1)?.into_bytes();
                                     cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, false)
                                 }
@@ -904,10 +1149,13 @@ impl Interpreter {
                                     let d = str_arg(&args, 1)?.into_bytes();
                                     cap_write(&dir_path(&rc), dir_writable(&rc), &args, d, true)
                                 }
-                                ("Directory", "delete")     if args.len() == 1 =>
-                                    cap_delete(&dir_path(&rc), dir_writable(&rc), &args),
+                                ("Directory", "delete") if args.len() == 1 => {
+                                    cap_delete(&dir_path(&rc), dir_writable(&rc), &args)
+                                }
                                 _ => Err(RuntimeError(format!(
-                                    "Méthode builtin inconnue '{}.{}()'", cn, method))),
+                                    "Méthode builtin inconnue '{}.{}()'",
+                                    cn, method
+                                ))),
                             }
                         } else {
                             self.call_method(&m, args, rc)
@@ -919,14 +1167,17 @@ impl Interpreter {
                             return Ok(Value::Int(val_hash(&Value::Enum(ed))));
                         }
                         let en = ed.enum_name.clone();
-                        let m = self.find_method(&en, method)
-                            .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}::{}()'", en, method)))?;
+                        let m = self.find_method(&en, method).ok_or_else(|| {
+                            RuntimeError(format!("Méthode inconnue '{}::{}()'", en, method))
+                        })?;
                         self.call_enum_method(&m, args, ed)
                     }
                     Value::Array(v) => {
                         match method.as_str() {
                             "get" => {
-                                if args.len() != 1 { return err!("get() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("get() attend 1 argument");
+                                }
                                 match &args[0] {
                                     Value::Int(i) => {
                                         let data = v.borrow();
@@ -941,7 +1192,9 @@ impl Interpreter {
                             }
                             "set" => {
                                 // set(index) -> Option<RefArray<T>>
-                                if args.len() != 1 { return err!("set() attend 1 argument (l'index)"); }
+                                if args.len() != 1 {
+                                    return err!("set() attend 1 argument (l'index)");
+                                }
                                 match &args[0] {
                                     Value::Int(i) => {
                                         let i = *i;
@@ -950,12 +1203,16 @@ impl Interpreter {
                                             Ok(make_none())
                                         } else {
                                             let mut fields = HashMap::new();
-                                            fields.insert("_array".to_string(), Value::Array(v.clone()));
+                                            fields.insert(
+                                                "_array".to_string(),
+                                                Value::Array(v.clone()),
+                                            );
                                             fields.insert("_index".to_string(), Value::Int(i));
-                                            let ref_array = Value::Object(Rc::new(RefCell::new(ObjectData {
-                                                class_name: "RefArray".to_string(),
-                                                fields,
-                                            })));
+                                            let ref_array =
+                                                Value::Object(Rc::new(RefCell::new(ObjectData {
+                                                    class_name: "RefArray".to_string(),
+                                                    fields,
+                                                })));
                                             Ok(make_some(ref_array))
                                         }
                                     }
@@ -964,13 +1221,17 @@ impl Interpreter {
                             }
                             "length" => Ok(Value::Int(v.borrow().len() as i64)),
                             "contains" => {
-                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("contains() attend 1 argument");
+                                }
                                 let needle = &args[0];
                                 let found = v.borrow().iter().any(|x| val_eq(x, needle));
                                 Ok(Value::Bool(found))
                             }
                             "indexOf" => {
-                                if args.len() != 1 { return err!("indexOf() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("indexOf() attend 1 argument");
+                                }
                                 let needle = &args[0];
                                 let data = v.borrow();
                                 if let Some(pos) = data.iter().position(|x| val_eq(x, needle)) {
@@ -980,7 +1241,9 @@ impl Interpreter {
                                 }
                             }
                             "find" => {
-                                if args.len() != 1 { return err!("find() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("find() attend 1 argument");
+                                }
                                 let needle = &args[0];
                                 let data = v.borrow();
                                 if let Some(found) = data.iter().find(|x| val_eq(x, needle)) {
@@ -990,14 +1253,20 @@ impl Interpreter {
                                 }
                             }
                             "fill" => {
-                                if args.len() != 1 { return err!("fill() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("fill() attend 1 argument");
+                                }
                                 let val = args[0].clone();
                                 let mut data = v.borrow_mut();
-                                for x in data.iter_mut() { *x = val.clone(); }
+                                for x in data.iter_mut() {
+                                    *x = val.clone();
+                                }
                                 Ok(Value::Void)
                             }
                             "forEach" => {
-                                if args.len() != 1 { return err!("forEach() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("forEach() attend 1 argument");
+                                }
                                 let consumer = args[0].clone();
                                 let items: Vec<Value> = v.borrow().clone();
                                 for item in items {
@@ -1014,33 +1283,42 @@ impl Interpreter {
                             "isEmpty" => Ok(Value::Bool(s.is_empty())),
                             "charAt" => {
                                 // charAt(index) -> Option<char>
-                                if args.len() != 1 { return err!("charAt() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("charAt() attend 1 argument");
+                                }
                                 match &args[0] {
-                                    Value::Int(i) => {
-                                        match s.chars().nth(*i as usize) {
-                                            Some(c) => Ok(make_some(Value::Char(c))),
-                                            None    => Ok(make_none()),
-                                        }
-                                    }
+                                    Value::Int(i) => match s.chars().nth(*i as usize) {
+                                        Some(c) => Ok(make_some(Value::Char(c))),
+                                        None => Ok(make_none()),
+                                    },
                                     _ => err!("charAt() requiert un int"),
                                 }
                             }
                             "contains" => {
-                                if args.len() != 1 { return err!("contains() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("contains() attend 1 argument");
+                                }
                                 match &args[0] {
                                     Value::Str(sub) => Ok(Value::Bool(s.contains(sub.as_str()))),
                                     _ => err!("contains() requiert une string"),
                                 }
                             }
                             "substring" => {
-                                if args.len() != 2 { return err!("substring() attend 2 arguments"); }
+                                if args.len() != 2 {
+                                    return err!("substring() attend 2 arguments");
+                                }
                                 match (&args[0], &args[1]) {
                                     (Value::Int(start), Value::Int(end)) => {
                                         let start = *start as usize;
-                                        let end   = *end   as usize;
+                                        let end = *end as usize;
                                         let chars: Vec<char> = s.chars().collect();
                                         if start > chars.len() || end > chars.len() || start > end {
-                                            return err!("substring({}, {}): indices invalides (len={})", start, end, chars.len());
+                                            return err!(
+                                                "substring({}, {}): indices invalides (len={})",
+                                                start,
+                                                end,
+                                                chars.len()
+                                            );
                                         }
                                         Ok(Value::Str(chars[start..end].iter().collect()))
                                     }
@@ -1050,35 +1328,47 @@ impl Interpreter {
                             "toUpperCase" => Ok(Value::Str(s.to_uppercase())),
                             "toLowerCase" => Ok(Value::Str(s.to_lowercase())),
                             "startsWith" => {
-                                if args.len() != 1 { return err!("startsWith() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("startsWith() attend 1 argument");
+                                }
                                 match &args[0] {
-                                    Value::Str(prefix) => Ok(Value::Bool(s.starts_with(prefix.as_str()))),
+                                    Value::Str(prefix) => {
+                                        Ok(Value::Bool(s.starts_with(prefix.as_str())))
+                                    }
                                     _ => err!("startsWith() requiert une string"),
                                 }
                             }
                             "endsWith" => {
-                                if args.len() != 1 { return err!("endsWith() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("endsWith() attend 1 argument");
+                                }
                                 match &args[0] {
-                                    Value::Str(suffix) => Ok(Value::Bool(s.ends_with(suffix.as_str()))),
+                                    Value::Str(suffix) => {
+                                        Ok(Value::Bool(s.ends_with(suffix.as_str())))
+                                    }
                                     _ => err!("endsWith() requiert une string"),
                                 }
                             }
                             "indexOf" => {
                                 // indexOf(s) -> Option<int>
-                                if args.len() != 1 { return err!("indexOf() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("indexOf() attend 1 argument");
+                                }
                                 match &args[0] {
-                                    Value::Str(needle) => {
-                                        match s.find(needle.as_str()) {
-                                            Some(b) => Ok(make_some(Value::Int(s[..b].chars().count() as i64))),
-                                            None    => Ok(make_none()),
+                                    Value::Str(needle) => match s.find(needle.as_str()) {
+                                        Some(b) => {
+                                            Ok(make_some(Value::Int(s[..b].chars().count() as i64)))
                                         }
-                                    }
+                                        None => Ok(make_none()),
+                                    },
                                     _ => err!("indexOf() requiert une string"),
                                 }
                             }
                             "trim" => Ok(Value::Str(s.trim().to_string())),
                             "replace" => {
-                                if args.len() != 2 { return err!("replace() attend 2 arguments"); }
+                                if args.len() != 2 {
+                                    return err!("replace() attend 2 arguments");
+                                }
                                 match (&args[0], &args[1]) {
                                     (Value::Str(old), Value::Str(new)) => {
                                         Ok(Value::Str(s.replace(old.as_str(), new.as_str())))
@@ -1087,7 +1377,9 @@ impl Interpreter {
                                 }
                             }
                             "equals" => {
-                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("equals() attend 1 argument");
+                                }
                                 match &args[0] {
                                     Value::Str(other) => Ok(Value::Bool(s == other)),
                                     _ => Ok(Value::Bool(false)),
@@ -1095,18 +1387,24 @@ impl Interpreter {
                             }
                             "split" => {
                                 // split(sep) -> List<string>  (retourne un ArrayList<string>)
-                                if args.len() != 1 { return err!("split() attend 1 argument"); }
+                                if args.len() != 1 {
+                                    return err!("split() attend 1 argument");
+                                }
                                 match &args[0] {
                                     Value::Str(sep) => {
                                         let parts: Vec<Value> = if sep.is_empty() {
                                             s.chars().map(|c| Value::Str(c.to_string())).collect()
                                         } else {
-                                            s.split(sep.as_str()).map(|p| Value::Str(p.to_string())).collect()
+                                            s.split(sep.as_str())
+                                                .map(|p| Value::Str(p.to_string()))
+                                                .collect()
                                         };
                                         let count = parts.len() as i64;
                                         let mut fields = HashMap::new();
-                                        fields.insert("data".to_string(),
-                                            Value::Array(Rc::new(RefCell::new(parts))));
+                                        fields.insert(
+                                            "data".to_string(),
+                                            Value::Array(Rc::new(RefCell::new(parts))),
+                                        );
                                         fields.insert("count".to_string(), Value::Int(count));
                                         Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
                                             class_name: "ArrayList".to_string(),
@@ -1120,276 +1418,320 @@ impl Interpreter {
                             _ => {
                                 // Fallthrough vers la définition minilang de la classe String
                                 match self.find_method("String", method) {
-                                    Some(m) if !matches!(m.body.as_slice(), [Stmt::Builtin]) =>
-                                        self.call_primitive_method(&m, args, Value::Str(s.clone())),
+                                    Some(m) if !matches!(m.body.as_slice(), [Stmt::Builtin]) => {
+                                        self.call_primitive_method(&m, args, Value::Str(s.clone()))
+                                    }
                                     _ => err!("Méthode inconnue '{}' sur string", method),
                                 }
                             }
                         }
                     }
-                    Value::Char(c) => {
-                        match method.as_str() {
-                            "isLetter"    => Ok(Value::Bool(c.is_alphabetic())),
-                            "isDigit"     => Ok(Value::Bool(c.is_ascii_digit())),
-                            "isWhitespace"=> Ok(Value::Bool(c.is_whitespace())),
-                            "isUpperCase" => Ok(Value::Bool(c.is_uppercase())),
-                            "isLowerCase" => Ok(Value::Bool(c.is_lowercase())),
-                            "toUpperCase" => Ok(Value::Char(c.to_uppercase().next().unwrap_or(c))),
-                            "toLowerCase" => Ok(Value::Char(c.to_lowercase().next().unwrap_or(c))),
-                            "toInt"       => Ok(Value::Int(c as i64)),
-                            "toString"    => Ok(Value::Str(c.to_string())),
-                            "equals" => {
-                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Char(o) => Ok(Value::Bool(c == *o)),
-                                    _ => Ok(Value::Bool(false)),
-                                }
+                    Value::Char(c) => match method.as_str() {
+                        "isLetter" => Ok(Value::Bool(c.is_alphabetic())),
+                        "isDigit" => Ok(Value::Bool(c.is_ascii_digit())),
+                        "isWhitespace" => Ok(Value::Bool(c.is_whitespace())),
+                        "isUpperCase" => Ok(Value::Bool(c.is_uppercase())),
+                        "isLowerCase" => Ok(Value::Bool(c.is_lowercase())),
+                        "toUpperCase" => Ok(Value::Char(c.to_uppercase().next().unwrap_or(c))),
+                        "toLowerCase" => Ok(Value::Char(c.to_lowercase().next().unwrap_or(c))),
+                        "toInt" => Ok(Value::Int(c as i64)),
+                        "toString" => Ok(Value::Str(c.to_string())),
+                        "equals" => {
+                            if args.len() != 1 {
+                                return err!("equals() attend 1 argument");
                             }
-                            "hashCode" => Ok(Value::Int(c as i64)),
-                            _ => err!("Méthode inconnue '{}' sur char", method),
+                            match &args[0] {
+                                Value::Char(o) => Ok(Value::Bool(c == *o)),
+                                _ => Ok(Value::Bool(false)),
+                            }
                         }
-                    }
-                    Value::Bool(b) => {
-                        match method.as_str() {
-                            "toString" => Ok(Value::Str(b.to_string())),
-                            "equals"   => {
-                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Bool(o) => Ok(Value::Bool(b == *o)),
-                                    _ => Ok(Value::Bool(false)),
-                                }
+                        "hashCode" => Ok(Value::Int(c as i64)),
+                        _ => err!("Méthode inconnue '{}' sur char", method),
+                    },
+                    Value::Bool(b) => match method.as_str() {
+                        "toString" => Ok(Value::Str(b.to_string())),
+                        "equals" => {
+                            if args.len() != 1 {
+                                return err!("equals() attend 1 argument");
                             }
-                            "and" => {
-                                if args.len() != 1 { return err!("and() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Bool(o) => Ok(Value::Bool(b && *o)),
-                                    _ => err!("and() requiert un bool"),
-                                }
+                            match &args[0] {
+                                Value::Bool(o) => Ok(Value::Bool(b == *o)),
+                                _ => Ok(Value::Bool(false)),
                             }
-                            "or" => {
-                                if args.len() != 1 { return err!("or() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Bool(o) => Ok(Value::Bool(b || *o)),
-                                    _ => err!("or() requiert un bool"),
-                                }
-                            }
-                            "not" => Ok(Value::Bool(!b)),
-                            "hashCode" => Ok(Value::Int(if b { 1 } else { 0 })),
-                            _ => err!("Méthode inconnue '{}' sur bool", method),
                         }
-                    }
-                    Value::Int(n) => {
-                        match method.as_str() {
-                            "toString"       => Ok(Value::Str(n.to_string())),
-                            "toBinaryString" => Ok(Value::Str(format!("{:b}", n))),
-                            "abs"            => Ok(Value::Int(n.abs())),
-                            "isPositive"     => Ok(Value::Bool(n > 0)),
-                            "isNegative"     => Ok(Value::Bool(n < 0)),
-                            "isZero"         => Ok(Value::Bool(n == 0)),
-                            "isEven"         => Ok(Value::Bool(n % 2 == 0)),
-                            "isOdd"          => Ok(Value::Bool(n % 2 != 0)),
-                            "toFloat"        => Ok(Value::Float(n as f64)),
-                            "toDouble"       => Ok(Value::Float(n as f64)),
-                            "toByte"         => {
-                                if n >= 0 && n <= 255 { Ok(make_some(Value::Byte(n as u8))) }
-                                else { Ok(make_none()) }
+                        "and" => {
+                            if args.len() != 1 {
+                                return err!("and() attend 1 argument");
                             }
-                            "min" => {
-                                if args.len() != 1 { return err!("min() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(o) => Ok(Value::Int(n.min(*o))),
-                                    _ => err!("min() requiert un int"),
-                                }
+                            match &args[0] {
+                                Value::Bool(o) => Ok(Value::Bool(b && *o)),
+                                _ => err!("and() requiert un bool"),
                             }
-                            "max" => {
-                                if args.len() != 1 { return err!("max() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(o) => Ok(Value::Int(n.max(*o))),
-                                    _ => err!("max() requiert un int"),
-                                }
-                            }
-                            "pow" => {
-                                if args.len() != 1 { return err!("pow() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(e) if *e >= 0 => Ok(Value::Int(i64::pow(n, *e as u32))),
-                                    Value::Int(e) => err!("pow() : exposant négatif {}", e),
-                                    _ => err!("pow() requiert un int"),
-                                }
-                            }
-                            "compareTo" => {
-                                if args.len() != 1 { return err!("compareTo() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(o) => Ok(Value::Int(n.cmp(o) as i64)),
-                                    _ => err!("compareTo() requiert un int"),
-                                }
-                            }
-                            "equals" => {
-                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Int(o) => Ok(Value::Bool(n == *o)),
-                                    _ => Ok(Value::Bool(false)),
-                                }
-                            }
-                            "hashCode" => Ok(Value::Int(n)),
-                            _ => err!("Méthode inconnue '{}' sur int", method),
                         }
-                    }
-                    Value::Byte(b) => {
-                        match method.as_str() {
-                            "toInt"    => Ok(Value::Int(b as i64)),
-                            "toString" => Ok(Value::Str(b.to_string())),
-                            "equals" => {
-                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Byte(o) => Ok(Value::Bool(b == *o)),
-                                    _ => Ok(Value::Bool(false)),
-                                }
+                        "or" => {
+                            if args.len() != 1 {
+                                return err!("or() attend 1 argument");
                             }
-                            "hashCode" => Ok(Value::Int(b as i64)),
-                            _ => err!("Méthode inconnue '{}' sur byte", method),
+                            match &args[0] {
+                                Value::Bool(o) => Ok(Value::Bool(b || *o)),
+                                _ => err!("or() requiert un bool"),
+                            }
                         }
-                    }
-                    Value::Float(f) => {
-                        match method.as_str() {
-                            "toString"   => Ok(Value::Str(f.to_string())),
-                            "abs"        => Ok(Value::Float(f.abs())),
-                            "floor"      => Ok(Value::Float(f.floor())),
-                            "ceil"       => Ok(Value::Float(f.ceil())),
-                            "round"      => Ok(Value::Float(f.round())),
-                            "isPositive" => Ok(Value::Bool(f > 0.0)),
-                            "isNegative" => Ok(Value::Bool(f < 0.0)),
-                            "isNaN"      => Ok(Value::Bool(f.is_nan())),
-                            "toInt"      => Ok(Value::Int(f as i64)),
-                            "toFloat"    => Ok(Value::Float(f)),
-                            "toDouble"   => Ok(Value::Float(f)),
-                            "min" => {
-                                if args.len() != 1 { return err!("min() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Float(o) => Ok(Value::Float(f.min(*o))),
-                                    _ => err!("min() requiert un float/double"),
-                                }
+                        "not" => Ok(Value::Bool(!b)),
+                        "hashCode" => Ok(Value::Int(if b { 1 } else { 0 })),
+                        _ => err!("Méthode inconnue '{}' sur bool", method),
+                    },
+                    Value::Int(n) => match method.as_str() {
+                        "toString" => Ok(Value::Str(n.to_string())),
+                        "toBinaryString" => Ok(Value::Str(format!("{:b}", n))),
+                        "abs" => Ok(Value::Int(n.abs())),
+                        "isPositive" => Ok(Value::Bool(n > 0)),
+                        "isNegative" => Ok(Value::Bool(n < 0)),
+                        "isZero" => Ok(Value::Bool(n == 0)),
+                        "isEven" => Ok(Value::Bool(n % 2 == 0)),
+                        "isOdd" => Ok(Value::Bool(n % 2 != 0)),
+                        "toFloat" => Ok(Value::Float(n as f64)),
+                        "toDouble" => Ok(Value::Float(n as f64)),
+                        "toByte" => {
+                            if n >= 0 && n <= 255 {
+                                Ok(make_some(Value::Byte(n as u8)))
+                            } else {
+                                Ok(make_none())
                             }
-                            "max" => {
-                                if args.len() != 1 { return err!("max() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Float(o) => Ok(Value::Float(f.max(*o))),
-                                    _ => err!("max() requiert un float/double"),
-                                }
-                            }
-                            "equals" => {
-                                if args.len() != 1 { return err!("equals() attend 1 argument"); }
-                                match &args[0] {
-                                    Value::Float(o) => Ok(Value::Bool((f - o).abs() < 1e-12)),
-                                    _ => Ok(Value::Bool(false)),
-                                }
-                            }
-                            "hashCode" => Ok(Value::Int(f.to_bits() as i64)),
-                            _ => err!("Méthode inconnue '{}' sur float/double", method),
                         }
-                    }
-                    Value::HashMap(v) => {
-                        match method.as_str() {
-                            "put" => {
-                                if args.len() != 2 { return err!("put() attend 2 arguments"); }
-                                let key = args[0].clone();
-                                let val = args[1].clone();
-                                let mut data = v.borrow_mut();
-                                if let Some(entry) = data.iter_mut().find(|(k, _)| val_eq(k, &key)) {
-                                    entry.1 = val;
-                                } else {
-                                    data.push((key, val));
-                                }
-                                Ok(Value::Void)
+                        "min" => {
+                            if args.len() != 1 {
+                                return err!("min() attend 1 argument");
                             }
-                            "get" => {
-                                if args.len() != 1 { return err!("get() attend 1 argument"); }
-                                let key = &args[0];
-                                let data = v.borrow();
-                                if let Some((_, val)) = data.iter().find(|(k, _)| val_eq(k, key)) {
-                                    Ok(make_some(val.clone()))
-                                } else {
-                                    Ok(make_none())
-                                }
+                            match &args[0] {
+                                Value::Int(o) => Ok(Value::Int(n.min(*o))),
+                                _ => err!("min() requiert un int"),
                             }
-                            "containsKey" => {
-                                if args.len() != 1 { return err!("containsKey() attend 1 argument"); }
-                                let found = v.borrow().iter().any(|(k, _)| val_eq(k, &args[0]));
-                                Ok(Value::Bool(found))
+                        }
+                        "max" => {
+                            if args.len() != 1 {
+                                return err!("max() attend 1 argument");
                             }
-                            "size"    => Ok(Value::Int(v.borrow().len() as i64)),
-                            "isEmpty" => Ok(Value::Bool(v.borrow().is_empty())),
-                            "remove" => {
-                                if args.len() != 1 { return err!("remove() attend 1 argument"); }
-                                let key = args[0].clone();
-                                let mut data = v.borrow_mut();
-                                if let Some(pos) = data.iter().position(|(k, _)| val_eq(k, &key)) {
-                                    data.remove(pos);
-                                    Ok(Value::Bool(true))
-                                } else {
-                                    Ok(Value::Bool(false))
-                                }
+                            match &args[0] {
+                                Value::Int(o) => Ok(Value::Int(n.max(*o))),
+                                _ => err!("max() requiert un int"),
                             }
-                            "clear" => { v.borrow_mut().clear(); Ok(Value::Void) }
-                            "keys" => {
-                                if !args.is_empty() { return err!("keys() ne prend pas d'arguments"); }
-                                let pairs = v.borrow();
-                                let keys: Vec<Value> = pairs.iter().map(|(k, _)| k.clone()).collect();
-                                let count = keys.len() as i64;
-                                let arr = Value::Array(Rc::new(RefCell::new(keys)));
-                                let mut fields = HashMap::new();
-                                fields.insert("data".to_string(), arr);
-                                fields.insert("count".to_string(), Value::Int(count));
-                                Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
-                                    class_name: "ArrayList".to_string(),
-                                    fields,
-                                }))))
+                        }
+                        "pow" => {
+                            if args.len() != 1 {
+                                return err!("pow() attend 1 argument");
                             }
-                            "entries" => {
-                                if !args.is_empty() { return err!("entries() ne prend pas d'arguments"); }
-                                let pairs = v.borrow();
-                                let entries: Vec<Value> = pairs.iter().map(|(k, val)| {
+                            match &args[0] {
+                                Value::Int(e) if *e >= 0 => Ok(Value::Int(i64::pow(n, *e as u32))),
+                                Value::Int(e) => err!("pow() : exposant négatif {}", e),
+                                _ => err!("pow() requiert un int"),
+                            }
+                        }
+                        "compareTo" => {
+                            if args.len() != 1 {
+                                return err!("compareTo() attend 1 argument");
+                            }
+                            match &args[0] {
+                                Value::Int(o) => Ok(Value::Int(n.cmp(o) as i64)),
+                                _ => err!("compareTo() requiert un int"),
+                            }
+                        }
+                        "equals" => {
+                            if args.len() != 1 {
+                                return err!("equals() attend 1 argument");
+                            }
+                            match &args[0] {
+                                Value::Int(o) => Ok(Value::Bool(n == *o)),
+                                _ => Ok(Value::Bool(false)),
+                            }
+                        }
+                        "hashCode" => Ok(Value::Int(n)),
+                        _ => err!("Méthode inconnue '{}' sur int", method),
+                    },
+                    Value::Byte(b) => match method.as_str() {
+                        "toInt" => Ok(Value::Int(b as i64)),
+                        "toString" => Ok(Value::Str(b.to_string())),
+                        "equals" => {
+                            if args.len() != 1 {
+                                return err!("equals() attend 1 argument");
+                            }
+                            match &args[0] {
+                                Value::Byte(o) => Ok(Value::Bool(b == *o)),
+                                _ => Ok(Value::Bool(false)),
+                            }
+                        }
+                        "hashCode" => Ok(Value::Int(b as i64)),
+                        _ => err!("Méthode inconnue '{}' sur byte", method),
+                    },
+                    Value::Float(f) => match method.as_str() {
+                        "toString" => Ok(Value::Str(f.to_string())),
+                        "abs" => Ok(Value::Float(f.abs())),
+                        "floor" => Ok(Value::Float(f.floor())),
+                        "ceil" => Ok(Value::Float(f.ceil())),
+                        "round" => Ok(Value::Float(f.round())),
+                        "isPositive" => Ok(Value::Bool(f > 0.0)),
+                        "isNegative" => Ok(Value::Bool(f < 0.0)),
+                        "isNaN" => Ok(Value::Bool(f.is_nan())),
+                        "toInt" => Ok(Value::Int(f as i64)),
+                        "toFloat" => Ok(Value::Float(f)),
+                        "toDouble" => Ok(Value::Float(f)),
+                        "min" => {
+                            if args.len() != 1 {
+                                return err!("min() attend 1 argument");
+                            }
+                            match &args[0] {
+                                Value::Float(o) => Ok(Value::Float(f.min(*o))),
+                                _ => err!("min() requiert un float/double"),
+                            }
+                        }
+                        "max" => {
+                            if args.len() != 1 {
+                                return err!("max() attend 1 argument");
+                            }
+                            match &args[0] {
+                                Value::Float(o) => Ok(Value::Float(f.max(*o))),
+                                _ => err!("max() requiert un float/double"),
+                            }
+                        }
+                        "equals" => {
+                            if args.len() != 1 {
+                                return err!("equals() attend 1 argument");
+                            }
+                            match &args[0] {
+                                Value::Float(o) => Ok(Value::Bool((f - o).abs() < 1e-12)),
+                                _ => Ok(Value::Bool(false)),
+                            }
+                        }
+                        "hashCode" => Ok(Value::Int(f.to_bits() as i64)),
+                        _ => err!("Méthode inconnue '{}' sur float/double", method),
+                    },
+                    Value::HashMap(v) => match method.as_str() {
+                        "put" => {
+                            if args.len() != 2 {
+                                return err!("put() attend 2 arguments");
+                            }
+                            let key = args[0].clone();
+                            let val = args[1].clone();
+                            let mut data = v.borrow_mut();
+                            if let Some(entry) = data.iter_mut().find(|(k, _)| val_eq(k, &key)) {
+                                entry.1 = val;
+                            } else {
+                                data.push((key, val));
+                            }
+                            Ok(Value::Void)
+                        }
+                        "get" => {
+                            if args.len() != 1 {
+                                return err!("get() attend 1 argument");
+                            }
+                            let key = &args[0];
+                            let data = v.borrow();
+                            if let Some((_, val)) = data.iter().find(|(k, _)| val_eq(k, key)) {
+                                Ok(make_some(val.clone()))
+                            } else {
+                                Ok(make_none())
+                            }
+                        }
+                        "containsKey" => {
+                            if args.len() != 1 {
+                                return err!("containsKey() attend 1 argument");
+                            }
+                            let found = v.borrow().iter().any(|(k, _)| val_eq(k, &args[0]));
+                            Ok(Value::Bool(found))
+                        }
+                        "size" => Ok(Value::Int(v.borrow().len() as i64)),
+                        "isEmpty" => Ok(Value::Bool(v.borrow().is_empty())),
+                        "remove" => {
+                            if args.len() != 1 {
+                                return err!("remove() attend 1 argument");
+                            }
+                            let key = args[0].clone();
+                            let mut data = v.borrow_mut();
+                            if let Some(pos) = data.iter().position(|(k, _)| val_eq(k, &key)) {
+                                data.remove(pos);
+                                Ok(Value::Bool(true))
+                            } else {
+                                Ok(Value::Bool(false))
+                            }
+                        }
+                        "clear" => {
+                            v.borrow_mut().clear();
+                            Ok(Value::Void)
+                        }
+                        "keys" => {
+                            if !args.is_empty() {
+                                return err!("keys() ne prend pas d'arguments");
+                            }
+                            let pairs = v.borrow();
+                            let keys: Vec<Value> = pairs.iter().map(|(k, _)| k.clone()).collect();
+                            let count = keys.len() as i64;
+                            let arr = Value::Array(Rc::new(RefCell::new(keys)));
+                            let mut fields = HashMap::new();
+                            fields.insert("data".to_string(), arr);
+                            fields.insert("count".to_string(), Value::Int(count));
+                            Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
+                                class_name: "ArrayList".to_string(),
+                                fields,
+                            }))))
+                        }
+                        "entries" => {
+                            if !args.is_empty() {
+                                return err!("entries() ne prend pas d'arguments");
+                            }
+                            let pairs = v.borrow();
+                            let entries: Vec<Value> = pairs
+                                .iter()
+                                .map(|(k, val)| {
                                     let mut fields = HashMap::new();
-                                    fields.insert("first".to_string(),  k.clone());
+                                    fields.insert("first".to_string(), k.clone());
                                     fields.insert("second".to_string(), val.clone());
                                     Value::Object(Rc::new(RefCell::new(ObjectData {
                                         class_name: "Pair".to_string(),
                                         fields,
                                     })))
-                                }).collect();
-                                let count = entries.len() as i64;
-                                let arr = Value::Array(Rc::new(RefCell::new(entries)));
-                                let mut fields = HashMap::new();
-                                fields.insert("data".to_string(),  arr);
-                                fields.insert("count".to_string(), Value::Int(count));
-                                Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
-                                    class_name: "ArrayList".to_string(),
-                                    fields,
-                                }))))
-                            }
-                            "forEach" => {
-                                if args.len() != 1 { return err!("forEach() attend 1 argument"); }
-                                let consumer = args[0].clone();
-                                let pairs: Vec<(Value, Value)> = v.borrow().clone();
-                                for (k, val) in pairs {
-                                    self.call_lambda(consumer.clone(), vec![k, val])?;
-                                }
-                                Ok(Value::Void)
-                            }
-                            "toString" => {
-                                let s = format!("HashMap{{{}}}", v.borrow().iter()
-                                    .map(|(k, val)| format!("{}={}", k, val))
-                                    .collect::<Vec<_>>().join(", "));
-                                Ok(Value::Str(s))
-                            }
-                            _ => err!("Méthode inconnue '{}' sur HashMap", method),
+                                })
+                                .collect();
+                            let count = entries.len() as i64;
+                            let arr = Value::Array(Rc::new(RefCell::new(entries)));
+                            let mut fields = HashMap::new();
+                            fields.insert("data".to_string(), arr);
+                            fields.insert("count".to_string(), Value::Int(count));
+                            Ok(Value::Object(Rc::new(RefCell::new(ObjectData {
+                                class_name: "ArrayList".to_string(),
+                                fields,
+                            }))))
                         }
-                    }
+                        "forEach" => {
+                            if args.len() != 1 {
+                                return err!("forEach() attend 1 argument");
+                            }
+                            let consumer = args[0].clone();
+                            let pairs: Vec<(Value, Value)> = v.borrow().clone();
+                            for (k, val) in pairs {
+                                self.call_lambda(consumer.clone(), vec![k, val])?;
+                            }
+                            Ok(Value::Void)
+                        }
+                        "toString" => {
+                            let s = format!(
+                                "HashMap{{{}}}",
+                                v.borrow()
+                                    .iter()
+                                    .map(|(k, val)| format!("{}={}", k, val))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            );
+                            Ok(Value::Str(s))
+                        }
+                        _ => err!("Méthode inconnue '{}' sur HashMap", method),
+                    },
                     _ => err!("Appel de méthode sur non-objet"),
                 }
             }
 
             Expr::FunctionCall { name, args } => {
-                let args: Vec<Value> = args.iter()
+                let args: Vec<Value> = args
+                    .iter()
                     .map(|a| self.eval(a, env, this.clone()))
                     .collect::<Result<_, _>>()?;
                 // Lambda dans une variable locale ?
@@ -1406,7 +1748,9 @@ impl Interpreter {
                     }
                 }
                 if name == "panic" {
-                    let msg = args.into_iter().next()
+                    let msg = args
+                        .into_iter()
+                        .next()
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| "panic".to_string());
                     return err!("{}", msg);
@@ -1415,30 +1759,44 @@ impl Interpreter {
                 match name.as_str() {
                     "assertTrue" => {
                         return match args.first() {
-                            Some(Value::Bool(true))  => Ok(Value::Void),
-                            Some(Value::Bool(false)) => err!("assertTrue : la condition est fausse"),
+                            Some(Value::Bool(true)) => Ok(Value::Void),
+                            Some(Value::Bool(false)) => {
+                                err!("assertTrue : la condition est fausse")
+                            }
                             _ => err!("assertTrue : condition non-bool"),
                         };
                     }
                     "assertFalse" => {
                         return match args.first() {
                             Some(Value::Bool(false)) => Ok(Value::Void),
-                            Some(Value::Bool(true))  => err!("assertFalse : la condition est vraie"),
+                            Some(Value::Bool(true)) => err!("assertFalse : la condition est vraie"),
                             _ => err!("assertFalse : condition non-bool"),
                         };
                     }
                     "assertEquals" => {
-                        if args.len() != 2 { return err!("assertEquals attend 2 arguments"); }
-                        return if val_eq(&args[0], &args[1]) { Ok(Value::Void) }
-                               else { err!("assertEquals : {} ≠ {}", args[0], args[1]) };
+                        if args.len() != 2 {
+                            return err!("assertEquals attend 2 arguments");
+                        }
+                        return if val_eq(&args[0], &args[1]) {
+                            Ok(Value::Void)
+                        } else {
+                            err!("assertEquals : {} ≠ {}", args[0], args[1])
+                        };
                     }
                     "assertNotEquals" => {
-                        if args.len() != 2 { return err!("assertNotEquals attend 2 arguments"); }
-                        return if !val_eq(&args[0], &args[1]) { Ok(Value::Void) }
-                               else { err!("assertNotEquals : les deux valeurs valent {}", args[0]) };
+                        if args.len() != 2 {
+                            return err!("assertNotEquals attend 2 arguments");
+                        }
+                        return if !val_eq(&args[0], &args[1]) {
+                            Ok(Value::Void)
+                        } else {
+                            err!("assertNotEquals : les deux valeurs valent {}", args[0])
+                        };
                     }
                     "fail" => {
-                        let msg = args.first().map(|v| v.to_string())
+                        let msg = args
+                            .first()
+                            .map(|v| v.to_string())
                             .unwrap_or_else(|| "fail".to_string());
                         return err!("fail : {}", msg);
                     }
@@ -1452,29 +1810,50 @@ impl Interpreter {
                     }
                     return match self.exec_body(&func.body, &mut fenv, None)? {
                         Flow::Return(v) => Ok(v),
-                        _               => Ok(Value::Void),
+                        _ => Ok(Value::Void),
                     };
                 }
                 err!("Fonction inconnue '{}'", name)
             }
 
-            Expr::New { class_name, args, .. } => {
+            Expr::New {
+                class_name, args, ..
+            } => {
                 match class_name.as_str() {
-                    "HashMap"  => return Ok(Value::HashMap(Rc::new(RefCell::new(vec![])))),
+                    "HashMap" => return Ok(Value::HashMap(Rc::new(RefCell::new(vec![])))),
                     _ => {}
                 }
                 let obj = self.instantiate(class_name)?;
-                let rc = match &obj { Value::Object(r) => r.clone(), _ => unreachable!() };
-                let ctors = self.classes.get(class_name)
-                    .map(|c| c.constructors.clone()).unwrap_or_default();
+                let rc = match &obj {
+                    Value::Object(r) => r.clone(),
+                    _ => unreachable!(),
+                };
+                let ctors = self
+                    .classes
+                    .get(class_name)
+                    .map(|c| c.constructors.clone())
+                    .unwrap_or_default();
                 if !ctors.is_empty() {
-                    let ctor = ctors.iter().find(|c| c.params.len() == args.len()).cloned()
-                        .ok_or_else(|| RuntimeError(format!(
-                            "Pas de constructeur à {} arg(s) pour '{}'", args.len(), class_name)))?;
-                    let eargs: Vec<Value> = args.iter()
-                        .map(|a| self.eval(a, env, this.clone())).collect::<Result<_, _>>()?;
-                    let mut ce = Env::new(); ce.push();
-                    for (p, v) in ctor.params.iter().zip(eargs) { ce.declare(p.name.clone(), v); }
+                    let ctor = ctors
+                        .iter()
+                        .find(|c| c.params.len() == args.len())
+                        .cloned()
+                        .ok_or_else(|| {
+                            RuntimeError(format!(
+                                "Pas de constructeur à {} arg(s) pour '{}'",
+                                args.len(),
+                                class_name
+                            ))
+                        })?;
+                    let eargs: Vec<Value> = args
+                        .iter()
+                        .map(|a| self.eval(a, env, this.clone()))
+                        .collect::<Result<_, _>>()?;
+                    let mut ce = Env::new();
+                    ce.push();
+                    for (p, v) in ctor.params.iter().zip(eargs) {
+                        ce.declare(p.name.clone(), v);
+                    }
                     self.exec_body(&ctor.body, &mut ce, Some(rc))?;
                 }
                 Ok(obj)
@@ -1491,13 +1870,27 @@ impl Interpreter {
                 self.get_or_create_service(&concrete)
             }
 
-            Expr::EnumConstructor { enum_name, variant, args, .. } => {
-                let ed = self.enums.get(enum_name)
-                    .ok_or_else(|| RuntimeError(format!("Enum inconnu '{}'", enum_name)))?.clone();
-                let vd = ed.variants.iter().find(|v| &v.name == variant)
-                    .ok_or_else(|| RuntimeError(format!("Variante '{}' inconnue", variant)))?.clone();
-                let eargs: Vec<Value> = args.iter()
-                    .map(|a| self.eval(a, env, this.clone())).collect::<Result<_, _>>()?;
+            Expr::EnumConstructor {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
+                let ed = self
+                    .enums
+                    .get(enum_name)
+                    .ok_or_else(|| RuntimeError(format!("Enum inconnu '{}'", enum_name)))?
+                    .clone();
+                let vd = ed
+                    .variants
+                    .iter()
+                    .find(|v| &v.name == variant)
+                    .ok_or_else(|| RuntimeError(format!("Variante '{}' inconnue", variant)))?
+                    .clone();
+                let eargs: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval(a, env, this.clone()))
+                    .collect::<Result<_, _>>()?;
                 let mut fields = HashMap::new();
                 let mut field_order = Vec::new();
                 for (p, v) in vd.fields.iter().zip(eargs) {
@@ -1505,24 +1898,32 @@ impl Interpreter {
                     field_order.push(p.name.clone());
                 }
                 Ok(Value::Enum(Rc::new(EnumData {
-                    enum_name: enum_name.clone(), variant_name: variant.clone(),
-                    fields, field_order,
+                    enum_name: enum_name.clone(),
+                    variant_name: variant.clone(),
+                    fields,
+                    field_order,
                 })))
             }
 
             // ── Navigation sûre : ?.field et ?.method() ──────────────────────
-
             Expr::SafeFieldAccess { object, field } => {
                 let v = self.eval(object, env, this)?;
                 match v {
                     Value::Enum(ref ed) if ed.enum_name == "Option" => {
-                        if ed.variant_name == "None" { return Ok(make_none()); }
-                        let inner = ed.fields.get("value")
-                            .ok_or_else(|| RuntimeError("Option::Some sans champ 'value'".into()))?.clone();
+                        if ed.variant_name == "None" {
+                            return Ok(make_none());
+                        }
+                        let inner = ed
+                            .fields
+                            .get("value")
+                            .ok_or_else(|| RuntimeError("Option::Some sans champ 'value'".into()))?
+                            .clone();
                         match inner {
                             Value::Object(rc) => {
-                                let fv = rc.borrow().fields.get(field).cloned()
-                                    .ok_or_else(|| RuntimeError(format!("Champ inconnu '{}'", field)))?;
+                                let fv =
+                                    rc.borrow().fields.get(field).cloned().ok_or_else(|| {
+                                        RuntimeError(format!("Champ inconnu '{}'", field))
+                                    })?;
                                 Ok(make_some(fv))
                             }
                             _ => err!("?. : la valeur dans Some n'est pas un objet"),
@@ -1532,27 +1933,39 @@ impl Interpreter {
                 }
             }
 
-            Expr::SafeMethodCall { object, method, args } => {
+            Expr::SafeMethodCall {
+                object,
+                method,
+                args,
+            } => {
                 let v = self.eval(object, env, this.clone())?;
-                let eargs: Vec<Value> = args.iter()
+                let eargs: Vec<Value> = args
+                    .iter()
                     .map(|a| self.eval(a, env, this.clone()))
                     .collect::<Result<_, _>>()?;
                 match v {
                     Value::Enum(ref ed) if ed.enum_name == "Option" => {
-                        if ed.variant_name == "None" { return Ok(make_none()); }
-                        let inner = ed.fields.get("value")
-                            .ok_or_else(|| RuntimeError("Option::Some sans champ 'value'".into()))?.clone();
+                        if ed.variant_name == "None" {
+                            return Ok(make_none());
+                        }
+                        let inner = ed
+                            .fields
+                            .get("value")
+                            .ok_or_else(|| RuntimeError("Option::Some sans champ 'value'".into()))?
+                            .clone();
                         let result = match inner {
                             Value::Object(rc) => {
                                 let cn = rc.borrow().class_name.clone();
-                                let m = self.find_method(&cn, method)
-                                    .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}'", method)))?;
+                                let m = self.find_method(&cn, method).ok_or_else(|| {
+                                    RuntimeError(format!("Méthode inconnue '{}'", method))
+                                })?;
                                 self.call_method(&m, eargs, rc)?
                             }
                             Value::Enum(inner_ed) => {
                                 let en = inner_ed.enum_name.clone();
-                                let m = self.find_method(&en, method)
-                                    .ok_or_else(|| RuntimeError(format!("Méthode inconnue '{}'", method)))?;
+                                let m = self.find_method(&en, method).ok_or_else(|| {
+                                    RuntimeError(format!("Méthode inconnue '{}'", method))
+                                })?;
                                 self.call_enum_method(&m, eargs, inner_ed)?
                             }
                             _ => return err!("?. : la valeur dans Some n'est pas un objet"),
@@ -1564,18 +1977,13 @@ impl Interpreter {
             }
 
             // ── Null coalescing : expr ?? default ─────────────────────────────
-
             Expr::NullCoalesce { expr, default } => {
                 let v = self.eval(expr, env, this.clone())?;
                 match &v {
-                    Value::Enum(ed) if ed.enum_name == "Option"
-                        && ed.variant_name == "None" =>
-                    {
+                    Value::Enum(ed) if ed.enum_name == "Option" && ed.variant_name == "None" => {
                         self.eval(default, env, this)
                     }
-                    Value::Enum(ed) if ed.enum_name == "Option"
-                        && ed.variant_name == "Some" =>
-                    {
+                    Value::Enum(ed) if ed.enum_name == "Option" && ed.variant_name == "Some" => {
                         Ok(ed.fields.get("value").cloned().unwrap_or(Value::Null))
                     }
                     _ => Ok(v),
@@ -1597,8 +2005,8 @@ impl Interpreter {
                 }
                 debug!("lambda capturée ({} vars)", captured.len());
                 Ok(Value::Lambda {
-                    params:   params.clone(),
-                    body:     body.clone(),
+                    params: params.clone(),
+                    body: body.clone(),
                     captured,
                 })
             }
@@ -1606,14 +2014,18 @@ impl Interpreter {
             // ── Appel d'une expression lambda : f(1, 2)  ou  ((x)=>x+1)(5) ───
             Expr::LambdaCall { callee, args } => {
                 let lam = self.eval(callee, env, this.clone())?;
-                let eargs: Vec<Value> = args.iter()
+                let eargs: Vec<Value> = args
+                    .iter()
                     .map(|a| self.eval(a, env, this.clone()))
                     .collect::<Result<_, _>>()?;
                 self.call_lambda(lam, eargs)
             }
 
             // ── Tableau littéral : new T[]{a, b, ...} ────────────────────────
-            Expr::ArrayLit { elem_type: _, elements } => {
+            Expr::ArrayLit {
+                elem_type: _,
+                elements,
+            } => {
                 let mut vals = Vec::new();
                 for e in elements {
                     vals.push(self.eval(e, env, this.clone())?);
@@ -1622,7 +2034,11 @@ impl Interpreter {
             }
 
             // ── Nouveau tableau de taille n : new T[n] ou new T[n](fill) ──────
-            Expr::ArrayNew { elem_type, size, fill } => {
+            Expr::ArrayNew {
+                elem_type,
+                size,
+                fill,
+            } => {
                 let n = match self.eval(size, env, this.clone())? {
                     Value::Int(n) if n >= 0 => n as usize,
                     Value::Int(n) => return err!("Taille de tableau négative : {}", n),
@@ -1630,7 +2046,7 @@ impl Interpreter {
                 };
                 let init = match fill {
                     Some(f) => self.eval(f, env, this)?,
-                    None    => Self::default_value(elem_type),
+                    None => Self::default_value(elem_type),
                 };
                 Ok(Value::Array(Rc::new(RefCell::new(vec![init; n]))))
             }
@@ -1661,9 +2077,10 @@ impl Interpreter {
     /// est un slot de configuration, rempli par les valeurs du `with`.
     fn is_dep_slot(&self, ty: &Type) -> bool {
         match ty {
-            Type::UserDefined(n) =>
+            Type::UserDefined(n) => {
                 self.interfaces.contains(n)
-                || self.classes.get(n).map(|c| c.is_service).unwrap_or(false),
+                    || self.classes.get(n).map(|c| c.is_service).unwrap_or(false)
+            }
             _ => false,
         }
     }
@@ -1674,17 +2091,23 @@ impl Interpreter {
     /// (l'unicité est garantie par le typechecker).
     fn resolve_service_class(&self, name: &str) -> Result<String, RuntimeError> {
         if let Some(c) = self.classes.get(name) {
-            if c.is_service { return Ok(name.to_string()); }
+            if c.is_service {
+                return Ok(name.to_string());
+            }
         }
-        if let Some(s) = self.binds_to.get(name) { return Ok(s.clone()); }
-        let mut impls: Vec<&String> = self.classes.values()
+        if let Some(s) = self.binds_to.get(name) {
+            return Ok(s.clone());
+        }
+        let mut impls: Vec<&String> = self
+            .classes
+            .values()
             .filter(|c| c.is_service && self.class_conforms(&c.name, name))
             .map(|c| &c.name)
             .collect();
         impls.sort();
         match impls.first() {
             Some(n) => Ok((*n).clone()),
-            None    => err!("Aucun service pour '{}'", name),
+            None => err!("Aucun service pour '{}'", name),
         }
     }
 
@@ -1692,23 +2115,33 @@ impl Interpreter {
     /// l'implémente directement, ou implémente une interface qui en hérite
     /// (transitif), ou hérite d'une classe conforme.
     fn class_conforms(&self, cn: &str, iface: &str) -> bool {
-        let Some(c) = self.classes.get(cn) else { return false };
+        let Some(c) = self.classes.get(cn) else {
+            return false;
+        };
         for i in &c.implements {
             let in_ = i.ref_name().unwrap_or("");
-            if in_ == iface || self.iface_extends(in_, iface) { return true; }
+            if in_ == iface || self.iface_extends(in_, iface) {
+                return true;
+            }
         }
         if let Some(p) = &c.parent {
-            if self.class_conforms(p.ref_name().unwrap_or(""), iface) { return true; }
+            if self.class_conforms(p.ref_name().unwrap_or(""), iface) {
+                return true;
+            }
         }
         false
     }
 
     /// true si l'interface `sub` étend (transitivement) `sup`.
     fn iface_extends(&self, sub: &str, sup: &str) -> bool {
-        if sub == sup { return true; }
+        if sub == sup {
+            return true;
+        }
         if let Some(parents) = self.iface_parents.get(sub) {
             for p in parents {
-                if self.iface_extends(p, sup) { return true; }
+                if self.iface_extends(p, sup) {
+                    return true;
+                }
             }
         }
         false
@@ -1719,12 +2152,21 @@ impl Interpreter {
     /// mémorisés ; les services `transient` sont recréés à chaque injection.
     /// Les services sont des `Rc<RefCell<…>>` : le clone partage l'instance.
     fn get_or_create_service(&mut self, cn: &str) -> Result<Value, RuntimeError> {
-        let is_transient = self.classes.get(cn).map(|c| c.is_transient).unwrap_or(false);
+        let is_transient = self
+            .classes
+            .get(cn)
+            .map(|c| c.is_transient)
+            .unwrap_or(false);
         if !is_transient {
-            if let Some(v) = self.singletons.get(cn) { return Ok(v.clone()); }
+            if let Some(v) = self.singletons.get(cn) {
+                return Ok(v.clone());
+            }
         }
         debug!("inject : création du service '{}'", cn);
-        let ctor = self.classes.get(cn).and_then(|c| c.constructors.first().cloned());
+        let ctor = self
+            .classes
+            .get(cn)
+            .and_then(|c| c.constructors.first().cloned());
         let with = self.with_values.get(cn).cloned().unwrap_or_default();
         let mut with_iter = with.into_iter();
         // Résoudre les arguments du constructeur : dépendances injectées
@@ -1740,19 +2182,28 @@ impl Interpreter {
                     let concrete = self.resolve_service_class(&dep)?;
                     arg_vals.push(self.get_or_create_service(&concrete)?);
                 } else {
-                    let expr = with_iter.next().ok_or_else(|| RuntimeError(format!(
-                        "Service '{}' : valeur de configuration manquante pour '{}'",
-                        cn, p.name)))?;
+                    let expr = with_iter.next().ok_or_else(|| {
+                        RuntimeError(format!(
+                            "Service '{}' : valeur de configuration manquante pour '{}'",
+                            cn, p.name
+                        ))
+                    })?;
                     let mut wenv = Env::new();
                     arg_vals.push(self.eval(&expr, &mut wenv, None)?);
                 }
             }
         }
         let obj = self.instantiate(cn)?;
-        let rc = match &obj { Value::Object(r) => r.clone(), _ => unreachable!() };
+        let rc = match &obj {
+            Value::Object(r) => r.clone(),
+            _ => unreachable!(),
+        };
         if let Some(ctor) = ctor {
-            let mut ce = Env::new(); ce.push();
-            for (p, v) in ctor.params.iter().zip(arg_vals) { ce.declare(p.name.clone(), v); }
+            let mut ce = Env::new();
+            ce.push();
+            for (p, v) in ctor.params.iter().zip(arg_vals) {
+                ce.declare(p.name.clone(), v);
+            }
             self.exec_body(&ctor.body, &mut ce, Some(rc))?;
         }
         if !is_transient {
@@ -1765,27 +2216,37 @@ impl Interpreter {
 
     fn call_lambda(&mut self, lam: Value, args: Vec<Value>) -> Result<Value, RuntimeError> {
         match lam {
-            Value::Lambda { params, body, captured } => {
+            Value::Lambda {
+                params,
+                body,
+                captured,
+            } => {
                 if args.len() != params.len() {
-                    return err!("Lambda : {} arg(s) attendus, {} fournis", params.len(), args.len());
+                    return err!(
+                        "Lambda : {} arg(s) attendus, {} fournis",
+                        params.len(),
+                        args.len()
+                    );
                 }
                 // Environnement = variables capturées + paramètres
                 let mut env = Env::new();
                 env.push();
-                for (k, v) in &captured { env.declare(k.clone(), v.clone()); }
-                for (p, v) in params.iter().zip(args) { env.set(p.clone(), v); }
+                for (k, v) in &captured {
+                    env.declare(k.clone(), v.clone());
+                }
+                for (p, v) in params.iter().zip(args) {
+                    env.set(p.clone(), v);
+                }
 
                 match body {
                     LambdaBody::Expr(e) => {
                         // Corps expression : évaluation directe, retour implicite
                         self.eval(&e, &mut env, None)
                     }
-                    LambdaBody::Block(stmts) => {
-                        match self.exec_body(&stmts, &mut env, None)? {
-                            Flow::Return(v) => Ok(v),
-                            _               => Ok(Value::Void),
-                        }
-                    }
+                    LambdaBody::Block(stmts) => match self.exec_body(&stmts, &mut env, None)? {
+                        Flow::Return(v) => Ok(v),
+                        _ => Ok(Value::Void),
+                    },
                 }
             }
             other => err!("Appel sur non-lambda : {}", other),
@@ -1795,17 +2256,23 @@ impl Interpreter {
     // ── Appel de méthode de classe ────────────────────────────────────────────
 
     fn call_method(
-        &mut self, m: &Method, args: Vec<Value>, this: Rc<RefCell<ObjectData>>,
+        &mut self,
+        m: &Method,
+        args: Vec<Value>,
+        this: Rc<RefCell<ObjectData>>,
     ) -> Result<Value, RuntimeError> {
         if args.len() != m.params.len() {
             return err!("{}() : {} arg(s) attendus", m.name, m.params.len());
         }
         debug!("→ {}", m.name);
-        let mut env = Env::new(); env.push();
-        for (p, v) in m.params.iter().zip(args) { env.declare(p.name.clone(), v); }
+        let mut env = Env::new();
+        env.push();
+        for (p, v) in m.params.iter().zip(args) {
+            env.declare(p.name.clone(), v);
+        }
         match self.exec_body(&m.body.clone(), &mut env, Some(this))? {
             Flow::Return(v) => Ok(v),
-            _               => Ok(Value::Void),
+            _ => Ok(Value::Void),
         }
     }
 
@@ -1814,18 +2281,24 @@ impl Interpreter {
     // (résout le bug où match this { Variant => } ne matchait jamais)
 
     fn call_enum_method(
-        &mut self, m: &Method, args: Vec<Value>, ed: Rc<EnumData>,
+        &mut self,
+        m: &Method,
+        args: Vec<Value>,
+        ed: Rc<EnumData>,
     ) -> Result<Value, RuntimeError> {
         if args.len() != m.params.len() {
             return err!("{}() : {} arg(s) attendus", m.name, m.params.len());
         }
         debug!("→ enum::{}", m.name);
-        let mut env = Env::new(); env.push();
+        let mut env = Env::new();
+        env.push();
         env.declare("this".to_string(), Value::Enum(ed));
-        for (p, v) in m.params.iter().zip(args) { env.declare(p.name.clone(), v); }
+        for (p, v) in m.params.iter().zip(args) {
+            env.declare(p.name.clone(), v);
+        }
         match self.exec_body(&m.body.clone(), &mut env, None)? {
             Flow::Return(v) => Ok(v),
-            _               => Ok(Value::Void),
+            _ => Ok(Value::Void),
         }
     }
 
@@ -1834,18 +2307,24 @@ impl Interpreter {
     // Permet d'écrire des méthodes String / Integer / … en minilang pur.
 
     fn call_primitive_method(
-        &mut self, m: &Method, args: Vec<Value>, this_val: Value,
+        &mut self,
+        m: &Method,
+        args: Vec<Value>,
+        this_val: Value,
     ) -> Result<Value, RuntimeError> {
         if args.len() != m.params.len() {
             return err!("{}() : {} arg(s) attendus", m.name, m.params.len());
         }
         debug!("→ primitive::{}", m.name);
-        let mut env = Env::new(); env.push();
+        let mut env = Env::new();
+        env.push();
         env.declare("this".to_string(), this_val);
-        for (p, v) in m.params.iter().zip(args) { env.declare(p.name.clone(), v); }
+        for (p, v) in m.params.iter().zip(args) {
+            env.declare(p.name.clone(), v);
+        }
         match self.exec_body(&m.body.clone(), &mut env, None)? {
             Flow::Return(v) => Ok(v),
-            _               => Ok(Value::Void),
+            _ => Ok(Value::Void),
         }
     }
 }
@@ -1854,8 +2333,10 @@ impl Interpreter {
 
 fn make_none() -> Value {
     Value::Enum(Rc::new(EnumData {
-        enum_name: "Option".to_string(), variant_name: "None".to_string(),
-        fields: HashMap::new(), field_order: vec![],
+        enum_name: "Option".to_string(),
+        variant_name: "None".to_string(),
+        fields: HashMap::new(),
+        field_order: vec![],
     }))
 }
 
@@ -1863,8 +2344,10 @@ fn make_some(v: Value) -> Value {
     let mut fields = HashMap::new();
     fields.insert("value".to_string(), v);
     Value::Enum(Rc::new(EnumData {
-        enum_name: "Option".to_string(), variant_name: "Some".to_string(),
-        fields, field_order: vec!["value".to_string()],
+        enum_name: "Option".to_string(),
+        variant_name: "Some".to_string(),
+        fields,
+        field_order: vec!["value".to_string()],
     }))
 }
 
@@ -1875,15 +2358,18 @@ fn make_ok(value: Value) -> Value {
     let mut fields = HashMap::new();
     fields.insert("value".to_string(), value);
     Value::Enum(Rc::new(EnumData {
-        enum_name: "Result".to_string(), variant_name: "Ok".to_string(),
-        fields, field_order: vec!["value".to_string()],
+        enum_name: "Result".to_string(),
+        variant_name: "Ok".to_string(),
+        fields,
+        field_order: vec!["value".to_string()],
     }))
 }
 
 /// `Result<Unit, IoError>::Ok(new Unit())` — succès d'I/O sans valeur.
 fn ok_unit() -> Value {
     let unit = Value::Object(Rc::new(RefCell::new(ObjectData {
-        class_name: "Unit".to_string(), fields: HashMap::new(),
+        class_name: "Unit".to_string(),
+        fields: HashMap::new(),
     })));
     make_ok(unit)
 }
@@ -1897,14 +2383,18 @@ fn io_err(variant: &str, message: Option<String>) -> Value {
         order.push("message".to_string());
     }
     let io = Value::Enum(Rc::new(EnumData {
-        enum_name: "IoError".to_string(), variant_name: variant.to_string(),
-        fields: ife, field_order: order,
+        enum_name: "IoError".to_string(),
+        variant_name: variant.to_string(),
+        fields: ife,
+        field_order: order,
     }));
     let mut fields = HashMap::new();
     fields.insert("error".to_string(), io);
     Value::Enum(Rc::new(EnumData {
-        enum_name: "Result".to_string(), variant_name: "Err".to_string(),
-        fields, field_order: vec!["error".to_string()],
+        enum_name: "Result".to_string(),
+        variant_name: "Err".to_string(),
+        fields,
+        field_order: vec!["error".to_string()],
     }))
 }
 
@@ -1918,23 +2408,37 @@ fn io_write(args: &[Value], newline: bool, to_stderr: bool) -> Result<Value, Run
     };
     let res = if to_stderr {
         let mut h = std::io::stderr();
-        (if newline { writeln!(h, "{}", s) } else { write!(h, "{}", s) }).and_then(|_| h.flush())
+        (if newline {
+            writeln!(h, "{}", s)
+        } else {
+            write!(h, "{}", s)
+        })
+        .and_then(|_| h.flush())
     } else {
         let mut h = std::io::stdout();
-        (if newline { writeln!(h, "{}", s) } else { write!(h, "{}", s) }).and_then(|_| h.flush())
+        (if newline {
+            writeln!(h, "{}", s)
+        } else {
+            write!(h, "{}", s)
+        })
+        .and_then(|_| h.flush())
     };
     match res {
-        Ok(())  => Ok(ok_unit()),
-        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+        Ok(()) => Ok(ok_unit()),
+        Err(e) => Ok(io_err("WriteFailed", Some(e.to_string()))),
     }
 }
 
 fn io_flush(to_stderr: bool) -> Result<Value, RuntimeError> {
     use std::io::Write;
-    let res = if to_stderr { std::io::stderr().flush() } else { std::io::stdout().flush() };
+    let res = if to_stderr {
+        std::io::stderr().flush()
+    } else {
+        std::io::stdout().flush()
+    };
     match res {
-        Ok(())  => Ok(ok_unit()),
-        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+        Ok(()) => Ok(ok_unit()),
+        Err(e) => Ok(io_err("WriteFailed", Some(e.to_string()))),
     }
 }
 
@@ -1944,7 +2448,7 @@ fn io_read_line() -> Result<Value, RuntimeError> {
     use std::io::BufRead;
     let mut line = String::new();
     match std::io::stdin().lock().read_line(&mut line) {
-        Ok(0) => Ok(make_ok(make_none())),   // EOF
+        Ok(0) => Ok(make_ok(make_none())), // EOF
         Ok(_) => {
             // Retire un seul terminateur de ligne : '\n', et le '\r' qui le
             // précède (cas '\r\n'). On ne touche pas aux autres '\r' qui font
@@ -1952,7 +2456,9 @@ fn io_read_line() -> Result<Value, RuntimeError> {
             // au plus qu'un '\n' (le dernier caractère).
             if line.ends_with('\n') {
                 line.pop();
-                if line.ends_with('\r') { line.pop(); }
+                if line.ends_with('\r') {
+                    line.pop();
+                }
             }
             Ok(make_ok(make_some(Value::Str(line))))
         }
@@ -1965,7 +2471,7 @@ fn io_read_all() -> Result<Value, RuntimeError> {
     use std::io::Read;
     let mut buf = String::new();
     match std::io::stdin().read_to_string(&mut buf) {
-        Ok(_)  => Ok(make_ok(Value::Str(buf))),
+        Ok(_) => Ok(make_ok(Value::Str(buf))),
         Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
     }
 }
@@ -1983,9 +2489,12 @@ fn io_read_char() -> Result<Value, RuntimeError> {
         match lock.read(&mut b) {
             Ok(0) => {
                 return if len == 0 {
-                    Ok(make_ok(make_none()))   // EOF propre
+                    Ok(make_ok(make_none())) // EOF propre
                 } else {
-                    Ok(io_err("ReadFailed", Some("séquence UTF-8 incomplète".to_string())))
+                    Ok(io_err(
+                        "ReadFailed",
+                        Some("séquence UTF-8 incomplète".to_string()),
+                    ))
                 };
             }
             Ok(_) => {
@@ -1997,7 +2506,10 @@ fn io_read_char() -> Result<Value, RuntimeError> {
                     }
                 }
                 if len == 4 {
-                    return Ok(io_err("ReadFailed", Some("séquence UTF-8 invalide".to_string())));
+                    return Ok(io_err(
+                        "ReadFailed",
+                        Some("séquence UTF-8 invalide".to_string()),
+                    ));
                 }
             }
             Err(e) => return Ok(io_err("ReadFailed", Some(e.to_string()))),
@@ -2034,13 +2546,15 @@ fn bytes_arg(args: &[Value], i: usize) -> Result<Vec<u8>, RuntimeError> {
 
 /// Construit une valeur byte[] à partir d'octets bruts.
 fn byte_array_value(bytes: Vec<u8>) -> Value {
-    Value::Array(Rc::new(RefCell::new(bytes.into_iter().map(Value::Byte).collect())))
+    Value::Array(Rc::new(RefCell::new(
+        bytes.into_iter().map(Value::Byte).collect(),
+    )))
 }
 
 fn file_read_bytes(args: &[Value]) -> Result<Value, RuntimeError> {
     let path = str_arg(args, 0)?;
     match std::fs::read(&path) {
-        Ok(b)  => Ok(make_ok(byte_array_value(b))),
+        Ok(b) => Ok(make_ok(byte_array_value(b))),
         Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
     }
 }
@@ -2048,7 +2562,7 @@ fn file_read_bytes(args: &[Value]) -> Result<Value, RuntimeError> {
 fn file_read_text(args: &[Value]) -> Result<Value, RuntimeError> {
     let path = str_arg(args, 0)?;
     match std::fs::read_to_string(&path) {
-        Ok(s)  => Ok(make_ok(Value::Str(s))),   // InvalidData si UTF-8 invalide
+        Ok(s) => Ok(make_ok(Value::Str(s))), // InvalidData si UTF-8 invalide
         Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
     }
 }
@@ -2056,29 +2570,33 @@ fn file_read_text(args: &[Value]) -> Result<Value, RuntimeError> {
 fn file_write(args: &[Value], data: Vec<u8>) -> Result<Value, RuntimeError> {
     let path = str_arg(args, 0)?;
     match std::fs::write(&path, data) {
-        Ok(())  => Ok(ok_unit()),
-        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+        Ok(()) => Ok(ok_unit()),
+        Err(e) => Ok(io_err("WriteFailed", Some(e.to_string()))),
     }
 }
 
 fn file_append(args: &[Value], data: Vec<u8>) -> Result<Value, RuntimeError> {
     use std::io::Write;
     let path = str_arg(args, 0)?;
-    let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        Ok(f)  => f,
+    let mut f = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        Ok(f) => f,
         Err(e) => return Ok(io_err("WriteFailed", Some(e.to_string()))),
     };
     match f.write_all(&data) {
-        Ok(())  => Ok(ok_unit()),
-        Err(e)  => Ok(io_err("WriteFailed", Some(e.to_string()))),
+        Ok(()) => Ok(ok_unit()),
+        Err(e) => Ok(io_err("WriteFailed", Some(e.to_string()))),
     }
 }
 
 fn file_delete(args: &[Value]) -> Result<Value, RuntimeError> {
     let path = str_arg(args, 0)?;
     match std::fs::remove_file(&path) {
-        Ok(())  => Ok(ok_unit()),
-        Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
+        Ok(()) => Ok(ok_unit()),
+        Err(e) => Ok(io_err("Other", Some(e.to_string()))),
     }
 }
 
@@ -2093,7 +2611,8 @@ fn make_directory(path: String, writable: bool) -> Value {
     fields.insert("_path".to_string(), Value::Str(path));
     fields.insert("_writable".to_string(), Value::Bool(writable));
     Value::Object(Rc::new(RefCell::new(ObjectData {
-        class_name: "Directory".to_string(), fields,
+        class_name: "Directory".to_string(),
+        fields,
     })))
 }
 
@@ -2108,8 +2627,10 @@ fn dir_writable(rc: &Rc<RefCell<ObjectData>>) -> bool {
 }
 
 fn dir_name(path: &str) -> String {
-    std::path::Path::new(path).file_name()
-        .map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+    std::path::Path::new(path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
 /// Résout un chemin enfant relatif sous `root`. None si `child` est absolu ou
@@ -2117,10 +2638,14 @@ fn dir_name(path: &str) -> String {
 /// (hors périmètre).
 fn cap_resolve(root: &str, child: &str) -> Option<std::path::PathBuf> {
     use std::path::{Component, Path};
-    if root.is_empty() { return None; }
+    if root.is_empty() {
+        return None;
+    }
     let p = Path::new(child);
     // 1. Rejet lexical : pas de chemin absolu ni de composant `..`.
-    if p.is_absolute() { return None; }
+    if p.is_absolute() {
+        return None;
+    }
     for c in p.components() {
         match c {
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
@@ -2138,7 +2663,9 @@ fn cap_resolve(root: &str, child: &str) -> Option<std::path::PathBuf> {
     //    (modèle de menace coopératif — voir docs/io.md).
     let root_anchor = canonical_existing(Path::new(root))?;
     let full_anchor = canonical_existing(&full)?;
-    if !full_anchor.starts_with(&root_anchor) { return None; }
+    if !full_anchor.starts_with(&root_anchor) {
+        return None;
+    }
     Some(full)
 }
 
@@ -2156,35 +2683,64 @@ fn canonical_existing(p: &std::path::Path) -> Option<std::path::PathBuf> {
 }
 
 fn cap_read(path: &str, args: &[Value], as_text: bool) -> Result<Value, RuntimeError> {
-    if path.is_empty() { return Ok(io_err("Other", Some("capacité non initialisée".to_string()))); }
+    if path.is_empty() {
+        return Ok(io_err(
+            "Other",
+            Some("capacité non initialisée".to_string()),
+        ));
+    }
     let child = str_arg(args, 0)?;
     let full = match cap_resolve(path, &child) {
         Some(f) => f,
-        None    => return Ok(io_err("Other", Some("chemin hors de la capacité".to_string()))),
+        None => {
+            return Ok(io_err(
+                "Other",
+                Some("chemin hors de la capacité".to_string()),
+            ));
+        }
     };
     if as_text {
         match std::fs::read_to_string(&full) {
-            Ok(s)  => Ok(make_ok(Value::Str(s))),
+            Ok(s) => Ok(make_ok(Value::Str(s))),
             Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
         }
     } else {
         match std::fs::read(&full) {
-            Ok(b)  => Ok(make_ok(byte_array_value(b))),
+            Ok(b) => Ok(make_ok(byte_array_value(b))),
             Err(e) => Ok(io_err("ReadFailed", Some(e.to_string()))),
         }
     }
 }
 
-fn cap_write(path: &str, writable: bool, args: &[Value], data: Vec<u8>, append: bool)
-    -> Result<Value, RuntimeError>
-{
+fn cap_write(
+    path: &str,
+    writable: bool,
+    args: &[Value],
+    data: Vec<u8>,
+    append: bool,
+) -> Result<Value, RuntimeError> {
     use std::io::Write;
-    if path.is_empty() { return Ok(io_err("Other", Some("capacité non initialisée".to_string()))); }
-    if !writable { return Ok(io_err("Other", Some("capacité en lecture seule".to_string()))); }
+    if path.is_empty() {
+        return Ok(io_err(
+            "Other",
+            Some("capacité non initialisée".to_string()),
+        ));
+    }
+    if !writable {
+        return Ok(io_err(
+            "Other",
+            Some("capacité en lecture seule".to_string()),
+        ));
+    }
     let child = str_arg(args, 0)?;
     let full = match cap_resolve(path, &child) {
         Some(f) => f,
-        None    => return Ok(io_err("Other", Some("chemin hors de la capacité".to_string()))),
+        None => {
+            return Ok(io_err(
+                "Other",
+                Some("chemin hors de la capacité".to_string()),
+            ));
+        }
     };
     // Crée les répertoires parents (dans la capacité) au besoin.
     if let Some(parent) = full.parent() {
@@ -2193,37 +2749,57 @@ fn cap_write(path: &str, writable: bool, args: &[Value], data: Vec<u8>, append: 
         }
     }
     let res = if append {
-        std::fs::OpenOptions::new().create(true).append(true).open(&full)
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&full)
             .and_then(|mut f| f.write_all(&data))
     } else {
         std::fs::write(&full, &data)
     };
     match res {
-        Ok(_)  => Ok(ok_unit()),
+        Ok(_) => Ok(ok_unit()),
         Err(e) => Ok(io_err("WriteFailed", Some(e.to_string()))),
     }
 }
 
 fn cap_delete(path: &str, writable: bool, args: &[Value]) -> Result<Value, RuntimeError> {
-    if path.is_empty() { return Ok(io_err("Other", Some("capacité non initialisée".to_string()))); }
-    if !writable { return Ok(io_err("Other", Some("capacité en lecture seule".to_string()))); }
+    if path.is_empty() {
+        return Ok(io_err(
+            "Other",
+            Some("capacité non initialisée".to_string()),
+        ));
+    }
+    if !writable {
+        return Ok(io_err(
+            "Other",
+            Some("capacité en lecture seule".to_string()),
+        ));
+    }
     let child = str_arg(args, 0)?;
     let full = match cap_resolve(path, &child) {
         Some(f) => f,
-        None    => return Ok(io_err("Other", Some("chemin hors de la capacité".to_string()))),
+        None => {
+            return Ok(io_err(
+                "Other",
+                Some("chemin hors de la capacité".to_string()),
+            ));
+        }
     };
     match std::fs::remove_file(&full) {
-        Ok(())  => Ok(ok_unit()),
-        Err(e)  => Ok(io_err("Other", Some(e.to_string()))),
+        Ok(()) => Ok(ok_unit()),
+        Err(e) => Ok(io_err("Other", Some(e.to_string()))),
     }
 }
 
 fn cap_exists(path: &str, args: &[Value]) -> Result<Value, RuntimeError> {
-    if path.is_empty() { return Ok(Value::Bool(false)); }
+    if path.is_empty() {
+        return Ok(Value::Bool(false));
+    }
     let child = str_arg(args, 0)?;
     match cap_resolve(path, &child) {
         Some(full) => Ok(Value::Bool(full.exists())),
-        None       => Ok(Value::Bool(false)),
+        None => Ok(Value::Bool(false)),
     }
 }
 
@@ -2232,13 +2808,18 @@ fn cap_exists(path: &str, args: &[Value]) -> Result<Value, RuntimeError> {
 fn cap_sub(path: &str, args: &[Value], child_writable: bool) -> Result<Value, RuntimeError> {
     let name = str_arg(args, 0)?;
     match cap_resolve(path, &name) {
-        Some(full) => Ok(make_directory(full.to_string_lossy().to_string(), child_writable)),
-        None       => Ok(make_directory(String::new(), false)),
+        Some(full) => Ok(make_directory(
+            full.to_string_lossy().to_string(),
+            child_writable,
+        )),
+        None => Ok(make_directory(String::new(), false)),
     }
 }
 
 /// Numéro de séquence des répertoires temporaires (unicité dans le processus).
-fn next_temp_seq() -> u64 { CAP_SEQ.fetch_add(1, Ordering::Relaxed) }
+fn next_temp_seq() -> u64 {
+    CAP_SEQ.fetch_add(1, Ordering::Relaxed)
+}
 
 // ── Hachage de valeurs ────────────────────────────────────────────────────────
 
@@ -2248,11 +2829,17 @@ pub fn val_hash(v: &Value) -> i64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     match v {
-        Value::Int(n)   => *n,
-        Value::Byte(b)  => *b as i64,
-        Value::Bool(b)  => if *b { 1 } else { 0 },
-        Value::Char(c)  => *c as i64,
-        Value::Str(s)   => {
+        Value::Int(n) => *n,
+        Value::Byte(b) => *b as i64,
+        Value::Bool(b) => {
+            if *b {
+                1
+            } else {
+                0
+            }
+        }
+        Value::Char(c) => *c as i64,
+        Value::Str(s) => {
             let mut h = DefaultHasher::new();
             s.hash(&mut h);
             h.finish() as i64
@@ -2276,24 +2863,26 @@ fn eval_binop(lv: Value, op: &BinOp, rv: Value) -> Result<Value, RuntimeError> {
     let (lv, rv) = promote(lv, rv);
     match op {
         BinOp::Add => match (&lv, &rv) {
-            (Value::Int(a),   Value::Int(b))   => Ok(Value::Int(a + b)),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
-            (Value::Str(a),   Value::Str(b))   => Ok(Value::Str(format!("{}{}", a, b))),
+            (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{}{}", a, b))),
             _ => err!("+ non applicable à {} et {}", lv, rv),
         },
         BinOp::Sub => match (&lv, &rv) {
-            (Value::Int(a),   Value::Int(b))   => Ok(Value::Int(a - b)),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
             _ => err!("- non applicable"),
         },
         BinOp::Mul => match (&lv, &rv) {
-            (Value::Int(a),   Value::Int(b))   => Ok(Value::Int(a * b)),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
             _ => err!("* non applicable"),
         },
         BinOp::Div => match (&lv, &rv) {
-            (Value::Int(a),   Value::Int(b))   => {
-                if *b == 0 { return err!("Division par zéro"); }
+            (Value::Int(a), Value::Int(b)) => {
+                if *b == 0 {
+                    return err!("Division par zéro");
+                }
                 Ok(Value::Int(a / b))
             }
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
@@ -2301,55 +2890,61 @@ fn eval_binop(lv: Value, op: &BinOp, rv: Value) -> Result<Value, RuntimeError> {
         },
         BinOp::Mod => match (&lv, &rv) {
             (Value::Int(a), Value::Int(b)) => {
-                if *b == 0 { return err!("Modulo par zéro"); }
+                if *b == 0 {
+                    return err!("Modulo par zéro");
+                }
                 Ok(Value::Int(a % b))
             }
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
             _ => err!("% non applicable"),
         },
         BinOp::Pow => match (&lv, &rv) {
-            (Value::Int(a),   Value::Int(b))   => Ok(Value::Int(i64::pow(*a, (*b).max(0) as u32))),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(i64::pow(*a, (*b).max(0) as u32))),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(*b))),
             _ => err!("** non applicable"),
         },
-        BinOp::Lt  => cmp(&lv, &rv, |a,b| a< b, |a,b| a< b),
-        BinOp::Le  => cmp(&lv, &rv, |a,b| a<=b, |a,b| a<=b),
-        BinOp::Gt  => cmp(&lv, &rv, |a,b| a> b, |a,b| a> b),
-        BinOp::Ge  => cmp(&lv, &rv, |a,b| a>=b, |a,b| a>=b),
-        BinOp::Eq  => Ok(Value::Bool(val_eq(&lv, &rv))),
-        BinOp::Ne  => Ok(Value::Bool(!val_eq(&lv, &rv))),
+        BinOp::Lt => cmp(&lv, &rv, |a, b| a < b, |a, b| a < b),
+        BinOp::Le => cmp(&lv, &rv, |a, b| a <= b, |a, b| a <= b),
+        BinOp::Gt => cmp(&lv, &rv, |a, b| a > b, |a, b| a > b),
+        BinOp::Ge => cmp(&lv, &rv, |a, b| a >= b, |a, b| a >= b),
+        BinOp::Eq => Ok(Value::Bool(val_eq(&lv, &rv))),
+        BinOp::Ne => Ok(Value::Bool(!val_eq(&lv, &rv))),
         BinOp::And => match (&lv, &rv) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(*a && *b)),
             _ => err!("&& requiert des bool"),
         },
-        BinOp::Or  => match (&lv, &rv) {
+        BinOp::Or => match (&lv, &rv) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(*a || *b)),
             _ => err!("|| requiert des bool"),
         },
     }
 }
 
-fn cmp(l: &Value, r: &Value,
-    fi: impl Fn(i64,i64)->bool, ff: impl Fn(f64,f64)->bool
+fn cmp(
+    l: &Value,
+    r: &Value,
+    fi: impl Fn(i64, i64) -> bool,
+    ff: impl Fn(f64, f64) -> bool,
 ) -> Result<Value, RuntimeError> {
     match (l, r) {
-        (Value::Int(a),   Value::Int(b))   => Ok(Value::Bool(fi(*a,*b))),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(ff(*a,*b))),
+        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(fi(*a, *b))),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(ff(*a, *b))),
         _ => err!("Comparaison non applicable"),
     }
 }
 
 fn val_eq(a: &Value, b: &Value) -> bool {
     match (a, b) {
-        (Value::Int(x),   Value::Int(y))   => x == y,
-        (Value::Byte(x),  Value::Byte(y))  => x == y,
-        (Value::Float(x), Value::Float(y)) => (x-y).abs() < 1e-12,
-        (Value::Bool(x),  Value::Bool(y))  => x == y,
-        (Value::Str(x),   Value::Str(y))   => x == y,
-        (Value::Char(x),  Value::Char(y))  => x == y,
-        (Value::Null,     Value::Null)     => true,
-        (Value::Enum(a),  Value::Enum(b))  =>
-            a.enum_name == b.enum_name && a.variant_name == b.variant_name,
+        (Value::Int(x), Value::Int(y)) => x == y,
+        (Value::Byte(x), Value::Byte(y)) => x == y,
+        (Value::Float(x), Value::Float(y)) => (x - y).abs() < 1e-12,
+        (Value::Bool(x), Value::Bool(y)) => x == y,
+        (Value::Str(x), Value::Str(y)) => x == y,
+        (Value::Char(x), Value::Char(y)) => x == y,
+        (Value::Null, Value::Null) => true,
+        (Value::Enum(a), Value::Enum(b)) => {
+            a.enum_name == b.enum_name && a.variant_name == b.variant_name
+        }
         _ => false,
     }
 }
@@ -2361,8 +2956,15 @@ pub fn run_source(src: &str) -> Result<i64, String> {
     let full = format!("{}\n{}", crate::STDLIB, src);
     let program = crate::parser::program_parser()
         .parse(full.as_str())
-        .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n"))?;
-    Interpreter::new(&program).run(&program).map_err(|e| e.to_string())
+        .map_err(|e| {
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
+    Interpreter::new(&program)
+        .run(&program)
+        .map_err(|e| e.to_string())
 }
 
 /// Exécute la source et retourne la valeur de retour + toutes les lignes imprimées.
@@ -2372,7 +2974,12 @@ pub fn run_source_with_output(src: &str) -> Result<(i64, Vec<String>), String> {
     let full = format!("{}\n{}", crate::STDLIB, src);
     let program = crate::parser::program_parser()
         .parse(full.as_str())
-        .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n"))?;
+        .map_err(|e| {
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
     let captured = Rc::new(RefCell::new(Vec::<String>::new()));
     let cap = captured.clone();
     let print_fn: Box<dyn FnMut(&str)> = Box::new(move |line: &str| {

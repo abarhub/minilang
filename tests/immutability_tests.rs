@@ -3,9 +3,9 @@
 //! Phase 2 : mot-clé `mut` sur les classes/interfaces — audit du système.
 //! Phase 3 : propagation transitive du qualificateur dans les appels enchaînés.
 
-use mini_parser::typechecker::check_source;
 use chumsky::Parser;
 use mini_parser::parser::program_parser;
+use mini_parser::typechecker::check_source;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -13,8 +13,14 @@ fn parses_ok(src: &str) {
     let full = format!("{}\n{}", mini_parser::STDLIB, src);
     match program_parser().parse(full.as_str()) {
         Ok(_) => {}
-        Err(e) => panic!("Parse failed:\n{}\n---\n{}",
-            src, e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")),
+        Err(e) => panic!(
+            "Parse failed:\n{}\n---\n{}",
+            src,
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
     }
 }
 
@@ -26,11 +32,18 @@ fn assert_tc_ok(src: &str) {
 
 fn assert_tc_err(src: &str, fragment: &str) {
     match check_source(src) {
-        Ok(()) => panic!("Typecheck should have failed (expected '{}'):\n{}", fragment, src),
+        Ok(()) => panic!(
+            "Typecheck should have failed (expected '{}'):\n{}",
+            fragment, src
+        ),
         Err(e) => {
             let all = e.join("\n");
-            assert!(all.contains(fragment),
-                "Expected '{}' in:\n{}", fragment, all);
+            assert!(
+                all.contains(fragment),
+                "Expected '{}' in:\n{}",
+                fragment,
+                all
+            );
         }
     }
 }
@@ -41,39 +54,46 @@ fn assert_tc_err(src: &str, fragment: &str) {
 
 #[test]
 fn parse_readonly_variable() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             readonly int x = 42;
             return x;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_immutable_variable() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             immutable int x = 10;
             return x;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_mutable_method() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
             int get() { return value; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_readonly_object() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut class Box {
             int value;
             mutable void set(int v) { value = v; }
@@ -84,12 +104,14 @@ fn parse_readonly_object() {
             readonly Box rb = b;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_immutable_object() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut class Point {
             int x;
             int y;
@@ -99,7 +121,8 @@ fn parse_immutable_object() {
             immutable Point p = new Point();
             return p.getX();
         }
-    "#);
+    "#,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,31 +131,36 @@ fn parse_immutable_object() {
 
 #[test]
 fn parse_mut_class() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
             int get() { return value; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_mut_interface() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut interface Resettable {
             mutable void reset();
             int getValue();
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_non_mut_class() {
     // Une classe sans mut parse correctement (usage limité aux var mutables)
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Helper {
             int compute(int x) { return x * 2; }
         }
@@ -140,7 +168,8 @@ fn parse_non_mut_class() {
             Helper h = new Helper();
             return h.compute(5);
         }
-    "#);
+    "#,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,7 +178,8 @@ fn parse_non_mut_class() {
 
 #[test]
 fn tc_mutable_can_call_mutable_method() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
@@ -160,12 +190,14 @@ fn tc_mutable_can_call_mutable_method() {
             c.increment();
             return c.get();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_readonly_can_call_non_mutable_method() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
@@ -176,12 +208,14 @@ fn tc_readonly_can_call_non_mutable_method() {
             readonly Counter rc = c;
             return rc.get();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_immutable_can_call_non_mutable_method() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Point {
             int x;
             int getX() { return x; }
@@ -190,12 +224,14 @@ fn tc_immutable_can_call_non_mutable_method() {
             immutable Point p = new Point();
             return p.getX();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_non_mutable_method_calls_non_mutable_on_this() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class MyPair {
             int a;
             int b;
@@ -203,12 +239,14 @@ fn tc_non_mutable_method_calls_non_mutable_on_this() {
             int sum() { return this.getA() + b; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_mutable_method_can_call_mutable_on_this() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Counter {
             int value;
             mutable void reset() { value = 0; }
@@ -219,18 +257,21 @@ fn tc_mutable_method_can_call_mutable_on_this() {
             int get() { return value; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_readonly_primitive_read_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             readonly int x = 5;
             readonly int y = x;
             return y;
         }
-    "#);
+    "#,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +281,8 @@ fn tc_readonly_primitive_read_ok() {
 #[test]
 fn tc_non_mut_class_usable_as_mutable() {
     // Une classe sans `mut` peut être utilisée comme variable mutable (défaut)
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         class Helper {
             int compute(int x) { return x * 2; }
         }
@@ -248,12 +290,14 @@ fn tc_non_mut_class_usable_as_mutable() {
             Helper h = new Helper();
             return h.compute(3);
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_mut_class_readonly_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Counter {
             int value;
             int get() { return value; }
@@ -263,12 +307,14 @@ fn tc_mut_class_readonly_ok() {
             readonly Counter rc = c;
             return rc.get();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_mut_class_immutable_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Point {
             int x;
             int getX() { return x; }
@@ -277,41 +323,48 @@ fn tc_mut_class_immutable_ok() {
             immutable Point p = new Point();
             return p.getX();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_stdlib_list_readonly_ok() {
     // List est mut → on peut déclarer readonly List
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             List<int> lst = new ArrayList<int>();
             readonly List<int> rlst = lst;
             return rlst.size();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_enum_always_mut_readonly_ok() {
     // Les enums sont mut implicitement
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             Option<int> opt = Option<int>::Some(42);
             readonly Option<int> ropt = opt;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_enum_always_mut_immutable_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             immutable Option<int> opt = Option<int>::Some(42);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,7 +373,8 @@ fn tc_enum_always_mut_immutable_ok() {
 
 #[test]
 fn tc_err_readonly_calls_mutable() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
@@ -332,12 +386,15 @@ fn tc_err_readonly_calls_mutable() {
             rc.increment();
             return 0;
         }
-    "#, "readonly");
+    "#,
+        "readonly",
+    );
 }
 
 #[test]
 fn tc_err_immutable_calls_mutable() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
@@ -348,12 +405,15 @@ fn tc_err_immutable_calls_mutable() {
             c.increment();
             return 0;
         }
-    "#, "immutable");
+    "#,
+        "immutable",
+    );
 }
 
 #[test]
 fn tc_err_non_mutable_method_calls_mutable_on_this() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
@@ -363,30 +423,38 @@ fn tc_err_non_mutable_method_calls_mutable_on_this() {
             }
         }
         int main() { return 0; }
-    "#, "non-mutable");
+    "#,
+        "non-mutable",
+    );
 }
 
 #[test]
 fn tc_err_readonly_on_list_add() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             List<int> lst = new ArrayList<int>();
             readonly List<int> rlst = lst;
             rlst.add(1);
             return 0;
         }
-    "#, "readonly");
+    "#,
+        "readonly",
+    );
 }
 
 #[test]
 fn tc_err_immutable_on_list_add() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             immutable List<int> lst = new ArrayList<int>();
             lst.add(1);
             return 0;
         }
-    "#, "immutable");
+    "#,
+        "immutable",
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -396,7 +464,8 @@ fn tc_err_immutable_on_list_add() {
 #[test]
 fn tc_err_non_mut_class_readonly() {
     // Classe sans `mut` → interdit avec readonly
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         class Helper {
             int compute(int x) { return x * 2; }
         }
@@ -405,13 +474,16 @@ fn tc_err_non_mut_class_readonly() {
             readonly Helper rh = h;
             return 0;
         }
-    "#, "mut");
+    "#,
+        "mut",
+    );
 }
 
 #[test]
 fn tc_err_non_mut_class_immutable() {
     // Classe sans `mut` → interdit avec immutable
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         class Helper {
             int compute(int x) { return x * 2; }
         }
@@ -419,7 +491,9 @@ fn tc_err_non_mut_class_immutable() {
             immutable Helper h = new Helper();
             return 0;
         }
-    "#, "mut");
+    "#,
+        "mut",
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -431,7 +505,8 @@ fn tc_err_non_mut_class_immutable() {
 #[test]
 fn tc_chain_readonly_non_mutable_ok() {
     // Appel de méthode non-mutable enchaîné sur un récepteur readonly → OK
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Inner {
             int value;
             int get() { return value; }
@@ -445,13 +520,15 @@ fn tc_chain_readonly_non_mutable_ok() {
             readonly Outer ro = o;
             return ro.getInner().get();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_chain_value_type_result_ok() {
     // Si la méthode retourne un type valeur (int), le qualificateur ne se propage pas
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Counter {
             int value;
             mutable void increment() { value = value + 1; }
@@ -467,12 +544,14 @@ fn tc_chain_value_type_result_ok() {
             int n = rw.getCount();
             return n;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_chain_immutable_non_mutable_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Node {
             int val;
             int getVal() { return val; }
@@ -485,25 +564,29 @@ fn tc_chain_immutable_non_mutable_ok() {
             immutable Tree t = new Tree();
             return t.getRoot().getVal();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_chain_stdlib_readonly_size_ok() {
     // size() retourne int (type valeur) → pas de propagation
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             List<int> lst = new ArrayList<int>();
             readonly List<int> rlst = lst;
             return rlst.size();
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_chain_two_levels_non_mutable_ok() {
     // Deux niveaux d'enchaînement, méthodes non-mutables → OK
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Inner {
             int val;
             int getVal() { return val; }
@@ -521,7 +604,8 @@ fn tc_chain_two_levels_non_mutable_ok() {
             readonly Outer ro = o;
             return ro.getMid().getInner().getVal();
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Erreurs attendues ─────────────────────────────────────────────────────────
@@ -529,7 +613,8 @@ fn tc_chain_two_levels_non_mutable_ok() {
 #[test]
 fn tc_err_chain_readonly_mutable_method() {
     // ro.getInner() propage readonly → appel de mutable sur le résultat → erreur
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class Inner {
             int value;
             mutable void reset() { value = 0; }
@@ -545,12 +630,15 @@ fn tc_err_chain_readonly_mutable_method() {
             ro.getInner().reset();
             return 0;
         }
-    "#, "readonly");
+    "#,
+        "readonly",
+    );
 }
 
 #[test]
 fn tc_err_chain_immutable_mutable_method() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class Inner {
             int value;
             mutable void set(int v) { value = v; }
@@ -565,13 +653,16 @@ fn tc_err_chain_immutable_mutable_method() {
             o.getInner().set(42);
             return 0;
         }
-    "#, "immutable");
+    "#,
+        "immutable",
+    );
 }
 
 #[test]
 fn tc_err_chain_three_levels() {
     // Trois niveaux d'enchaînement : readonly se propage jusqu'au bout
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class Leaf {
             int val;
             mutable void set(int v) { val = v; }
@@ -590,20 +681,25 @@ fn tc_err_chain_three_levels() {
             rr.getMid().getLeaf().set(1);
             return 0;
         }
-    "#, "readonly");
+    "#,
+        "readonly",
+    );
 }
 
 #[test]
 fn tc_err_chain_readonly_list_add() {
     // readonly List → add() directement interdit (phase 1, toujours OK)
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         int main() {
             List<int> lst = new ArrayList<int>();
             readonly List<int> rlst = lst;
             rlst.add(1);
             return 0;
         }
-    "#, "readonly");
+    "#,
+        "readonly",
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -614,36 +710,42 @@ fn tc_err_chain_readonly_list_add() {
 
 #[test]
 fn parse_type_param_constraint_class() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut class Repository<immutable K, V> {
             mutable void put(K key, V value) { }
             V get(K key) { return value; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_type_param_constraint_interface() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut interface Cache<immutable K, V> {
             mutable void store(K key, V value);
             V load(K key);
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_type_param_no_constraint() {
     // Sans contrainte → comportement inchangé
-    parses_ok(r#"
+    parses_ok(
+        r#"
         mut class Box<T> {
             T value;
             T get() { return value; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 // ── Typecheck valide ──────────────────────────────────────────────────────────
@@ -651,7 +753,8 @@ fn parse_type_param_no_constraint() {
 #[test]
 fn tc_type_param_constraint_primitive_ok() {
     // int est un type valeur → toujours accepté comme argument contraint
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Store<immutable K, V> {
             mutable void put(K key, V value) { }
         }
@@ -659,13 +762,15 @@ fn tc_type_param_constraint_primitive_ok() {
             Store<int, string> s = new Store<int, string>();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_type_param_constraint_mut_class_ok() {
     // Point est mut → OK comme argument immutable K
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Point {
             int x;
             int getX() { return x; }
@@ -677,13 +782,15 @@ fn tc_type_param_constraint_mut_class_ok() {
             Store<Point, int> s = new Store<Point, int>();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_type_param_constraint_string_ok() {
     // string est primitif → OK
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Store<immutable K, V> {
             mutable void put(K key, V value) { }
         }
@@ -691,13 +798,15 @@ fn tc_type_param_constraint_string_ok() {
             Store<string, int> s = new Store<string, int>();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_type_param_unconstrained_ok() {
     // Paramètre sans contrainte → n'importe quel type
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Wrapper<T> {
             T value;
             T get() { return value; }
@@ -709,13 +818,15 @@ fn tc_type_param_unconstrained_ok() {
             Wrapper<Helper> w = new Wrapper<Helper>();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_type_param_constraint_enum_ok() {
     // Les enums sont mut implicitement
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         mut class Store<immutable K, V> {
             mutable void put(K key, V value) { }
         }
@@ -723,7 +834,8 @@ fn tc_type_param_constraint_enum_ok() {
             Store<Option<int>, string> s = new Store<Option<int>, string>();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Typecheck erreurs ─────────────────────────────────────────────────────────
@@ -731,7 +843,8 @@ fn tc_type_param_constraint_enum_ok() {
 #[test]
 fn tc_err_type_param_constraint_non_mut_class() {
     // Helper n'est pas mut → interdit comme argument immutable K
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         class Helper {
             int compute(int x) { return x * 2; }
         }
@@ -742,13 +855,16 @@ fn tc_err_type_param_constraint_non_mut_class() {
             Store<Helper, int> s = new Store<Helper, int>();
             return 0;
         }
-    "#, "mut");
+    "#,
+        "mut",
+    );
 }
 
 #[test]
 fn tc_err_type_param_constraint_var_decl() {
     // La contrainte est vérifiée aussi sur la déclaration de variable
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         class NonMut {
             int val;
         }
@@ -759,5 +875,7 @@ fn tc_err_type_param_constraint_var_decl() {
             Store<NonMut, int> s = new Store<NonMut, int>();
             return 0;
         }
-    "#, "mut");
+    "#,
+        "mut",
+    );
 }

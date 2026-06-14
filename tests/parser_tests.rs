@@ -8,11 +8,14 @@ use mini_parser::parser::program_parser;
 
 fn parses_ok(src: &str) {
     match program_parser().parse(src) {
-        Ok(_)    => {}
+        Ok(_) => {}
         Err(errs) => panic!(
             "Parsing inattendu échoué :\n{}\n---\n{}",
             src,
-            errs.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n")
+            errs.iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
         ),
     }
 }
@@ -32,7 +35,8 @@ fn test_empty_main() {
 
 #[test]
 fn test_main_with_local_vars() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int x = 42;
             bool b = true;
@@ -41,19 +45,22 @@ fn test_main_with_local_vars() {
             string s = "hello";
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Package et imports ────────────────────────────────────────────────────────
 
 #[test]
 fn test_package_and_imports() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         package com.example.app;
         import com.example.util.*;
         import com.example.model.User;
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
@@ -70,19 +77,22 @@ fn test_import_only() {
 
 #[test]
 fn test_arithmetic_expressions() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int a = 1 + 2 * 3 - 4 / 2 % 3;
             float p = 2.0 ** 10.0;
             string s = "hello" + " " + "world";
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_comparison_and_logic() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             bool a = 1 < 2;
             bool b = 3 >= 2 && true || false;
@@ -90,19 +100,22 @@ fn test_comparison_and_logic() {
             bool d = 5 != 6;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_unary_operators() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int n = -42;
             bool b = !true;
             float f = -3.14;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
@@ -115,7 +128,8 @@ fn test_operator_precedence() {
 
 #[test]
 fn test_if_else_if_else() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int x = 5;
             if (x > 10) {
@@ -127,12 +141,14 @@ fn test_if_else_if_else() {
             }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_while_loop() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int i = 0;
             while (i < 10) {
@@ -140,12 +156,14 @@ fn test_while_loop() {
             }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_do_while_loop() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int i = 0;
             do {
@@ -153,35 +171,41 @@ fn test_do_while_loop() {
             } while (i < 5);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_for_loop_full() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             for (int i = 0; i < 10; i = i + 1) {
                 print(i);
             }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_for_loop_empty_parts() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int i = 0;
             for (; i < 5; i = i + 1) { print(i); }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_break_continue() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             for (int i = 0; i < 10; i = i + 1) {
                 if (i == 3) { continue; }
@@ -189,14 +213,16 @@ fn test_break_continue() {
             }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Classes ───────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_simple_class() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Point {
             int x;
             int y;
@@ -209,12 +235,14 @@ fn test_simple_class() {
             int getX() { return x; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_class_inheritance() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Animal {
             string name;
             void speak() { print(name); }
@@ -223,12 +251,14 @@ fn test_class_inheritance() {
             void fetch() { print("fetching"); }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_interface_and_implements() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         interface Drawable {
             void draw();
             int area();
@@ -239,12 +269,14 @@ fn test_interface_and_implements() {
             int  area()  { return 0; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_generic_class() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Box<T> {
             T value;
             Box(T v) { value = v; }
@@ -254,12 +286,14 @@ fn test_generic_class() {
             Box<int> b = new Box<int>(42);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_multiple_constructors() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Vec {
             int x;
             int y;
@@ -268,14 +302,16 @@ fn test_multiple_constructors() {
             Vec(int a, int b) { x = a; y = b; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 // ── Appels enchaînés ──────────────────────────────────────────────────────────
 
 #[test]
 fn test_chained_method_calls() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Builder {
             int val;
             Builder set(int v) { val = v; return this; }
@@ -286,12 +322,14 @@ fn test_chained_method_calls() {
             b.set(5);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_field_access_and_assignment() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         class Counter {
             int count;
             Counter(int c) { count = c; }
@@ -302,7 +340,8 @@ fn test_field_access_and_assignment() {
             print(c.count);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Erreurs de syntaxe ────────────────────────────────────────────────────────
@@ -311,7 +350,9 @@ fn test_field_access_and_assignment() {
 fn test_missing_main() {
     // Depuis le système de tests, main est optionnel : un fichier sans main
     // parse (main = None) — c'est l'exécution (mode run) qui le refuse.
-    let program = program_parser().parse("class Foo {}").expect("parse ok sans main");
+    let program = program_parser()
+        .parse("class Foo {}")
+        .expect("parse ok sans main");
     assert!(program.main.is_none());
 }
 
@@ -378,53 +419,62 @@ fn test_char_comparison() {
 
 #[test]
 fn test_block_comment_in_function() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             /* ceci est un commentaire */
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_block_comment_multiline() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             /* commentaire
                sur plusieurs
                lignes */
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_block_comment_before_declaration() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         /* commentaire avant la classe */
         class Foo {
             int x;
             int bar() { return x; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_block_comment_between_statements() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int main() {
             int x = 1;
             /* entre deux statements */
             int y = 2;
             return x + y;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_doc_comment_before_class() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         /** Classe Point représentant un point 2D */
         class Point {
             int x;
@@ -433,21 +483,25 @@ fn test_doc_comment_before_class() {
             int getX() { return x; }
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_doc_comment_before_function() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         /** Calcule le carré d'un entier */
         int square(int n) { return n * n; }
         int main() { return square(4); }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_doc_comment_multiline() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         /**
          * Additionne deux entiers
          * @param a premier operande
@@ -455,7 +509,8 @@ fn test_doc_comment_multiline() {
          */
         int add(int a, int b) { return a + b; }
         int main() { return add(1, 2); }
-    "#);
+    "#,
+    );
 }
 
 #[test]
@@ -465,7 +520,8 @@ fn test_block_comment_inline() {
 
 #[test]
 fn test_mixed_comments() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         // commentaire simple
         /* commentaire bloc */
         /** commentaire doc */
@@ -474,5 +530,6 @@ fn test_mixed_comments() {
             /* autre bloc */
             return 0;
         }
-    "#);
+    "#,
+    );
 }

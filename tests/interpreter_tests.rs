@@ -8,7 +8,7 @@ use mini_parser::interpreter::run_source;
 fn run_ok(src: &str) -> i64 {
     match run_source(src) {
         Ok(code) => code,
-        Err(e)   => panic!("Exécution inattendue échouée :\n{}\n---\n{}", src, e),
+        Err(e) => panic!("Exécution inattendue échouée :\n{}\n---\n{}", src, e),
     }
 }
 
@@ -97,63 +97,90 @@ fn test_modulo_by_zero_fails() {
 
 #[test]
 fn test_local_var_assignment() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int x = 10;
             int y = 20;
             int z = x + y;
             return z;
         }
-    "#), 30);
+    "#
+        ),
+        30
+    );
 }
 
 #[test]
 fn test_var_reassignment() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int x = 1;
             x = x + 1;
             x = x * 3;
             return x;
         }
-    "#), 6);
+    "#
+        ),
+        6
+    );
 }
 
 // ── if / else ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_if_true_branch() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             if (true) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_if_false_branch() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             if (false) { return 1; }
             return 0;
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn test_if_else() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int x = 5;
             if (x > 10) { return 1; } else { return 2; }
         }
-    "#), 2);
+    "#
+        ),
+        2
+    );
 }
 
 #[test]
 fn test_if_else_if_else() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int score = 75;
             if (score >= 90)      { return 4; }
@@ -161,12 +188,17 @@ fn test_if_else_if_else() {
             else if (score >= 60) { return 2; }
             else                  { return 1; }
         }
-    "#), 3);
+    "#
+        ),
+        3
+    );
 }
 
 #[test]
 fn test_nested_if() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int x = 5;
             int y = 3;
@@ -176,14 +208,19 @@ fn test_nested_if() {
             }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 // ── while ─────────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_while_sum() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int i   = 1;
             int sum = 0;
@@ -193,36 +230,51 @@ fn test_while_sum() {
             }
             return sum;
         }
-    "#), 55);
+    "#
+        ),
+        55
+    );
 }
 
 #[test]
 fn test_while_not_entered() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int i = 10;
             while (i < 5) { i = i + 1; }
             return i;
         }
-    "#), 10);
+    "#
+        ),
+        10
+    );
 }
 
 // ── do-while ──────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_do_while_executes_at_least_once() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int i = 100;
             do { i = i + 1; } while (i < 5);
             return i;
         }
-    "#), 101); // exécuté une fois même si condition fausse d'entrée
+    "#
+        ),
+        101
+    ); // exécuté une fois même si condition fausse d'entrée
 }
 
 #[test]
 fn test_do_while_sum() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int i   = 1;
             int sum = 0;
@@ -232,14 +284,19 @@ fn test_do_while_sum() {
             } while (i <= 5);
             return sum;
         }
-    "#), 15);
+    "#
+        ),
+        15
+    );
 }
 
 // ── for ───────────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_for_sum() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int sum = 0;
             for (int i = 1; i <= 100; i = i + 1) {
@@ -247,23 +304,33 @@ fn test_for_sum() {
             }
             return sum;
         }
-    "#), 5050);
+    "#
+        ),
+        5050
+    );
 }
 
 #[test]
 fn test_for_not_entered() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int sum = 0;
             for (int i = 10; i < 5; i = i + 1) { sum = sum + 1; }
             return sum;
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn test_for_break() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int sum = 0;
             for (int i = 1; i <= 10; i = i + 1) {
@@ -272,12 +339,17 @@ fn test_for_break() {
             }
             return sum;
         }
-    "#), 15); // 1+2+3+4+5
+    "#
+        ),
+        15
+    ); // 1+2+3+4+5
 }
 
 #[test]
 fn test_for_continue_skip_even() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int sum = 0;
             for (int i = 1; i <= 10; i = i + 1) {
@@ -286,14 +358,19 @@ fn test_for_continue_skip_even() {
             }
             return sum;
         }
-    "#), 25); // 1+3+5+7+9
+    "#
+        ),
+        25
+    ); // 1+3+5+7+9
 }
 
 // ── Constructeurs & méthodes ──────────────────────────────────────────────────
 
 #[test]
 fn test_constructor_sets_fields() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Counter {
             int count;
             Counter(int n) { count = n; }
@@ -303,12 +380,17 @@ fn test_constructor_sets_fields() {
             Counter c = new Counter(7);
             return c.get();
         }
-    "#), 7);
+    "#
+        ),
+        7
+    );
 }
 
 #[test]
 fn test_method_modifies_field() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Counter {
             int count;
             Counter() { count = 0; }
@@ -322,12 +404,17 @@ fn test_method_modifies_field() {
             c.inc();
             return c.get();
         }
-    "#), 3);
+    "#
+        ),
+        3
+    );
 }
 
 #[test]
 fn test_method_with_params() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Calc {
             int val;
             Calc(int v) { val = v; }
@@ -340,12 +427,17 @@ fn test_method_with_params() {
             int b = c.mul(3);
             return a + b;
         }
-    "#), 45); // 15 + 30
+    "#
+        ),
+        45
+    ); // 15 + 30
 }
 
 #[test]
 fn test_multiple_constructors_select_by_arity() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Vec {
             int x;
             int y;
@@ -360,14 +452,19 @@ fn test_multiple_constructors_select_by_arity() {
             Vec v2 = new Vec(3, 4);
             return v0.sum() + v1.sum() + v2.sum();
         }
-    "#), 10); // 0 + 3 + 7
+    "#
+        ),
+        10
+    ); // 0 + 3 + 7
 }
 
 // ── Héritage ──────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_inherited_method() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Animal {
             int legs;
             Animal(int l) { legs = l; }
@@ -380,12 +477,17 @@ fn test_inherited_method() {
             Dog d = new Dog();
             return d.getLegs();
         }
-    "#), 4);
+    "#
+        ),
+        4
+    );
 }
 
 #[test]
 fn test_method_override() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Shape {
             int area() { return 0; }
         }
@@ -398,12 +500,17 @@ fn test_method_override() {
             Square s = new Square(5);
             return s.area();
         }
-    "#), 25);
+    "#
+        ),
+        25
+    );
 }
 
 #[test]
 fn test_three_level_inheritance() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class A { int val; A(int v) { val = v; } int get() { return val; } }
         class B extends A { B(int v) { val = v; } }
         class C extends B { C(int v) { val = v; } }
@@ -411,14 +518,19 @@ fn test_three_level_inheritance() {
             C c = new C(99);
             return c.get();
         }
-    "#), 99);
+    "#
+        ),
+        99
+    );
 }
 
 // ── Algorithmes classiques ────────────────────────────────────────────────────
 
 #[test]
 fn test_factorial_iterative() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int n      = 10;
             int result = 1;
@@ -429,12 +541,17 @@ fn test_factorial_iterative() {
             }
             return result;
         }
-    "#), 3628800);
+    "#
+        ),
+        3628800
+    );
 }
 
 #[test]
 fn test_fibonacci_iterative() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int n = 10;
             int a = 0;
@@ -446,12 +563,17 @@ fn test_fibonacci_iterative() {
             }
             return a;
         }
-    "#), 55); // fib(10) = 55
+    "#
+        ),
+        55
+    ); // fib(10) = 55
 }
 
 #[test]
 fn test_collatz_steps() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int n     = 27;
             int steps = 0;
@@ -462,12 +584,17 @@ fn test_collatz_steps() {
             }
             return steps;
         }
-    "#), 111);
+    "#
+        ),
+        111
+    );
 }
 
 #[test]
 fn test_gcd_euclid() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int a = 48;
             int b = 18;
@@ -478,12 +605,17 @@ fn test_gcd_euclid() {
             }
             return a;
         }
-    "#), 6);
+    "#
+        ),
+        6
+    );
 }
 
 #[test]
 fn test_sum_of_squares() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             int sum = 0;
             for (int i = 1; i <= 5; i = i + 1) {
@@ -491,14 +623,19 @@ fn test_sum_of_squares() {
             }
             return sum;
         }
-    "#), 55); // 1+4+9+16+25
+    "#
+        ),
+        55
+    ); // 1+4+9+16+25
 }
 
 // ── Champs via accès direct ───────────────────────────────────────────────────
 
 #[test]
 fn test_field_assign_from_outside() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Point {
             int x;
             int y;
@@ -511,7 +648,10 @@ fn test_field_assign_from_outside() {
             p.y = 4;
             return p.sum();
         }
-    "#), 7);
+    "#
+        ),
+        7
+    );
 }
 
 // ── Erreurs runtime ───────────────────────────────────────────────────────────
@@ -523,10 +663,12 @@ fn test_runtime_unknown_variable() {
 
 #[test]
 fn test_runtime_unknown_method() {
-    run_fails(r#"
+    run_fails(
+        r#"
         class Foo { Foo() {} }
         int main() { Foo f = new Foo(); f.nothing(); return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
@@ -543,110 +685,157 @@ fn test_char_literal_declaration() {
 
 #[test]
 fn test_char_equality_true() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char c = 'x';
             if (c == 'x') { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_char_equality_false() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char c = 'a';
             if (c == 'b') { return 1; }
             return 0;
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn test_char_inequality() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char c = 'z';
             if (c != 'a') { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_char_escape_newline() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char nl = '\n';
             if (nl == '\n') { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_char_escape_tab() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char t = '\t';
             if (t == '\t') { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_char_default_value() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char c;
             if (c == '\0') { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_char_print() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char c = 'A';
             print(c);
             return 0;
         }
-    "#), 0);
+    "#
+        ),
+        0
+    );
 }
 
 #[test]
 fn test_char_reassign() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         int main() {
             char c = 'a';
             c = 'b';
             if (c == 'b') { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 // ── Object.equals ─────────────────────────────────────────────────────────────
 
 #[test]
 fn test_equals_same_instance() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Point { int x; Point(int a) { x = a; } }
         int main() {
             Point p = new Point(1);
             if (p.equals(p)) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_equals_different_instances() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Point { int x; Point(int a) { x = a; } }
         int main() {
             Point a = new Point(1);
@@ -654,12 +843,17 @@ fn test_equals_different_instances() {
             if (a.equals(b)) { return 0; }
             return 1;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_equals_assigned_reference() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Box { int v; Box(int n) { v = n; } }
         int main() {
             Box a = new Box(42);
@@ -667,12 +861,17 @@ fn test_equals_assigned_reference() {
             if (a.equals(b)) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_equals_override() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Point {
             int x;
             Point(int a) { x = a; }
@@ -686,17 +885,25 @@ fn test_equals_override() {
             if (p.equals(q)) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }
 
 #[test]
 fn test_object_as_parameter_type() {
-    assert_eq!(run_ok(r#"
+    assert_eq!(
+        run_ok(
+            r#"
         class Wrapper { int val; Wrapper(int v) { val = v; } }
         int main() {
             Wrapper w = new Wrapper(7);
             if (w.equals(w)) { return 1; }
             return 0;
         }
-    "#), 1);
+    "#
+        ),
+        1
+    );
 }

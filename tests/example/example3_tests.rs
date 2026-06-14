@@ -6,7 +6,7 @@ fn run_example3() -> (i64, Vec<String>) {
     let src = include_str!("../../examples/example3.mini");
     match run_source_with_output(src) {
         Ok(result) => result,
-        Err(e)     => panic!("Erreur d'exécution :\n{}", e),
+        Err(e) => panic!("Erreur d'exécution :\n{}", e),
     }
 }
 
@@ -35,9 +35,9 @@ fn example3_output_lines() {
         "Distance de l'origine : 7",
         // Formes
         "\n=== Formes ===",
-        "Aire cercle    : 78.53975",   // 3.14159 * 5.0 * 5.0
-        "Aire rectangle : 24",          // 4.0 * 6.0
-        "Aire triangle  : 12",          // 0.5 * 3.0 * 8.0
+        "Aire cercle    : 78.53975", // 3.14159 * 5.0 * 5.0
+        "Aire rectangle : 24",       // 4.0 * 6.0
+        "Aire triangle  : 12",       // 0.5 * 3.0 * 8.0
         // Pattern matching
         "\n=== Pattern matching ===",
         "C'est un cercle, rayon = 10",
@@ -53,10 +53,19 @@ fn example3_output_lines() {
         "Pas au nord (wildcard)",
     ];
 
-    assert_eq!(lines.len(), expected.len(),
+    assert_eq!(
+        lines.len(),
+        expected.len(),
         "Nombre de lignes attendu : {}, obtenu : {}\nLignes réelles :\n{}",
-        expected.len(), lines.len(),
-        lines.iter().enumerate().map(|(i,l)| format!("[{}] {:?}", i, l)).collect::<Vec<_>>().join("\n"));
+        expected.len(),
+        lines.len(),
+        lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| format!("[{}] {:?}", i, l))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 
     for (i, (got, exp)) in lines.iter().zip(expected.iter()).enumerate() {
         assert_eq!(got, exp, "Ligne {} incorrecte", i);
