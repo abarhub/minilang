@@ -170,11 +170,15 @@ fn record_def_parser() -> chumsky::BoxedParser<'static, char, RecordDef, Simple<
             body: b,
         });
 
-    // Champs dans les parenthèses : `(int x, string name)`
+    // Champs dans les parenthèses : `(int x, string name)` — toujours privés.
     let record_fields = ty
         .clone()
         .then(text::ident().padded_by(ws()))
-        .map(|(ty, name)| Field { ty, name })
+        .map(|(ty, name)| Field {
+            visibility: Visibility::Private,
+            ty,
+            name,
+        })
         .separated_by(just(',').padded_by(ws()))
         .allow_trailing()
         .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws()));
@@ -731,6 +735,17 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
             .then_ignore(just(';').padded_by(ws()))
             .map(Stmt::Return);
 
+        // `super(args);` — appel du constructeur parent (1ère instruction d'un ctor)
+        let super_stmt = kw("super")
+            .ignore_then(
+                expr.clone()
+                    .separated_by(just(',').padded_by(ws()))
+                    .allow_trailing()
+                    .delimited_by(just('(').padded_by(ws()), just(')').padded_by(ws())),
+            )
+            .then_ignore(just(';').padded_by(ws()))
+            .map(Stmt::SuperCall);
+
         let break_stmt = kw("break")
             .then_ignore(just(';').padded_by(ws()))
             .to(Stmt::Break);
@@ -980,6 +995,7 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         choice((
             print_stmt,
             return_stmt,
+            super_stmt,
             break_stmt,
             continue_stmt,
             builtin_stmt,
@@ -1062,11 +1078,21 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
                 })
             });
 
-        let field = ty
-            .clone()
+        // Champ : `protected` optionnel (absence = private), jamais public.
+        let field = kw("protected")
+            .to(Visibility::Protected)
+            .or_not()
+            .map(|v| v.unwrap_or(Visibility::Private))
+            .then(ty.clone())
             .then(text::ident().padded_by(ws()))
             .then_ignore(just(';').padded_by(ws()))
-            .map(|(ty, name)| CM::F(Field { ty, name }));
+            .map(|((visibility, ty), name)| {
+                CM::F(Field {
+                    visibility,
+                    ty,
+                    name,
+                })
+            });
 
         choice((ctor, method, field))
     };

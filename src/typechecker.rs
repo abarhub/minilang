@@ -146,6 +146,8 @@ pub struct TypeChecker {
     expected_return: Type,
     /// true si la méthode courante est déclarée `mutable`
     current_method_mutable: bool,
+    /// true pendant la vérification du corps d'un constructeur (autorise `super`)
+    in_constructor: bool,
     errors: Vec<TypeError>,
 }
 
@@ -404,6 +406,7 @@ impl TypeChecker {
             current_enum: None,
             expected_return: Type::Void,
             current_method_mutable: true,
+            in_constructor: false,
             errors: vec![],
         }
     }
@@ -1164,6 +1167,26 @@ impl TypeChecker {
         self.current_class = Some(class.name.clone());
         self.type_params = class.type_params.iter().cloned().collect();
         debug!("check class '{}'", class.name);
+        // Le parent a-t-il un constructeur ? (→ super(...) obligatoire)
+        let parent_has_ctor = class
+            .parent
+            .as_ref()
+            .and_then(|p| p.ref_name())
+            .and_then(|pn| self.classes.get(pn))
+            .map(|pc| !pc.constructors.is_empty())
+            .unwrap_or(false);
+        if parent_has_ctor && class.constructors.is_empty() {
+            let pn = class
+                .parent
+                .as_ref()
+                .and_then(|p| p.ref_name())
+                .unwrap_or("");
+            self.err(format!(
+                "Classe '{}' : le parent '{}' a un constructeur — un constructeur \
+                 appelant super(...) est obligatoire",
+                class.name, pn
+            ));
+        }
         for ctor in &class.constructors.clone() {
             let mut env = TypeEnv::new();
             env.push();
@@ -1171,9 +1194,26 @@ impl TypeChecker {
                 env.declare(p.name.clone(), self.resolve(&p.ty));
             }
             self.expected_return = Type::Void;
-            for s in &ctor.body.clone() {
+            self.in_constructor = true;
+            // Règles de position de super(...) : uniquement en première instruction.
+            let first_is_super = matches!(ctor.body.first(), Some(Stmt::SuperCall(_)));
+            if parent_has_ctor && !first_is_super {
+                self.err(format!(
+                    "Constructeur de '{}' : doit commencer par super(...) \
+                     (le parent a un constructeur)",
+                    class.name
+                ));
+            }
+            for (i, s) in ctor.body.clone().iter().enumerate() {
+                if matches!(s, Stmt::SuperCall(_)) && i != 0 {
+                    self.err(format!(
+                        "Constructeur de '{}' : super(...) doit être la première instruction",
+                        class.name
+                    ));
+                }
                 self.check_stmt(s, &mut env);
             }
+            self.in_constructor = false;
         }
         for m in &class.methods.clone() {
             let mut env = TypeEnv::new();
@@ -1237,11 +1277,14 @@ impl TypeChecker {
 
             Stmt::Assign { target, value } => {
                 let vt = self.infer(value, env);
-                let tt = env
-                    .get(target)
-                    .cloned()
-                    .or_else(|| self.field_of_current_class(target))
-                    .map(|t| self.resolve(&t));
+                let tt = if let Some(t) = env.get(target).cloned() {
+                    Some(self.resolve(&t))
+                } else if let Some(t) = self.field_of_current_class(target) {
+                    self.check_own_field_access(target); // visibilité (private hérité interdit)
+                    Some(self.resolve(&t))
+                } else {
+                    None
+                };
                 if let (Some(vt), Some(tt)) = (vt, tt) {
                     if !self.is_compatible(&vt, &tt) {
                         self.err(format!(
@@ -1282,6 +1325,65 @@ impl TypeChecker {
                             }
                         }
                         None => warn!("Champ inconnu '{}.{}'", object, field),
+                    }
+                }
+            }
+
+            Stmt::SuperCall(args) => {
+                // Types des arguments (toujours inférés, pour vérifier les sous-expr)
+                let arg_tys: Vec<Option<Type>> = args.iter().map(|a| self.infer(a, env)).collect();
+                if !self.in_constructor {
+                    self.err(
+                        "super(...) autorisé uniquement comme première instruction d'un \
+                         constructeur"
+                            .to_string(),
+                    );
+                    return;
+                }
+                let parent = self
+                    .current_class
+                    .as_ref()
+                    .and_then(|cc| self.classes.get(cc))
+                    .and_then(|c| c.parent.clone());
+                let Some(parent) = parent else {
+                    self.err("super(...) sans classe parente".to_string());
+                    return;
+                };
+                let pn = parent.ref_name().unwrap_or("").to_string();
+                let Some(pc) = self.classes.get(&pn).cloned() else {
+                    return;
+                };
+                // Constructeur parent correspondant par arité
+                let Some(pctor) = pc
+                    .constructors
+                    .iter()
+                    .find(|c| c.params.len() == args.len())
+                else {
+                    self.err(format!(
+                        "super(...) : aucun constructeur de '{}' à {} argument(s)",
+                        pn,
+                        args.len()
+                    ));
+                    return;
+                };
+                // Substitution des paramètres de type du parent (extends Base<int>)
+                let subst: Vec<(String, Type)> = pc
+                    .type_params
+                    .iter()
+                    .cloned()
+                    .zip(parent.ref_args().iter().cloned())
+                    .collect();
+                for (i, (at, p)) in arg_tys.iter().zip(pctor.params.iter()).enumerate() {
+                    if let Some(at) = at {
+                        let expected = self.resolve(&substitute(&p.ty, &subst));
+                        if !self.is_compatible(at, &expected) {
+                            self.err(format!(
+                                "super(...) arg {} : type incompatible {} ≠ {}",
+                                i + 1,
+                                at,
+                                expected
+                            ));
+                        }
                     }
                 }
             }
@@ -1533,12 +1635,16 @@ impl TypeChecker {
                 if self.type_params.contains(name.as_str()) {
                     return Ok(Type::UserDefined(name.clone()));
                 }
-                let ty = env
-                    .get(name)
-                    .cloned()
-                    .or_else(|| self.field_of_current_class(name))
-                    .or_else(|| self.field_of_current_enum(name))
-                    .ok_or_else(|| TypeError(format!("Variable inconnue '{}'", name)))?;
+                let ty = if let Some(t) = env.get(name).cloned() {
+                    t
+                } else if let Some(t) = self.field_of_current_class(name) {
+                    self.check_own_field_access(name); // visibilité (private hérité interdit)
+                    t
+                } else if let Some(t) = self.field_of_current_enum(name) {
+                    t
+                } else {
+                    return Err(TypeError(format!("Variable inconnue '{}'", name)));
+                };
                 Ok(self.resolve(&ty))
             }
 
@@ -2461,27 +2567,56 @@ impl TypeChecker {
         }
     }
 
-    /// Vérifie la règle de privé-par-classe : accès autorisé depuis `this` ou
-    /// depuis une méthode de la même classe (ou sous-classe) — pattern Java/C++.
-    fn check_field_access_visibility(&mut self, obj_ty: &Type, field: &str, via_this: bool) {
-        let cn = match obj_ty {
-            Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
+    /// Vérifie la visibilité d'un accès `obj.field` (obj de type statique `obj_ty`).
+    /// - `private` (défaut) : accessible uniquement depuis la classe déclarante.
+    /// - `protected`        : accessible aussi depuis les sous-classes.
+    /// La règle s'applique même via `this` : `this.champHéritéPrivé` est interdit.
+    fn check_field_access_visibility(&mut self, obj_ty: &Type, field: &str, _via_this: bool) {
+        let (cn, args) = match obj_ty {
+            Type::UserDefined(n) => (n.clone(), vec![]),
+            Type::Generic(n, a) => (n.clone(), a.clone()),
             _ => return,
         };
         if !self.classes.contains_key(&cn) {
             return;
         }
-        if via_this {
+        let Some((decl, vis, _)) = self.find_field_decl(&cn, &args, field) else {
+            return; // champ inconnu : signalé ailleurs
+        };
+        let cc = self.current_class.clone();
+        // Accès depuis la classe qui déclare le champ : toujours autorisé.
+        if cc.as_deref() == Some(decl.as_str()) {
             return;
         }
-        let same_class = match &self.current_class {
-            Some(cc) => cc == &cn || self.is_subclass(cc, &cn),
-            None => false,
+        // Champ protected : autorisé depuis une sous-classe de la déclarante.
+        if vis == Visibility::Protected {
+            if let Some(cc) = &cc {
+                if self.is_subclass(cc, &decl) {
+                    return;
+                }
+            }
+        }
+        let kind = if vis == Visibility::Protected {
+            "protected : accessible depuis la classe déclarante et ses sous-classes"
+        } else {
+            "privé : accessible uniquement depuis la classe déclarante"
         };
-        if !same_class {
+        self.err(format!("Champ '{}' de '{}' est {}", field, decl, kind));
+    }
+
+    /// Vérifie l'accès par nom nu (`field`) à un champ depuis le corps de la
+    /// classe courante : un champ hérité `private` est inaccessible.
+    fn check_own_field_access(&mut self, field: &str) {
+        let Some(cc) = self.current_class.clone() else {
+            return;
+        };
+        if let Some((decl, vis, _)) = self.find_field_decl(&cc, &[], field) {
+            if decl == cc || vis == Visibility::Protected {
+                return; // champ propre, ou hérité protected
+            }
             self.err(format!(
-                "Champ '{}' de '{}' est privé : accessible uniquement depuis la classe",
-                field, cn
+                "Champ '{}' hérité de '{}' est privé : inaccessible depuis '{}'",
+                field, decl, cc
             ));
         }
     }
@@ -2578,6 +2713,17 @@ impl TypeChecker {
     /// Type d'un champ de `cn<args>` ou d'un ancêtre, avec substitution des args
     /// de type le long de la chaîne `extends` (`Sub extends Base<int>`).
     fn find_field_in(&self, cn: &str, args: &[Type], field: &str) -> Option<Type> {
+        self.find_field_decl(cn, args, field).map(|(_, _, ty)| ty)
+    }
+
+    /// Cherche un champ dans `cn<args>` et ses ancêtres. Retourne la classe qui
+    /// déclare le champ, sa visibilité, et son type substitué le long de la chaîne.
+    fn find_field_decl(
+        &self,
+        cn: &str,
+        args: &[Type],
+        field: &str,
+    ) -> Option<(String, Visibility, Type)> {
         let c = self.classes.get(cn)?;
         let subst: Vec<(String, Type)> = c
             .type_params
@@ -2586,12 +2732,16 @@ impl TypeChecker {
             .zip(args.iter().cloned())
             .collect();
         if let Some(f) = c.fields.iter().find(|f| f.name == field) {
-            return Some(self.resolve(&substitute(&f.ty, &subst)));
+            return Some((
+                cn.to_string(),
+                f.visibility.clone(),
+                self.resolve(&substitute(&f.ty, &subst)),
+            ));
         }
         if let Some(p) = &c.parent {
             let pn = p.ref_name().unwrap_or("");
             let pargs: Vec<Type> = p.ref_args().iter().map(|a| substitute(a, &subst)).collect();
-            return self.find_field_in(pn, &pargs, field);
+            return self.find_field_decl(pn, &pargs, field);
         }
         None
     }

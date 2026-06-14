@@ -95,7 +95,7 @@ fn test_valid_inheritance_subtype() {
             string getName() { return name; }
         }
         class Dog extends Animal {
-            Dog(string n) { name = n; }
+            Dog(string n) { super(n); }
         }
         int main() {
             Dog d = new Dog("Rex");
@@ -207,10 +207,10 @@ fn test_valid_method_chain_3_levels() {
             int get() { return val; }
         }
         class B extends A {
-            B(int v) { val = v; }
+            B(int v) { super(v); }
         }
         class C extends B {
-            C(int v) { val = v; }
+            C(int v) { super(v); }
         }
         int main() {
             C c = new C(7);

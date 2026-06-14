@@ -41,8 +41,6 @@ Points volontairement laissés de côté au fil des fonctionnalités récentes.
   * confinement symlink adversarial (niveau OS : `openat`/`RESOLVE_BENEATH`, p. ex. crate `cap-std`) — l'actuel est best-effort coopératif (canonicalisation + containment, TOCTOU résiduel)
 * limitations connues
   * positions d'erreur multi-fichiers : `[sources] include` concatène, donc les positions de syntaxe ne tracent pas le fichier d'origine
-  * appel du constructeur parent (`super(...)`) non implémenté — une sous-classe ne peut pas initialiser les champs hérités via le constructeur du parent
-  * accès aux champs hérités d'une classe parente : les champs sont privés à la classe déclarante (pas de `protected` sur les champs), donc une sous-classe ne peut pas y accéder directement
 * choix délibérés, revisitables
   * pas d'arithmétique sur `byte` (ajoutable en enroulement mod 256)
   * `inject` réservé à `main` et aux fonctions top-level (pas dans les méthodes de classe)
