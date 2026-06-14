@@ -7,7 +7,11 @@ use mini_parser::typechecker::check_source;
 
 fn assert_ok(src: &str) {
     if let Err(errs) = check_source(src) {
-        panic!("Typecheck inattendu échoué :\n{}\n---\n{}", src, errs.join("\n"));
+        panic!(
+            "Typecheck inattendu échoué :\n{}\n---\n{}",
+            src,
+            errs.join("\n")
+        );
     }
 }
 
@@ -33,7 +37,8 @@ fn assert_error(src: &str, expected_fragment: &str) {
 
 #[test]
 fn test_valid_primitives() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             int    i = 42;
             float  f = 3.14;
@@ -42,12 +47,14 @@ fn test_valid_primitives() {
             string s = "ok";
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_arithmetic() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             int   a = 2 + 3 * 4 - 1;
             float b = 1.5 + 2.5;
@@ -55,12 +62,14 @@ fn test_valid_arithmetic() {
             int   d = 10 % 3;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_class_with_constructor() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Point {
             int x;
             int y;
@@ -72,12 +81,14 @@ fn test_valid_class_with_constructor() {
             int v = p.getX();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_inheritance_subtype() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Animal {
             string name;
             Animal(string n) { name = n; }
@@ -91,12 +102,14 @@ fn test_valid_inheritance_subtype() {
             string s = d.getName();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_interface_implementation() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         interface Describable {
             void describe();
         }
@@ -110,23 +123,27 @@ fn test_valid_interface_implementation() {
             c.describe();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_if_bool_condition() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             bool b = 3 > 2;
             if (b) { print("ok"); }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_for_loop() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             int sum = 0;
             for (int i = 0; i < 10; i = i + 1) {
@@ -134,23 +151,27 @@ fn test_valid_for_loop() {
             }
             return sum;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_while_loop() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             int i = 0;
             while (i < 5) { i = i + 1; }
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_generic_class() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Box<T> {
             T value;
             Box(T v) { value = v; }
@@ -160,22 +181,26 @@ fn test_valid_generic_class() {
             Box<int> b = new Box<int>(99);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_string_concat() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             string s = "Hello" + ", " + "world!";
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_valid_method_chain_3_levels() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class A {
             int val;
             A(int v) { val = v; }
@@ -192,33 +217,25 @@ fn test_valid_method_chain_3_levels() {
             int x = c.get();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Erreurs de type ───────────────────────────────────────────────────────────
 
 #[test]
 fn test_error_type_mismatch_int_string() {
-    assert_error(
-        r#"int main() { string s = 42; return 0; }"#,
-        "incompatible",
-    );
+    assert_error(r#"int main() { string s = 42; return 0; }"#, "incompatible");
 }
 
 #[test]
 fn test_error_type_mismatch_bool_int() {
-    assert_error(
-        r#"int main() { bool b = 1; return 0; }"#,
-        "incompatible",
-    );
+    assert_error(r#"int main() { bool b = 1; return 0; }"#, "incompatible");
 }
 
 #[test]
 fn test_error_return_wrong_type() {
-    assert_error(
-        r#"int main() { return "oops"; }"#,
-        "return",
-    );
+    assert_error(r#"int main() { return "oops"; }"#, "return");
 }
 
 #[test]
@@ -364,10 +381,7 @@ fn test_error_arithmetic_on_bool() {
 #[test]
 fn test_error_logic_on_int() {
     // && attend deux bool, pas deux int
-    assert_error(
-        r#"int main() { bool b = 1 && 2; return 0; }"#,
-        "bool",
-    );
+    assert_error(r#"int main() { bool b = 1 && 2; return 0; }"#, "bool");
 }
 
 #[test]
@@ -385,70 +399,85 @@ fn test_error_inheritance_cycle() {
 
 #[test]
 fn test_int_to_float_promotion_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             float f = 42;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_float_to_double_promotion_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             double d = 3.14;
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── char ──────────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_char_declaration_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             char c = 'a';
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_char_comparison_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             char c = 'x';
             bool b = (c == 'x');
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_char_not_compatible_with_int() {
-    assert_error(r#"
+    assert_error(
+        r#"
         int main() {
             int n = 'a';
             return 0;
         }
-    "#, "incompatible");
+    "#,
+        "incompatible",
+    );
 }
 
 #[test]
 fn test_char_not_compatible_with_string() {
-    assert_error(r#"
+    assert_error(
+        r#"
         int main() {
             string s = 'a';
             return 0;
         }
-    "#, "incompatible");
+    "#,
+        "incompatible",
+    );
 }
 
 #[test]
 fn test_char_escape_sequences_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         int main() {
             char nl = '\n';
             char tb = '\t';
@@ -456,14 +485,16 @@ fn test_char_escape_sequences_ok() {
             char qt = '\'';
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Object et equals ──────────────────────────────────────────────────────────
 
 #[test]
 fn test_object_equals_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Foo { int x; Foo(int a) { x = a; } }
         int main() {
             Foo a = new Foo(1);
@@ -471,12 +502,14 @@ fn test_object_equals_ok() {
             bool r = a.equals(b);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_object_param_accepts_subclass() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Animal { string name; }
         int check(Object o) { return 1; }
         int main() {
@@ -484,12 +517,14 @@ fn test_object_param_accepts_subclass() {
             int r = check(a);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_equals_override_ok() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Point {
             int x;
             Point(int a) { x = a; }
@@ -501,17 +536,20 @@ fn test_equals_override_ok() {
             bool r = p.equals(q);
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn test_subclass_is_compatible_with_object() {
-    assert_ok(r#"
+    assert_ok(
+        r#"
         class Node { int val; Node(int v) { val = v; } }
         int main() {
             Node n = new Node(5);
             Object o = n;
             return 0;
         }
-    "#);
+    "#,
+    );
 }

@@ -2,9 +2,9 @@
 //  Typechecker
 // ─────────────────────────────────────────────────────────────────────────────
 
-use std::collections::{HashMap, HashSet};
-use log::{debug, warn};
 use crate::ast::*;
+use log::{debug, warn};
+use std::collections::{HashMap, HashSet};
 
 // ── Erreur ────────────────────────────────────────────────────────────────────
 
@@ -22,20 +22,34 @@ macro_rules! type_err { ($($a:tt)*) => { Err(TypeError(format!($($a)*))) }; }
 // ── Environnement de types ────────────────────────────────────────────────────
 
 struct TypeEnv {
-    scopes:      Vec<HashMap<String, Type>>,
+    scopes: Vec<HashMap<String, Type>>,
     qual_scopes: Vec<HashMap<String, Qualifier>>,
 }
 
 impl TypeEnv {
-    fn new() -> Self { Self { scopes: vec![HashMap::new()], qual_scopes: vec![HashMap::new()] } }
-    fn push(&mut self) { self.scopes.push(HashMap::new()); self.qual_scopes.push(HashMap::new()); }
-    fn pop(&mut self)  {
-        if self.scopes.len() > 1 { self.scopes.pop(); self.qual_scopes.pop(); }
+    fn new() -> Self {
+        Self {
+            scopes: vec![HashMap::new()],
+            qual_scopes: vec![HashMap::new()],
+        }
+    }
+    fn push(&mut self) {
+        self.scopes.push(HashMap::new());
+        self.qual_scopes.push(HashMap::new());
+    }
+    fn pop(&mut self) {
+        if self.scopes.len() > 1 {
+            self.scopes.pop();
+            self.qual_scopes.pop();
+        }
     }
 
     fn declare(&mut self, name: String, ty: Type) {
         self.scopes.last_mut().unwrap().insert(name.clone(), ty);
-        self.qual_scopes.last_mut().unwrap().insert(name, Qualifier::Mutable);
+        self.qual_scopes
+            .last_mut()
+            .unwrap()
+            .insert(name, Qualifier::Mutable);
     }
     fn declare_qualified(&mut self, name: String, ty: Type, qual: Qualifier) {
         self.scopes.last_mut().unwrap().insert(name.clone(), ty);
@@ -45,14 +59,19 @@ impl TypeEnv {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
     fn get_qualifier(&self, name: &str) -> Qualifier {
-        self.qual_scopes.iter().rev()
+        self.qual_scopes
+            .iter()
+            .rev()
             .find_map(|s| s.get(name))
             .cloned()
             .unwrap_or(Qualifier::Mutable)
     }
     fn set(&mut self, name: &str, ty: Type) {
         for s in self.scopes.iter_mut().rev() {
-            if s.contains_key(name) { s.insert(name.to_string(), ty); return; }
+            if s.contains_key(name) {
+                s.insert(name.to_string(), ty);
+                return;
+            }
         }
         self.scopes.last_mut().unwrap().insert(name.to_string(), ty);
     }
@@ -61,7 +80,9 @@ impl TypeEnv {
     fn snapshot(&self) -> Vec<(String, Type)> {
         let mut result: HashMap<String, Type> = HashMap::new();
         for scope in &self.scopes {
-            for (k, v) in scope { result.insert(k.clone(), v.clone()); }
+            for (k, v) in scope {
+                result.insert(k.clone(), v.clone());
+            }
         }
         result.into_iter().collect()
     }
@@ -71,12 +92,16 @@ impl TypeEnv {
 
 fn substitute(ty: &Type, subst: &[(String, Type)]) -> Type {
     match ty {
-        Type::UserDefined(n) => subst.iter()
-            .find(|(k, _)| k == n).map(|(_, v)| v.clone())
+        Type::UserDefined(n) => subst
+            .iter()
+            .find(|(k, _)| k == n)
+            .map(|(_, v)| v.clone())
             .unwrap_or_else(|| ty.clone()),
         Type::Array(i) => Type::Array(Box::new(substitute(i, subst))),
-        Type::Generic(n, args) =>
-            Type::Generic(n.clone(), args.iter().map(|a| substitute(a, subst)).collect()),
+        Type::Generic(n, args) => Type::Generic(
+            n.clone(),
+            args.iter().map(|a| substitute(a, subst)).collect(),
+        ),
         Type::FnType(params, ret) => Type::FnType(
             params.iter().map(|p| substitute(p, subst)).collect(),
             Box::new(substitute(ret, subst)),
@@ -88,11 +113,16 @@ fn substitute(ty: &Type, subst: &[(String, Type)]) -> Type {
 /// Applique une substitution de paramètres de type à une signature de méthode.
 fn subst_method_sig(sig: &MethodSig, subst: &[(String, Type)]) -> MethodSig {
     MethodSig {
-        is_mutable:  sig.is_mutable,
+        is_mutable: sig.is_mutable,
         return_type: substitute(&sig.return_type, subst),
-        name:        sig.name.clone(),
-        params:      sig.params.iter()
-            .map(|p| Param { name: p.name.clone(), ty: substitute(&p.ty, subst) })
+        name: sig.name.clone(),
+        params: sig
+            .params
+            .iter()
+            .map(|p| Param {
+                name: p.name.clone(),
+                ty: substitute(&p.ty, subst),
+            })
             .collect(),
     }
 }
@@ -100,23 +130,23 @@ fn subst_method_sig(sig: &MethodSig, subst: &[(String, Type)]) -> MethodSig {
 // ── TypeChecker ───────────────────────────────────────────────────────────────
 
 pub struct TypeChecker {
-    classes:         HashMap<String, ClassDef>,
-    interfaces:      HashMap<String, InterfaceDef>,
-    enums:           HashMap<String, EnumDef>,
-    aliases:                HashMap<String, Type>,
-    funcs:                  HashMap<String, FuncDef>,
-    modules:                Vec<ModuleDef>,
+    classes: HashMap<String, ClassDef>,
+    interfaces: HashMap<String, InterfaceDef>,
+    enums: HashMap<String, EnumDef>,
+    aliases: HashMap<String, Type>,
+    funcs: HashMap<String, FuncDef>,
+    modules: Vec<ModuleDef>,
     /// Bindings explicites issus des modules : interface → service concret
-    binds_to:               HashMap<String, String>,
+    binds_to: HashMap<String, String>,
     /// Valeurs de configuration issues des modules : service → args du `with`
-    with_values:            HashMap<String, Vec<Expr>>,
-    type_params:            HashSet<String>,
-    current_class:          Option<String>,
-    current_enum:           Option<String>,
-    expected_return:        Type,
+    with_values: HashMap<String, Vec<Expr>>,
+    type_params: HashSet<String>,
+    current_class: Option<String>,
+    current_enum: Option<String>,
+    expected_return: Type,
     /// true si la méthode courante est déclarée `mutable`
     current_method_mutable: bool,
-    errors:                 Vec<TypeError>,
+    errors: Vec<TypeError>,
 }
 
 impl TypeChecker {
@@ -126,7 +156,7 @@ impl TypeChecker {
     fn capitalize(s: &str) -> String {
         let mut c = s.chars();
         match c.next() {
-            None    => String::new(),
+            None => String::new(),
             Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
         }
     }
@@ -134,7 +164,9 @@ impl TypeChecker {
     /// Convertit un `RecordDef` en `ClassDef` en synthétisant les méthodes
     /// générées automatiquement (getters, copy, equals, toString, hashCode).
     /// Version publique pour que l'interpréteur puisse aussi l'utiliser.
-    pub fn record_to_class_pub(rd: &RecordDef) -> ClassDef { Self::record_to_class(rd) }
+    pub fn record_to_class_pub(rd: &RecordDef) -> ClassDef {
+        Self::record_to_class(rd)
+    }
 
     fn record_to_class(rd: &RecordDef) -> ClassDef {
         let mut methods: Vec<Method> = vec![];
@@ -142,102 +174,121 @@ impl TypeChecker {
         // ── Getters — corps réel pour que l'interpréteur puisse les exécuter
         for field in &rd.fields {
             methods.push(Method {
-                visibility:  Visibility::Public,
-                is_mutable:  false,
+                visibility: Visibility::Public,
+                is_mutable: false,
                 return_type: field.ty.clone(),
-                name:        format!("get{}", Self::capitalize(&field.name)),
-                params:      vec![],
+                name: format!("get{}", Self::capitalize(&field.name)),
+                params: vec![],
                 // `return fieldName;` — le champ est accessible via this dans l'interpréteur
-                body:        vec![Stmt::Return(Some(Expr::FieldAccess {
+                body: vec![Stmt::Return(Some(Expr::FieldAccess {
                     object: Box::new(Expr::Ident("this".to_string())),
-                    field:  field.name.clone(),
+                    field: field.name.clone(),
                 }))],
             });
         }
 
         // ── copy(Option<T1> f1, Option<T2> f2, ...) ───────────────────────
-        let copy_params: Vec<Param> = rd.fields.iter().map(|f| Param {
-            name: f.name.clone(),
-            ty:   Type::Generic("Option".to_string(), vec![f.ty.clone()]),
-        }).collect();
+        let copy_params: Vec<Param> = rd
+            .fields
+            .iter()
+            .map(|f| Param {
+                name: f.name.clone(),
+                ty: Type::Generic("Option".to_string(), vec![f.ty.clone()]),
+            })
+            .collect();
         let copy_return = if rd.type_params.is_empty() {
             Type::UserDefined(rd.name.clone())
         } else {
             Type::Generic(
                 rd.name.clone(),
-                rd.type_params.iter().map(|p| Type::UserDefined(p.clone())).collect(),
+                rd.type_params
+                    .iter()
+                    .map(|p| Type::UserDefined(p.clone()))
+                    .collect(),
             )
         };
         methods.push(Method {
-            visibility:  Visibility::Public,
-            is_mutable:  false,
+            visibility: Visibility::Public,
+            is_mutable: false,
             return_type: copy_return,
-            name:        "copy".to_string(),
-            params:      copy_params,
-            body:        vec![Stmt::Builtin],
+            name: "copy".to_string(),
+            params: copy_params,
+            body: vec![Stmt::Builtin],
         });
 
         // ── toString() ────────────────────────────────────────────────────
         methods.push(Method {
-            visibility:  Visibility::Public,
-            is_mutable:  false,
+            visibility: Visibility::Public,
+            is_mutable: false,
             return_type: Type::Str,
-            name:        "toString".to_string(),
-            params:      vec![],
-            body:        vec![Stmt::Builtin],
+            name: "toString".to_string(),
+            params: vec![],
+            body: vec![Stmt::Builtin],
         });
 
         // ── equals(Object) ────────────────────────────────────────────────
         methods.push(Method {
-            visibility:  Visibility::Public,
-            is_mutable:  false,
+            visibility: Visibility::Public,
+            is_mutable: false,
             return_type: Type::Bool,
-            name:        "equals".to_string(),
-            params:      vec![Param { name: "other".to_string(),
-                                      ty:   Type::UserDefined("Object".to_string()) }],
-            body:        vec![Stmt::Builtin],
+            name: "equals".to_string(),
+            params: vec![Param {
+                name: "other".to_string(),
+                ty: Type::UserDefined("Object".to_string()),
+            }],
+            body: vec![Stmt::Builtin],
         });
 
         // ── hashCode() ────────────────────────────────────────────────────
         methods.push(Method {
-            visibility:  Visibility::Public,
-            is_mutable:  false,
+            visibility: Visibility::Public,
+            is_mutable: false,
             return_type: Type::Int,
-            name:        "hashCode".to_string(),
-            params:      vec![],
-            body:        vec![Stmt::Builtin],
+            name: "hashCode".to_string(),
+            params: vec![],
+            body: vec![Stmt::Builtin],
         });
 
         // ── Méthodes custom de l'utilisateur ──────────────────────────────
         methods.extend(rd.methods.clone());
 
         // ── Constructeur implicite : `this.fieldN = fieldN;` pour chaque champ
-        let ctor_body: Vec<Stmt> = rd.fields.iter()
+        let ctor_body: Vec<Stmt> = rd
+            .fields
+            .iter()
             .map(|f| Stmt::FieldAssign {
                 object: "this".to_string(),
-                field:  f.name.clone(),
-                value:  Expr::Ident(f.name.clone()),
+                field: f.name.clone(),
+                value: Expr::Ident(f.name.clone()),
             })
             .collect();
         let constructor = Constructor {
-            params: rd.fields.iter()
-                .map(|f| Param { name: f.name.clone(), ty: f.ty.clone() })
+            params: rd
+                .fields
+                .iter()
+                .map(|f| Param {
+                    name: f.name.clone(),
+                    ty: f.ty.clone(),
+                })
                 .collect(),
             body: ctor_body,
         };
 
         ClassDef {
-            is_service:             false,
-            is_transient:           false,
-            is_mut:                 true,
-            name:                   rd.name.clone(),
-            type_params:            rd.type_params.clone(),
+            is_service: false,
+            is_transient: false,
+            is_mut: true,
+            name: rd.name.clone(),
+            type_params: rd.type_params.clone(),
             type_param_constraints: rd.type_param_constraints.clone(),
-            parent:                 Some(Type::UserDefined("Record".to_string())),
-            implements:             rd.implements.iter()
-                                        .map(|s| Type::UserDefined(s.clone())).collect(),
-            fields:                 rd.fields.clone(),
-            constructors:           vec![constructor],
+            parent: Some(Type::UserDefined("Record".to_string())),
+            implements: rd
+                .implements
+                .iter()
+                .map(|s| Type::UserDefined(s.clone()))
+                .collect(),
+            fields: rd.fields.clone(),
+            constructors: vec![constructor],
             methods,
         }
     }
@@ -246,78 +297,114 @@ impl TypeChecker {
         // Records en premier, puis classes — les classes utilisateur ont
         // priorité sur un record stdlib du même nom (ex. Pair), comme dans
         // l'interpréteur (Interpreter::new_with_print).
-        let mut classes: HashMap<String, ClassDef> = program.records.iter()
+        let mut classes: HashMap<String, ClassDef> = program
+            .records
+            .iter()
             .map(|rd| (rd.name.clone(), Self::record_to_class(rd)))
             .collect();
         for c in &program.classes {
             classes.insert(c.name.clone(), c.clone());
         }
-        classes.entry("Object".to_string()).or_insert_with(|| ClassDef {
-            is_service: false,
-            is_transient: false,
-            is_mut: true,
-            name: "Object".to_string(),
-            type_params: vec![],
-            type_param_constraints: vec![],
-            parent: None::<Type>,
-            implements: vec![],
-            fields: vec![],
-            constructors: vec![],
-            methods: vec![Method {
-                visibility:  Visibility::Public,
-                is_mutable:  false,
-                return_type: Type::Bool,
-                name: "equals".to_string(),
-                params: vec![Param { name: "other".to_string(), ty: Type::UserDefined("Object".to_string()) }],
-                body: vec![Stmt::Builtin],
-            }],
-        });
-        // ── Classe abstraite Record — ancêtre de tous les records ─────────
-        classes.entry("Record".to_string()).or_insert_with(|| ClassDef {
-            is_service: false,
-            is_transient: false,
-            is_mut: true,
-            name: "Record".to_string(),
-            type_params: vec![],
-            type_param_constraints: vec![],
-            parent: Some(Type::UserDefined("Object".to_string())),
-            implements: vec![],
-            fields: vec![],
-            constructors: vec![],
-            methods: vec![
-                Method {
-                    visibility: Visibility::Public, is_mutable: false,
-                    return_type: Type::Bool, name: "equals".to_string(),
-                    params: vec![Param { name: "other".to_string(), ty: Type::UserDefined("Object".to_string()) }],
+        classes
+            .entry("Object".to_string())
+            .or_insert_with(|| ClassDef {
+                is_service: false,
+                is_transient: false,
+                is_mut: true,
+                name: "Object".to_string(),
+                type_params: vec![],
+                type_param_constraints: vec![],
+                parent: None::<Type>,
+                implements: vec![],
+                fields: vec![],
+                constructors: vec![],
+                methods: vec![Method {
+                    visibility: Visibility::Public,
+                    is_mutable: false,
+                    return_type: Type::Bool,
+                    name: "equals".to_string(),
+                    params: vec![Param {
+                        name: "other".to_string(),
+                        ty: Type::UserDefined("Object".to_string()),
+                    }],
                     body: vec![Stmt::Builtin],
-                },
-                Method {
-                    visibility: Visibility::Public, is_mutable: false,
-                    return_type: Type::Str, name: "toString".to_string(),
-                    params: vec![], body: vec![Stmt::Builtin],
-                },
-                Method {
-                    visibility: Visibility::Public, is_mutable: false,
-                    return_type: Type::Int, name: "hashCode".to_string(),
-                    params: vec![], body: vec![Stmt::Builtin],
-                },
-            ],
-        });
+                }],
+            });
+        // ── Classe abstraite Record — ancêtre de tous les records ─────────
+        classes
+            .entry("Record".to_string())
+            .or_insert_with(|| ClassDef {
+                is_service: false,
+                is_transient: false,
+                is_mut: true,
+                name: "Record".to_string(),
+                type_params: vec![],
+                type_param_constraints: vec![],
+                parent: Some(Type::UserDefined("Object".to_string())),
+                implements: vec![],
+                fields: vec![],
+                constructors: vec![],
+                methods: vec![
+                    Method {
+                        visibility: Visibility::Public,
+                        is_mutable: false,
+                        return_type: Type::Bool,
+                        name: "equals".to_string(),
+                        params: vec![Param {
+                            name: "other".to_string(),
+                            ty: Type::UserDefined("Object".to_string()),
+                        }],
+                        body: vec![Stmt::Builtin],
+                    },
+                    Method {
+                        visibility: Visibility::Public,
+                        is_mutable: false,
+                        return_type: Type::Str,
+                        name: "toString".to_string(),
+                        params: vec![],
+                        body: vec![Stmt::Builtin],
+                    },
+                    Method {
+                        visibility: Visibility::Public,
+                        is_mutable: false,
+                        return_type: Type::Int,
+                        name: "hashCode".to_string(),
+                        params: vec![],
+                        body: vec![Stmt::Builtin],
+                    },
+                ],
+            });
         Self {
             classes,
-            interfaces:      program.interfaces.iter().map(|i| (i.name.clone(), i.clone())).collect(),
-            enums:           program.enums.iter().map(|e| (e.name.clone(), e.clone())).collect(),
-            aliases:         program.type_aliases.iter().map(|a| (a.name.clone(), a.ty.clone())).collect(),
-            funcs:           program.funcs.iter().map(|f| (f.name.clone(), f.clone())).collect(),
-            modules:         program.modules.clone(),
-            binds_to:        HashMap::new(),
-            with_values:     HashMap::new(),
-            type_params:            HashSet::new(),
-            current_class:          None,
-            current_enum:           None,
-            expected_return:        Type::Void,
+            interfaces: program
+                .interfaces
+                .iter()
+                .map(|i| (i.name.clone(), i.clone()))
+                .collect(),
+            enums: program
+                .enums
+                .iter()
+                .map(|e| (e.name.clone(), e.clone()))
+                .collect(),
+            aliases: program
+                .type_aliases
+                .iter()
+                .map(|a| (a.name.clone(), a.ty.clone()))
+                .collect(),
+            funcs: program
+                .funcs
+                .iter()
+                .map(|f| (f.name.clone(), f.clone()))
+                .collect(),
+            modules: program.modules.clone(),
+            binds_to: HashMap::new(),
+            with_values: HashMap::new(),
+            type_params: HashSet::new(),
+            current_class: None,
+            current_enum: None,
+            expected_return: Type::Void,
             current_method_mutable: true,
-            errors:                 vec![],
+            errors: vec![],
         }
     }
 
@@ -328,12 +415,17 @@ impl TypeChecker {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fn err(&mut self, msg: String) { self.errors.push(TypeError(msg)); }
+    fn err(&mut self, msg: String) {
+        self.errors.push(TypeError(msg));
+    }
 
     fn infer(&mut self, expr: &Expr, env: &TypeEnv) -> Option<Type> {
         match self.infer_expr(expr, env) {
-            Ok(t)  => Some(t),
-            Err(e) => { self.errors.push(e); None }
+            Ok(t) => Some(t),
+            Err(e) => {
+                self.errors.push(e);
+                None
+            }
         }
     }
 
@@ -351,14 +443,14 @@ impl TypeChecker {
                     ty.clone()
                 }
             }
-            Type::Array(inner)       => Type::Array(Box::new(self.resolve(inner))),
+            Type::Array(inner) => Type::Array(Box::new(self.resolve(inner))),
             Type::FnType(params, ret) => Type::FnType(
                 params.iter().map(|p| self.resolve(p)).collect(),
                 Box::new(self.resolve(ret)),
             ),
-            Type::Generic(n, args)   => Type::Generic(
-                n.clone(), args.iter().map(|a| self.resolve(a)).collect(),
-            ),
+            Type::Generic(n, args) => {
+                Type::Generic(n.clone(), args.iter().map(|a| self.resolve(a)).collect())
+            }
             _ => ty.clone(),
         }
     }
@@ -373,13 +465,19 @@ impl TypeChecker {
         self.check_services();
         self.check_enums(program);
         self.check_records(program);
-        for class in &program.classes.clone() { self.check_class(class); }
-        for func in &program.funcs.clone() { self.check_func(func); }
+        for class in &program.classes.clone() {
+            self.check_class(class);
+        }
+        for func in &program.funcs.clone() {
+            self.check_func(func);
+        }
         // main est optionnel (fichiers de tests) — le mode run exige sa présence
         if let Some(main) = &program.main {
             let mut env = TypeEnv::new();
             self.expected_return = Type::Int;
-            for stmt in &main.body.clone() { self.check_stmt(stmt, &mut env); }
+            for stmt in &main.body.clone() {
+                self.check_stmt(stmt, &mut env);
+            }
         }
     }
 
@@ -393,26 +491,32 @@ impl TypeChecker {
                     self.err(format!(
                         "Record '{}' : la méthode '{}' ne peut pas être mutable \
                          (les records sont immuables)",
-                        rd.name, m.name));
+                        rd.name, m.name
+                    ));
                 }
                 if m.visibility != Visibility::Public {
                     self.err(format!(
                         "Record '{}' : la méthode '{}' doit être publique \
                          (les méthodes privées/protected ne sont pas autorisées dans un record)",
-                        rd.name, m.name));
+                        rd.name, m.name
+                    ));
                 }
             }
             // Vérifier les interfaces implémentées (méthodes propres + héritées)
             for iname in &rd.implements.clone() {
                 if !self.interfaces.contains_key(iname) {
-                    self.err(format!("Record '{}' implements '{}' inconnu", rd.name, iname));
+                    self.err(format!(
+                        "Record '{}' implements '{}' inconnu",
+                        rd.name, iname
+                    ));
                 } else {
                     let synth = Self::record_to_class(rd);
                     for sig in self.iface_all_methods(iname) {
                         if synth.methods.iter().find(|m| m.name == sig.name).is_none() {
                             self.err(format!(
                                 "Record '{}' n'implémente pas '{}.{}()'",
-                                rd.name, iname, sig.name));
+                                rd.name, iname, sig.name
+                            ));
                         }
                     }
                 }
@@ -429,19 +533,27 @@ impl TypeChecker {
             if func.return_type != Type::Void {
                 self.err(format!(
                     "Fonction de test '{}' : doit retourner void (trouvé {})",
-                    func.name, func.return_type));
+                    func.name, func.return_type
+                ));
             }
             if !func.params.is_empty() {
                 self.err(format!(
                     "Fonction de test '{}' : ne doit pas avoir de paramètres \
-                     ({} trouvé(s))", func.name, func.params.len()));
+                     ({} trouvé(s))",
+                    func.name,
+                    func.params.len()
+                ));
             }
         }
         let mut env = TypeEnv::new();
-        for p in &func.params { env.declare(p.name.clone(), p.ty.clone()); }
+        for p in &func.params {
+            env.declare(p.name.clone(), p.ty.clone());
+        }
         let saved = self.expected_return.clone();
         self.expected_return = func.return_type.clone();
-        for stmt in &func.body.clone() { self.check_stmt(stmt, &mut env); }
+        for stmt in &func.body.clone() {
+            self.check_stmt(stmt, &mut env);
+        }
         self.expected_return = saved;
     }
 
@@ -451,12 +563,18 @@ impl TypeChecker {
     /// 0 argument est toléré (usage « brut », paramètres non liés) ; sinon le
     /// nombre doit correspondre exactement aux paramètres du supertype.
     fn check_type_arg_arity(
-        &mut self, who: &str, kw: &str, target: &str, expected: usize, provided: usize,
+        &mut self,
+        who: &str,
+        kw: &str,
+        target: &str,
+        expected: usize,
+        provided: usize,
     ) {
         if provided != 0 && provided != expected {
             self.err(format!(
                 "'{}' {} '{}' : {} argument(s) de type attendu(s), {} fourni(s)",
-                who, kw, target, expected, provided));
+                who, kw, target, expected, provided
+            ));
         }
     }
 
@@ -468,7 +586,12 @@ impl TypeChecker {
                 match self.classes.get(pn) {
                     None => self.err(format!("Classe '{}' extends '{}' inconnu", name, pn)),
                     Some(pc) => self.check_type_arg_arity(
-                        name, "extends", pn, pc.type_params.len(), p.ref_args().len()),
+                        name,
+                        "extends",
+                        pn,
+                        pc.type_params.len(),
+                        p.ref_args().len(),
+                    ),
                 }
             }
             for iface in &class.implements {
@@ -476,7 +599,12 @@ impl TypeChecker {
                 match self.interfaces.get(in_) {
                     None => self.err(format!("Classe '{}' implements '{}' inconnu", name, in_)),
                     Some(i) => self.check_type_arg_arity(
-                        name, "implements", in_, i.type_params.len(), iface.ref_args().len()),
+                        name,
+                        "implements",
+                        in_,
+                        i.type_params.len(),
+                        iface.ref_args().len(),
+                    ),
                 }
             }
             if self.has_cycle(name) {
@@ -489,13 +617,19 @@ impl TypeChecker {
         let mut visited = HashSet::new();
         let mut cur = start.to_string();
         loop {
-            if visited.contains(&cur) { return true; }
+            if visited.contains(&cur) {
+                return true;
+            }
             visited.insert(cur.clone());
-            match self.classes.get(&cur).and_then(|c| c.parent.as_ref())
-                .and_then(|p| p.ref_name()).map(|s| s.to_string())
+            match self
+                .classes
+                .get(&cur)
+                .and_then(|c| c.parent.as_ref())
+                .and_then(|p| p.ref_name())
+                .map(|s| s.to_string())
             {
                 Some(p) => cur = p,
-                None    => return false,
+                None => return false,
             }
         }
     }
@@ -509,7 +643,10 @@ impl TypeChecker {
                     // Méthodes de l'interface ET de ses parents (transitif)
                     for sig in self.iface_all_methods(iname) {
                         if self.find_method_def(cn, &sig.name).is_none() {
-                            self.err(format!("'{}' n'implémente pas '{}.{}()'", cn, iname, sig.name));
+                            self.err(format!(
+                                "'{}' n'implémente pas '{}.{}()'",
+                                cn, iname, sig.name
+                            ));
                         }
                     }
                 }
@@ -527,12 +664,19 @@ impl TypeChecker {
                 match self.interfaces.get(pn) {
                     None => self.err(format!(
                         "Interface '{}' extends '{}' inconnu (ou n'est pas une interface)",
-                        name, pn)),
+                        name, pn
+                    )),
                     Some(pi) => self.check_type_arg_arity(
-                        name, "extends", pn, pi.type_params.len(), p.ref_args().len()),
+                        name,
+                        "extends",
+                        pn,
+                        pi.type_params.len(),
+                        p.ref_args().len(),
+                    ),
                 }
             }
-            let mut path = vec![]; let mut seen = HashSet::new();
+            let mut path = vec![];
+            let mut seen = HashSet::new();
             if self.iface_cycle(name, &mut path, &mut seen) {
                 self.err(format!("Cycle d'héritage d'interface pour '{}'", name));
             }
@@ -541,12 +685,18 @@ impl TypeChecker {
 
     /// DFS de détection de cycle dans le graphe d'héritage d'interfaces.
     fn iface_cycle(&self, cur: &str, path: &mut Vec<String>, seen: &mut HashSet<String>) -> bool {
-        if path.iter().any(|p| p == cur) { return true; }
-        if seen.contains(cur) { return false; }
+        if path.iter().any(|p| p == cur) {
+            return true;
+        }
+        if seen.contains(cur) {
+            return false;
+        }
         path.push(cur.to_string());
         if let Some(i) = self.interfaces.get(cur).cloned() {
             for p in &i.parents {
-                if self.iface_cycle(p.ref_name().unwrap_or(""), path, seen) { return true; }
+                if self.iface_cycle(p.ref_name().unwrap_or(""), path, seen) {
+                    return true;
+                }
             }
         }
         path.pop();
@@ -565,13 +715,22 @@ impl TypeChecker {
     }
 
     fn collect_iface_methods(
-        &self, iname: &str, out: &mut Vec<MethodSig>,
-        seen_names: &mut HashSet<String>, visited: &mut HashSet<String>,
+        &self,
+        iname: &str,
+        out: &mut Vec<MethodSig>,
+        seen_names: &mut HashSet<String>,
+        visited: &mut HashSet<String>,
     ) {
-        if !visited.insert(iname.to_string()) { return; } // garde anti-cycle
-        let Some(iface) = self.interfaces.get(iname).cloned() else { return };
+        if !visited.insert(iname.to_string()) {
+            return;
+        } // garde anti-cycle
+        let Some(iface) = self.interfaces.get(iname).cloned() else {
+            return;
+        };
         for sig in &iface.methods {
-            if seen_names.insert(sig.name.clone()) { out.push(sig.clone()); }
+            if seen_names.insert(sig.name.clone()) {
+                out.push(sig.clone());
+            }
         }
         for p in &iface.parents {
             self.collect_iface_methods(p.ref_name().unwrap_or(""), out, seen_names, visited);
@@ -587,12 +746,22 @@ impl TypeChecker {
     }
 
     fn iface_find_sig_inner(
-        &self, iname: &str, args: &[Type], method: &str, visited: &mut HashSet<String>,
+        &self,
+        iname: &str,
+        args: &[Type],
+        method: &str,
+        visited: &mut HashSet<String>,
     ) -> Option<MethodSig> {
-        if !visited.insert(iname.to_string()) { return None; }
+        if !visited.insert(iname.to_string()) {
+            return None;
+        }
         let iface = self.interfaces.get(iname)?.clone();
-        let subst: Vec<(String, Type)> = iface.type_params.iter().cloned()
-            .zip(args.iter().cloned()).collect();
+        let subst: Vec<(String, Type)> = iface
+            .type_params
+            .iter()
+            .cloned()
+            .zip(args.iter().cloned())
+            .collect();
         if let Some(s) = iface.methods.iter().find(|m| m.name == method) {
             return Some(subst_method_sig(s, &subst));
         }
@@ -600,8 +769,7 @@ impl TypeChecker {
             let pn = p.ref_name().unwrap_or("");
             // Args du parent réécrits dans le contexte de substitution courant :
             // `Box<E> extends Container<E>` avec E↦int donne Container<int>.
-            let pargs: Vec<Type> = p.ref_args().iter()
-                .map(|a| substitute(a, &subst)).collect();
+            let pargs: Vec<Type> = p.ref_args().iter().map(|a| substitute(a, &subst)).collect();
             if let Some(s) = self.iface_find_sig_inner(pn, &pargs, method, visited) {
                 return Some(s);
             }
@@ -627,9 +795,10 @@ impl TypeChecker {
     /// L'interpréteur applique exactement la même classification.
     fn is_dep_slot(&self, ty: &Type) -> bool {
         match ty {
-            Type::UserDefined(n) =>
+            Type::UserDefined(n) => {
                 self.interfaces.contains_key(n)
-                || self.classes.get(n).map(|c| c.is_service).unwrap_or(false),
+                    || self.classes.get(n).map(|c| c.is_service).unwrap_or(false)
+            }
             _ => false,
         }
     }
@@ -641,46 +810,63 @@ impl TypeChecker {
     /// - sinon                               → erreur (binding manquant ou ambigu).
     fn resolve_service(&self, name: &str) -> Result<String, TypeError> {
         if let Some(c) = self.classes.get(name) {
-            if c.is_service { return Ok(name.to_string()); }
+            if c.is_service {
+                return Ok(name.to_string());
+            }
             return type_err!(
-                "'{}' n'est pas injectable : la classe doit être déclarée `service`", name);
+                "'{}' n'est pas injectable : la classe doit être déclarée `service`",
+                name
+            );
         }
         if self.interfaces.contains_key(name) {
             // Binding explicite d'un module — prioritaire sur la règle d'unicité
-            if let Some(s) = self.binds_to.get(name) { return Ok(s.clone()); }
+            if let Some(s) = self.binds_to.get(name) {
+                return Ok(s.clone());
+            }
             // Services conformes à l'interface, héritage d'interface inclus
-            let mut impls: Vec<String> = self.classes.values()
+            let mut impls: Vec<String> = self
+                .classes
+                .values()
                 .filter(|c| c.is_service)
                 .map(|c| c.name.clone())
                 .collect();
             impls.retain(|cn| self.is_subclass(cn, name));
             impls.sort();
             return match impls.len() {
-                0 => type_err!(
-                    "Aucun service n'implémente l'interface '{}'", name),
+                0 => type_err!("Aucun service n'implémente l'interface '{}'", name),
                 1 => Ok(impls.remove(0)),
                 _ => type_err!(
                     "Binding ambigu : '{}' est implémenté par plusieurs services ({}) \
                      — choisissez avec `bind {} to ...` dans un module",
-                    name, impls.join(", "), name),
+                    name,
+                    impls.join(", "),
+                    name
+                ),
             };
         }
-        type_err!("'{}' n'est pas injectable : ni classe `service` ni interface", name)
+        type_err!(
+            "'{}' n'est pas injectable : ni classe `service` ni interface",
+            name
+        )
     }
 
     /// Dépendances d'un service = paramètres-dépendances de son constructeur,
     /// résolus vers les classes services concrètes. Les dépendances non
     /// résolvables sont ignorées ici (l'erreur est déjà remontée par check_services).
     fn service_deps(&self, cn: &str) -> Vec<String> {
-        self.classes.get(cn)
+        self.classes
+            .get(cn)
             .and_then(|c| c.constructors.first())
-            .map(|ctor| ctor.params.iter()
-                .filter(|p| self.is_dep_slot(&p.ty))
-                .filter_map(|p| match &p.ty {
-                    Type::UserDefined(n) => self.resolve_service(n).ok(),
-                    _ => None,
-                })
-                .collect())
+            .map(|ctor| {
+                ctor.params
+                    .iter()
+                    .filter(|p| self.is_dep_slot(&p.ty))
+                    .filter_map(|p| match &p.ty {
+                        Type::UserDefined(n) => self.resolve_service(n).ok(),
+                        _ => None,
+                    })
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -690,13 +876,18 @@ impl TypeChecker {
     fn check_modules(&mut self) {
         for m in &self.modules.clone() {
             for b in &m.binds {
-                let target_is_iface   = self.interfaces.contains_key(&b.target);
-                let target_is_service = self.classes.get(&b.target)
-                    .map(|c| c.is_service).unwrap_or(false);
+                let target_is_iface = self.interfaces.contains_key(&b.target);
+                let target_is_service = self
+                    .classes
+                    .get(&b.target)
+                    .map(|c| c.is_service)
+                    .unwrap_or(false);
                 if !target_is_iface && !target_is_service {
                     self.err(format!(
                         "Module '{}' : bind '{}' — '{}' n'est ni une interface ni une \
-                         classe service", m.name, b.target, b.target));
+                         classe service",
+                        m.name, b.target, b.target
+                    ));
                     continue;
                 }
 
@@ -704,33 +895,42 @@ impl TypeChecker {
                 let concrete: Option<String> = match &b.to {
                     Some(to) => {
                         // Pré-calcul pour éviter les conflits d'emprunt avec is_subclass
-                        let known      = self.classes.contains_key(to);
-                        let is_service = self.classes.get(to).map(|c| c.is_service).unwrap_or(false);
-                        let conforms   = self.is_subclass(to, &b.target);
+                        let known = self.classes.contains_key(to);
+                        let is_service =
+                            self.classes.get(to).map(|c| c.is_service).unwrap_or(false);
+                        let conforms = self.is_subclass(to, &b.target);
                         if !target_is_iface {
                             self.err(format!(
                                 "Module '{}' : bind {} to {} — la cible d'un `to` doit \
-                                 être une interface", m.name, b.target, to));
+                                 être une interface",
+                                m.name, b.target, to
+                            ));
                             None
                         } else if !known {
                             self.err(format!(
                                 "Module '{}' : bind {} to {} — classe '{}' inconnue",
-                                m.name, b.target, to, to));
+                                m.name, b.target, to, to
+                            ));
                             None
                         } else if !is_service {
                             self.err(format!(
                                 "Module '{}' : bind {} to {} — '{}' doit être \
-                                 déclarée `service`", m.name, b.target, to, to));
+                                 déclarée `service`",
+                                m.name, b.target, to, to
+                            ));
                             None
                         } else if !conforms {
                             self.err(format!(
                                 "Module '{}' : bind {} to {} — '{}' n'implémente \
-                                 pas '{}'", m.name, b.target, to, to, b.target));
+                                 pas '{}'",
+                                m.name, b.target, to, to, b.target
+                            ));
                             None
                         } else if self.binds_to.contains_key(&b.target) {
                             self.err(format!(
                                 "Binding dupliqué pour '{}' : déjà lié à '{}'",
-                                b.target, self.binds_to[&b.target]));
+                                b.target, self.binds_to[&b.target]
+                            ));
                             None
                         } else {
                             self.binds_to.insert(b.target.clone(), to.clone());
@@ -743,11 +943,15 @@ impl TypeChecker {
                         if b.with.is_empty() {
                             self.err(format!(
                                 "Module '{}' : bind {} — binding sans effet (précisez \
-                                 `to` et/ou `with`)", m.name, b.target));
+                                 `to` et/ou `with`)",
+                                m.name, b.target
+                            ));
                         } else {
                             self.err(format!(
                                 "Module '{}' : bind {} with (...) — `with` sur une \
-                                 interface nécessite `to`", m.name, b.target));
+                                 interface nécessite `to`",
+                                m.name, b.target
+                            ));
                         }
                         None
                     }
@@ -757,8 +961,7 @@ impl TypeChecker {
                 if !b.with.is_empty() {
                     if let Some(c) = concrete {
                         if self.with_values.contains_key(&c) {
-                            self.err(format!(
-                                "Valeurs `with` dupliquées pour le service '{}'", c));
+                            self.err(format!("Valeurs `with` dupliquées pour le service '{}'", c));
                         } else {
                             self.with_values.insert(c, b.with.clone());
                         }
@@ -766,7 +969,9 @@ impl TypeChecker {
                 } else if b.to.is_none() && target_is_service {
                     self.err(format!(
                         "Module '{}' : bind {} — binding sans effet (précisez \
-                         `to` et/ou `with`)", m.name, b.target));
+                         `to` et/ou `with`)",
+                        m.name, b.target
+                    ));
                 }
             }
         }
@@ -777,11 +982,15 @@ impl TypeChecker {
         for c in self.classes.values().cloned().collect::<Vec<_>>() {
             if c.is_transient && !c.is_service {
                 self.err(format!(
-                    "Classe '{}' : `transient` nécessite `service`", c.name));
+                    "Classe '{}' : `transient` nécessite `service`",
+                    c.name
+                ));
             }
         }
 
-        let mut services: Vec<String> = self.classes.values()
+        let mut services: Vec<String> = self
+            .classes
+            .values()
             .filter(|c| c.is_service)
             .map(|c| c.name.clone())
             .collect();
@@ -792,12 +1001,17 @@ impl TypeChecker {
             let class = self.classes[sn].clone();
             if !class.type_params.is_empty() {
                 self.err(format!(
-                    "Service '{}' : un service ne peut pas être générique", sn));
+                    "Service '{}' : un service ne peut pas être générique",
+                    sn
+                ));
             }
             if class.constructors.len() > 1 {
                 self.err(format!(
                     "Service '{}' : un service doit avoir au plus un constructeur \
-                     ({} trouvés)", sn, class.constructors.len()));
+                     ({} trouvés)",
+                    sn,
+                    class.constructors.len()
+                ));
             }
             // Partition des paramètres : dépendances vs configuration
             let mut config_params: Vec<Param> = vec![];
@@ -810,17 +1024,24 @@ impl TypeChecker {
                         };
                         match self.resolve_service(&dep) {
                             Err(e) => self.err(format!(
-                                "Service '{}', dépendance '{}' : {}", sn, p.name, e.0)),
+                                "Service '{}', dépendance '{}' : {}",
+                                sn, p.name, e.0
+                            )),
                             Ok(concrete) => {
                                 // Dépendance captive : un singleton qui capture un
                                 // transient figerait son instance — interdit.
-                                let dep_transient = self.classes.get(&concrete)
-                                    .map(|c| c.is_transient).unwrap_or(false);
+                                let dep_transient = self
+                                    .classes
+                                    .get(&concrete)
+                                    .map(|c| c.is_transient)
+                                    .unwrap_or(false);
                                 if !class.is_transient && dep_transient {
                                     self.err(format!(
                                         "Service '{}' (singleton) ne peut pas dépendre du \
                                          service transient '{}' (dépendance captive : \
-                                         l'instance serait figée)", sn, concrete));
+                                         l'instance serait figée)",
+                                        sn, concrete
+                                    ));
                                 }
                             }
                         }
@@ -837,13 +1058,18 @@ impl TypeChecker {
                         self.err(format!(
                             "Service '{}' : le paramètre '{}' de type {} n'est pas \
                              injectable — fournissez sa valeur via `bind {} with (...)` \
-                             dans un module", sn, p.name, p.ty, sn));
+                             dans un module",
+                            sn, p.name, p.ty, sn
+                        ));
                     }
                 } else {
                     self.err(format!(
                         "bind {} with : {} valeur(s) fournie(s) mais {} paramètre(s) \
                          de configuration dans le constructeur",
-                        sn, with.len(), config_params.len()));
+                        sn,
+                        with.len(),
+                        config_params.len()
+                    ));
                 }
             } else {
                 let env = TypeEnv::new();
@@ -853,7 +1079,8 @@ impl TypeChecker {
                         if !self.is_compatible(&at, &expected) {
                             self.err(format!(
                                 "bind {} with : type incompatible pour '{}' : {} ≠ {}",
-                                sn, p.name, at, expected));
+                                sn, p.name, at, expected
+                            ));
                         }
                     }
                 }
@@ -863,7 +1090,9 @@ impl TypeChecker {
         // ── Détection de cycle (DFS avec chemin courant) ──────────────────
         let mut done: HashSet<String> = HashSet::new();
         for sn in &services {
-            if done.contains(sn) { continue; }
+            if done.contains(sn) {
+                continue;
+            }
             let mut path: Vec<String> = vec![];
             if let Some(cycle) = self.find_service_cycle(sn, &mut path, &mut done) {
                 self.err(format!("Cycle de dépendances entre services : {}", cycle));
@@ -874,14 +1103,19 @@ impl TypeChecker {
     /// DFS : retourne la description du cycle si un service du chemin courant
     /// est revisité. `done` évite de re-parcourir (et re-signaler) les sous-graphes.
     fn find_service_cycle(
-        &self, cur: &str, path: &mut Vec<String>, done: &mut HashSet<String>,
+        &self,
+        cur: &str,
+        path: &mut Vec<String>,
+        done: &mut HashSet<String>,
     ) -> Option<String> {
         if let Some(pos) = path.iter().position(|p| p == cur) {
             let mut cycle: Vec<&str> = path[pos..].iter().map(|s| s.as_str()).collect();
             cycle.push(cur);
             return Some(cycle.join(" → "));
         }
-        if done.contains(cur) { return None; }
+        if done.contains(cur) {
+            return None;
+        }
         path.push(cur.to_string());
         for dep in self.service_deps(cur) {
             if let Some(c) = self.find_service_cycle(&dep, path, done) {
@@ -898,21 +1132,29 @@ impl TypeChecker {
     fn check_enums(&mut self, program: &Program) {
         for ed in &program.enums.clone() {
             self.current_enum = Some(ed.name.clone());
-            self.type_params  = ed.type_params.iter().cloned().collect();
+            self.type_params = ed.type_params.iter().cloned().collect();
             let mut seen = HashSet::new();
             for v in &ed.variants {
                 if !seen.insert(v.name.clone()) {
-                    self.err(format!("Enum '{}' : variante '{}' dupliquée", ed.name, v.name));
+                    self.err(format!(
+                        "Enum '{}' : variante '{}' dupliquée",
+                        ed.name, v.name
+                    ));
                 }
             }
             for m in &ed.methods.clone() {
-                let mut env = TypeEnv::new(); env.push();
-                for p in &m.params { env.declare(p.name.clone(), self.resolve(&p.ty)); }
+                let mut env = TypeEnv::new();
+                env.push();
+                for p in &m.params {
+                    env.declare(p.name.clone(), self.resolve(&p.ty));
+                }
                 self.expected_return = self.resolve(&m.return_type);
-                for s in &m.body.clone() { self.check_stmt(s, &mut env); }
+                for s in &m.body.clone() {
+                    self.check_stmt(s, &mut env);
+                }
             }
             self.current_enum = None;
-            self.type_params  = HashSet::new();
+            self.type_params = HashSet::new();
         }
     }
 
@@ -920,41 +1162,55 @@ impl TypeChecker {
 
     fn check_class(&mut self, class: &ClassDef) {
         self.current_class = Some(class.name.clone());
-        self.type_params   = class.type_params.iter().cloned().collect();
+        self.type_params = class.type_params.iter().cloned().collect();
         debug!("check class '{}'", class.name);
         for ctor in &class.constructors.clone() {
-            let mut env = TypeEnv::new(); env.push();
-            for p in &ctor.params { env.declare(p.name.clone(), self.resolve(&p.ty)); }
+            let mut env = TypeEnv::new();
+            env.push();
+            for p in &ctor.params {
+                env.declare(p.name.clone(), self.resolve(&p.ty));
+            }
             self.expected_return = Type::Void;
-            for s in &ctor.body.clone() { self.check_stmt(s, &mut env); }
+            for s in &ctor.body.clone() {
+                self.check_stmt(s, &mut env);
+            }
         }
         for m in &class.methods.clone() {
-            let mut env = TypeEnv::new(); env.push();
-            for p in &m.params { env.declare(p.name.clone(), self.resolve(&p.ty)); }
-            self.expected_return        = self.resolve(&m.return_type);
+            let mut env = TypeEnv::new();
+            env.push();
+            for p in &m.params {
+                env.declare(p.name.clone(), self.resolve(&p.ty));
+            }
+            self.expected_return = self.resolve(&m.return_type);
             self.current_method_mutable = m.is_mutable;
-            for s in &m.body.clone() { self.check_stmt(s, &mut env); }
+            for s in &m.body.clone() {
+                self.check_stmt(s, &mut env);
+            }
         }
-        self.current_class          = None;
+        self.current_class = None;
         self.current_method_mutable = true;
-        self.type_params            = HashSet::new();
+        self.type_params = HashSet::new();
     }
 
     // ── Instructions ──────────────────────────────────────────────────────────
 
     fn check_stmt(&mut self, stmt: &Stmt, env: &mut TypeEnv) {
         match stmt {
-
-            Stmt::VarDecl { qualifier, ty, name, init } => {
+            Stmt::VarDecl {
+                qualifier,
+                ty,
+                name,
+                init,
+            } => {
                 let resolved = self.resolve(ty);
 
                 if let Some(init_expr) = init {
                     // Cas spécial : lambda littérale assignée à un type fn annoté
-                    if let (Expr::Lambda { params, body }, Type::FnType(ptys, rty))
-                        = (init_expr, &resolved)
+                    if let (Expr::Lambda { params, body }, Type::FnType(ptys, rty)) =
+                        (init_expr, &resolved)
                     {
                         let ptys = ptys.iter().map(|t| self.resolve(t)).collect::<Vec<_>>();
-                        let rty  = self.resolve(rty);
+                        let rty = self.resolve(rty);
                         self.check_lambda_typed(params, body, &ptys, &rty, env);
                     } else {
                         if let Some(et) = self.infer(init_expr, env) {
@@ -981,23 +1237,34 @@ impl TypeChecker {
 
             Stmt::Assign { target, value } => {
                 let vt = self.infer(value, env);
-                let tt = env.get(target).cloned()
+                let tt = env
+                    .get(target)
+                    .cloned()
                     .or_else(|| self.field_of_current_class(target))
                     .map(|t| self.resolve(&t));
                 if let (Some(vt), Some(tt)) = (vt, tt) {
                     if !self.is_compatible(&vt, &tt) {
-                        self.err(format!("Affectation '{}' : type incompatible {} ≠ {}", target, vt, tt));
+                        self.err(format!(
+                            "Affectation '{}' : type incompatible {} ≠ {}",
+                            target, vt, tt
+                        ));
                     }
                 }
             }
 
-            Stmt::FieldAssign { object, field, value } => {
+            Stmt::FieldAssign {
+                object,
+                field,
+                value,
+            } => {
                 let vt = self.infer(value, env);
                 let via_this = object == "this";
                 let ot = if via_this {
                     Some(self.this_type())
                 } else {
-                    env.get(object).cloned().or_else(|| self.field_of_current_class(object))
+                    env.get(object)
+                        .cloned()
+                        .or_else(|| self.field_of_current_class(object))
                 };
                 if let Some(ot) = ot {
                     let ot = self.resolve(&ot);
@@ -1007,7 +1274,10 @@ impl TypeChecker {
                         Some(ft) => {
                             if let Some(vt) = vt {
                                 if !self.is_compatible(&vt, &ft) {
-                                    self.err(format!("{}.{} : type incompatible {} ≠ {}", object, field, vt, ft));
+                                    self.err(format!(
+                                        "{}.{} : type incompatible {} ≠ {}",
+                                        object, field, vt, ft
+                                    ));
                                 }
                             }
                         }
@@ -1016,7 +1286,11 @@ impl TypeChecker {
                 }
             }
 
-            Stmt::Print(args) => { for a in args { self.infer(a, env); } }
+            Stmt::Print(args) => {
+                for a in args {
+                    self.infer(a, env);
+                }
+            }
 
             Stmt::Return(expr) => {
                 let ret = self.expected_return.clone();
@@ -1037,20 +1311,30 @@ impl TypeChecker {
                 }
             }
 
-            Stmt::ExprStmt(e) => { self.infer(e, env); }
+            Stmt::ExprStmt(e) => {
+                self.infer(e, env);
+            }
 
-            Stmt::If { condition, then_body, else_body } => {
+            Stmt::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
                 if let Some(ct) = self.infer(condition, env) {
                     if ct != Type::Bool {
                         self.err(format!("Condition if doit être bool, trouvé {}", ct));
                     }
                 }
                 env.push();
-                for s in then_body { self.check_stmt(s, env); }
+                for s in then_body {
+                    self.check_stmt(s, env);
+                }
                 env.pop();
                 if let Some(eb) = else_body {
                     env.push();
-                    for s in eb { self.check_stmt(s, env); }
+                    for s in eb {
+                        self.check_stmt(s, env);
+                    }
                     env.pop();
                 }
             }
@@ -1062,13 +1346,22 @@ impl TypeChecker {
                     }
                 }
                 env.push();
-                for s in body { self.check_stmt(s, env); }
+                for s in body {
+                    self.check_stmt(s, env);
+                }
                 env.pop();
             }
 
-            Stmt::For { init, condition, update, body } => {
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
                 env.push();
-                if let Some(s) = init { self.check_stmt(s, env); }
+                if let Some(s) = init {
+                    self.check_stmt(s, env);
+                }
                 if let Some(e) = condition {
                     if let Some(ct) = self.infer(e, env) {
                         if ct != Type::Bool {
@@ -1076,17 +1369,28 @@ impl TypeChecker {
                         }
                     }
                 }
-                if let Some(s) = update { self.check_stmt(s, env); }
+                if let Some(s) = update {
+                    self.check_stmt(s, env);
+                }
                 env.push();
-                for s in body { self.check_stmt(s, env); }
+                for s in body {
+                    self.check_stmt(s, env);
+                }
                 env.pop();
                 env.pop();
             }
 
-            Stmt::ForIn { var_type, var_name, body, .. } => {
+            Stmt::ForIn {
+                var_type,
+                var_name,
+                body,
+                ..
+            } => {
                 env.push();
                 env.declare(var_name.clone(), var_type.clone());
-                for s in body { self.check_stmt(s, env); }
+                for s in body {
+                    self.check_stmt(s, env);
+                }
                 env.pop();
             }
 
@@ -1096,41 +1400,61 @@ impl TypeChecker {
 
             Stmt::Match { expr, arms } => {
                 let st = self.infer(expr, env);
-                let (enum_name, subst): (Option<String>, Vec<(String, Type)>) =
-                    match st.as_ref() {
-                        Some(Type::UserDefined(n)) => (Some(n.clone()), vec![]),
-                        Some(Type::Generic(n, ta)) => {
-                            let s = self.enums.get(n).map(|ed| {
-                                ed.type_params.iter().zip(ta.iter())
-                                    .map(|(p, t)| (p.clone(), t.clone())).collect()
-                            }).unwrap_or_default();
-                            (Some(n.clone()), s)
-                        }
-                        _ => (None, vec![]),
-                    };
+                let (enum_name, subst): (Option<String>, Vec<(String, Type)>) = match st.as_ref() {
+                    Some(Type::UserDefined(n)) => (Some(n.clone()), vec![]),
+                    Some(Type::Generic(n, ta)) => {
+                        let s = self
+                            .enums
+                            .get(n)
+                            .map(|ed| {
+                                ed.type_params
+                                    .iter()
+                                    .zip(ta.iter())
+                                    .map(|(p, t)| (p.clone(), t.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        (Some(n.clone()), s)
+                    }
+                    _ => (None, vec![]),
+                };
                 for arm in arms {
                     env.push();
-                    if let (Pattern::Variant { name: vname, bindings }, Some(en))
-                        = (&arm.pattern, &enum_name)
+                    if let (
+                        Pattern::Variant {
+                            name: vname,
+                            bindings,
+                        },
+                        Some(en),
+                    ) = (&arm.pattern, &enum_name)
                     {
                         if let Some(ed) = self.enums.get(en).cloned() {
                             match ed.variants.iter().find(|v| &v.name == vname) {
-                                None => self.err(format!("Variante '{}' inconnue dans '{}'", vname, en)),
+                                None => {
+                                    self.err(format!("Variante '{}' inconnue dans '{}'", vname, en))
+                                }
                                 Some(v) => {
                                     if !bindings.is_empty() && bindings.len() != v.fields.len() {
                                         self.err(format!(
                                             "Variante '{}' : {} binding(s) mais {} champ(s)",
-                                            vname, bindings.len(), v.fields.len()
+                                            vname,
+                                            bindings.len(),
+                                            v.fields.len()
                                         ));
                                     }
                                     for (b, f) in bindings.iter().zip(v.fields.iter()) {
-                                        env.declare(b.clone(), substitute(&self.resolve(&f.ty), &subst));
+                                        env.declare(
+                                            b.clone(),
+                                            substitute(&self.resolve(&f.ty), &subst),
+                                        );
                                     }
                                 }
                             }
                         }
                     }
-                    for s in &arm.body { self.check_stmt(s, env); }
+                    for s in &arm.body {
+                        self.check_stmt(s, env);
+                    }
                     env.pop();
                 }
             }
@@ -1144,23 +1468,26 @@ impl TypeChecker {
 
     fn check_lambda_typed(
         &mut self,
-        params:    &[String],
-        body:      &LambdaBody,
+        params: &[String],
+        body: &LambdaBody,
         param_tys: &[Type],
-        ret_ty:    &Type,
+        ret_ty: &Type,
         outer_env: &TypeEnv,
     ) {
         if params.len() != param_tys.len() {
             self.err(format!(
                 "Lambda : {} paramètre(s) mais type déclare {}",
-                params.len(), param_tys.len()
+                params.len(),
+                param_tys.len()
             ));
             return;
         }
         let mut lenv = TypeEnv::new();
         lenv.push();
         // Capture les variables visibles de l'environnement extérieur
-        for (k, v) in outer_env.snapshot() { lenv.declare(k, v); }
+        for (k, v) in outer_env.snapshot() {
+            lenv.declare(k, v);
+        }
         // Paramètres typés
         for (p, t) in params.iter().zip(param_tys.iter()) {
             lenv.declare(p.clone(), t.clone());
@@ -1181,7 +1508,9 @@ impl TypeChecker {
             }
             LambdaBody::Block(stmts) => {
                 let mut le = lenv;
-                for s in stmts { self.check_stmt(s, &mut le); }
+                for s in stmts {
+                    self.check_stmt(s, &mut le);
+                }
             }
         }
         self.expected_return = saved;
@@ -1191,11 +1520,11 @@ impl TypeChecker {
 
     fn infer_expr(&mut self, expr: &Expr, env: &TypeEnv) -> Result<Type, TypeError> {
         match expr {
-            Expr::IntLit(_)    => Ok(Type::Int),
-            Expr::FloatLit(_)  => Ok(Type::Float),
-            Expr::BoolLit(_)   => Ok(Type::Bool),
+            Expr::IntLit(_) => Ok(Type::Int),
+            Expr::FloatLit(_) => Ok(Type::Float),
+            Expr::BoolLit(_) => Ok(Type::Bool),
             Expr::StringLit(_) => Ok(Type::Str),
-            Expr::CharLit(_)   => Ok(Type::Char),
+            Expr::CharLit(_) => Ok(Type::Char),
 
             Expr::Ident(name) => {
                 if name == "this" {
@@ -1204,7 +1533,9 @@ impl TypeChecker {
                 if self.type_params.contains(name.as_str()) {
                     return Ok(Type::UserDefined(name.clone()));
                 }
-                let ty = env.get(name).cloned()
+                let ty = env
+                    .get(name)
+                    .cloned()
                     .or_else(|| self.field_of_current_class(name))
                     .or_else(|| self.field_of_current_enum(name))
                     .ok_or_else(|| TypeError(format!("Variable inconnue '{}'", name)))?;
@@ -1216,14 +1547,24 @@ impl TypeChecker {
                 match op {
                     UnaryOp::Neg => {
                         // Type::Fn = param non annoté → on skip
-                        if matches!(t, Type::Fn) { return Ok(Type::Fn); }
-                        if self.is_numeric(&t) { Ok(t) }
-                        else { type_err!("- non applicable à {}", t) }
+                        if matches!(t, Type::Fn) {
+                            return Ok(Type::Fn);
+                        }
+                        if self.is_numeric(&t) {
+                            Ok(t)
+                        } else {
+                            type_err!("- non applicable à {}", t)
+                        }
                     }
                     UnaryOp::Not => {
-                        if matches!(t, Type::Fn) { return Ok(Type::Bool); }
-                        if t == Type::Bool { Ok(Type::Bool) }
-                        else { type_err!("! non applicable à {}", t) }
+                        if matches!(t, Type::Fn) {
+                            return Ok(Type::Bool);
+                        }
+                        if t == Type::Bool {
+                            Ok(Type::Bool)
+                        } else {
+                            type_err!("! non applicable à {}", t)
+                        }
                     }
                 }
             }
@@ -1243,7 +1584,11 @@ impl TypeChecker {
                     .ok_or_else(|| TypeError(format!("Champ inconnu '{}.{}'", ot, field)))
             }
 
-            Expr::MethodCall { object, method, args } => {
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
                 let (ptys, rty, subst) = self.resolve_method(&ot, method)?;
@@ -1255,14 +1600,14 @@ impl TypeChecker {
                 if self.method_is_mutable(&ot, method) {
                     let qual = self.qualifier_of_expr(object, env);
                     match qual {
-                        Qualifier::Readonly  =>
-                            self.err(format!(
-                                "Appel de méthode mutable '{}()' sur une variable readonly",
-                                method)),
-                        Qualifier::Immutable =>
-                            self.err(format!(
-                                "Appel de méthode mutable '{}()' sur une variable immutable",
-                                method)),
+                        Qualifier::Readonly => self.err(format!(
+                            "Appel de méthode mutable '{}()' sur une variable readonly",
+                            method
+                        )),
+                        Qualifier::Immutable => self.err(format!(
+                            "Appel de méthode mutable '{}()' sur une variable immutable",
+                            method
+                        )),
                         Qualifier::Mutable => {}
                     }
                     // this dans une méthode non-mutable est readonly
@@ -1271,19 +1616,27 @@ impl TypeChecker {
                     {
                         self.err(format!(
                             "Méthode non-mutable : impossible d'appeler '{}()' (mutable) sur this",
-                            method));
+                            method
+                        ));
                     }
                 }
 
                 if args.len() != ptys.len() {
-                    return type_err!("{}() : {} arg(s) attendus, {} fournis",
-                        method, ptys.len(), args.len());
+                    return type_err!(
+                        "{}() : {} arg(s) attendus, {} fournis",
+                        method,
+                        ptys.len(),
+                        args.len()
+                    );
                 }
                 for (arg, pt) in args.iter().zip(ptys.iter()) {
                     if let Ok(at) = self.infer_expr(arg, env) {
                         let expected = substitute(pt, &subst);
                         if !self.is_compatible(&at, &expected) {
-                            self.err(format!("Arg de {}() : type incompatible {} ≠ {}", method, at, expected));
+                            self.err(format!(
+                                "Arg de {}() : type incompatible {} ≠ {}",
+                                method, at, expected
+                            ));
                         }
                     }
                 }
@@ -1292,11 +1645,15 @@ impl TypeChecker {
 
             Expr::FunctionCall { name, args } => {
                 if name == "print" {
-                    for a in args { self.infer(a, env); }
+                    for a in args {
+                        self.infer(a, env);
+                    }
                     return Ok(Type::Void);
                 }
                 if name == "panic" {
-                    for a in args { self.infer(a, env); }
+                    for a in args {
+                        self.infer(a, env);
+                    }
                     return Ok(Type::Void);
                 }
 
@@ -1307,32 +1664,44 @@ impl TypeChecker {
                     }
                     if let Some(at) = self.infer(&args[0], env) {
                         if at != Type::Bool && !matches!(at, Type::Fn) {
-                            self.err(format!("{}() : la condition doit être bool, trouvé {}", name, at));
+                            self.err(format!(
+                                "{}() : la condition doit être bool, trouvé {}",
+                                name, at
+                            ));
                         }
                     }
                     return Ok(Type::Void);
                 }
                 if name == "assertEquals" || name == "assertNotEquals" {
                     if args.len() != 2 {
-                        return type_err!("{}() attend 2 arguments, {} fourni(s)", name, args.len());
+                        return type_err!(
+                            "{}() attend 2 arguments, {} fourni(s)",
+                            name,
+                            args.len()
+                        );
                     }
                     let at = self.infer(&args[0], env);
                     let bt = self.infer(&args[1], env);
                     if let (Some(at), Some(bt)) = (at, bt) {
                         if !self.is_compatible(&at, &bt) && !self.is_compatible(&bt, &at) {
-                            self.err(format!(
-                                "{}() : types incomparables {} et {}", name, at, bt));
+                            self.err(format!("{}() : types incomparables {} et {}", name, at, bt));
                         }
                     }
                     return Ok(Type::Void);
                 }
                 if name == "fail" {
                     if args.len() != 1 {
-                        return type_err!("fail() attend 1 argument (le message), {} fourni(s)", args.len());
+                        return type_err!(
+                            "fail() attend 1 argument (le message), {} fourni(s)",
+                            args.len()
+                        );
                     }
                     if let Some(at) = self.infer(&args[0], env) {
                         if at != Type::Str && !matches!(at, Type::Fn) {
-                            self.err(format!("fail() : le message doit être string, trouvé {}", at));
+                            self.err(format!(
+                                "fail() : le message doit être string, trouvé {}",
+                                at
+                            ));
                         }
                     }
                     return Ok(Type::Void);
@@ -1342,14 +1711,18 @@ impl TypeChecker {
                 if let Some(ty) = env.get(name).cloned().map(|t| self.resolve(&t)) {
                     match &ty {
                         Type::FnType(ptys, rty) => {
-                            let ptys = ptys.clone(); let rty = *rty.clone();
+                            let ptys = ptys.clone();
+                            let rty = *rty.clone();
                             if args.len() != ptys.len() {
                                 return type_err!("{}() : {} arg(s) attendus", name, ptys.len());
                             }
                             for (arg, pt) in args.iter().zip(ptys.iter()) {
                                 if let Some(at) = self.infer(arg, env) {
                                     if !self.is_compatible(&at, pt) {
-                                        self.err(format!("Arg de {}() : type incompatible {} ≠ {}", name, at, pt));
+                                        self.err(format!(
+                                            "Arg de {}() : type incompatible {} ≠ {}",
+                                            name, at, pt
+                                        ));
                                     }
                                 }
                             }
@@ -1357,7 +1730,9 @@ impl TypeChecker {
                         }
                         Type::Fn => {
                             // Lambda non annotée : on skip la vérification des types
-                            for a in args { self.infer(a, env); }
+                            for a in args {
+                                self.infer(a, env);
+                            }
                             return Ok(Type::Fn);
                         }
                         _ => {}
@@ -1373,7 +1748,10 @@ impl TypeChecker {
                         for (arg, p) in args.iter().zip(m.params.iter()) {
                             if let Ok(at) = self.infer_expr(arg, env) {
                                 if !self.is_compatible(&at, &p.ty) {
-                                    self.err(format!("Arg de {}() : type incompatible {} ≠ {}", name, at, p.ty));
+                                    self.err(format!(
+                                        "Arg de {}() : type incompatible {} ≠ {}",
+                                        name, at, p.ty
+                                    ));
                                 }
                             }
                         }
@@ -1391,13 +1769,20 @@ impl TypeChecker {
                 // Fonction de haut niveau
                 if let Some(f) = self.funcs.get(name.as_str()).cloned() {
                     if args.len() != f.params.len() {
-                        return type_err!("{}() : {} arg(s) attendus, {} fournis",
-                            name, f.params.len(), args.len());
+                        return type_err!(
+                            "{}() : {} arg(s) attendus, {} fournis",
+                            name,
+                            f.params.len(),
+                            args.len()
+                        );
                     }
                     for (arg, p) in args.iter().zip(f.params.iter()) {
                         if let Ok(at) = self.infer_expr(arg, env) {
                             if !self.is_compatible(&at, &p.ty) {
-                                self.err(format!("Arg de {}() : incompatible {} ≠ {}", name, at, p.ty));
+                                self.err(format!(
+                                    "Arg de {}() : incompatible {} ≠ {}",
+                                    name, at, p.ty
+                                ));
                             }
                         }
                     }
@@ -1407,22 +1792,43 @@ impl TypeChecker {
                 type_err!("Fonction inconnue '{}'", name)
             }
 
-            Expr::New { class_name, type_args, args } => {
-                let class = self.classes.get(class_name)
-                    .ok_or_else(|| TypeError(format!("Classe inconnue '{}'", class_name)))?.clone();
-                let subst: Vec<_> = class.type_params.iter()
-                    .zip(type_args.iter()).map(|(p, t)| (p.clone(), t.clone())).collect();
+            Expr::New {
+                class_name,
+                type_args,
+                args,
+            } => {
+                let class = self
+                    .classes
+                    .get(class_name)
+                    .ok_or_else(|| TypeError(format!("Classe inconnue '{}'", class_name)))?
+                    .clone();
+                let subst: Vec<_> = class
+                    .type_params
+                    .iter()
+                    .zip(type_args.iter())
+                    .map(|(p, t)| (p.clone(), t.clone()))
+                    .collect();
                 if !class.constructors.is_empty() {
-                    let ctor = class.constructors.iter()
+                    let ctor = class
+                        .constructors
+                        .iter()
                         .find(|c| c.params.len() == args.len())
-                        .ok_or_else(|| TypeError(format!(
-                            "Pas de constructeur à {} arg(s) pour '{}'", args.len(), class_name
-                        )))?.clone();
+                        .ok_or_else(|| {
+                            TypeError(format!(
+                                "Pas de constructeur à {} arg(s) pour '{}'",
+                                args.len(),
+                                class_name
+                            ))
+                        })?
+                        .clone();
                     for (arg, p) in args.iter().zip(ctor.params.iter()) {
                         if let Ok(at) = self.infer_expr(arg, env) {
                             let expected = substitute(&p.ty, &subst);
                             if !self.is_compatible(&at, &expected) {
-                                self.err(format!("new {}() : type incompatible {} ≠ {}", class_name, at, expected));
+                                self.err(format!(
+                                    "new {}() : type incompatible {} ≠ {}",
+                                    class_name, at, expected
+                                ));
                             }
                         }
                     }
@@ -1435,8 +1841,11 @@ impl TypeChecker {
                     let ta = type_args.clone();
                     self.check_generic_type_constraints(&cn, &ta);
                 }
-                if type_args.is_empty() { Ok(Type::UserDefined(class_name.clone())) }
-                else { Ok(Type::Generic(class_name.clone(), type_args.clone())) }
+                if type_args.is_empty() {
+                    Ok(Type::UserDefined(class_name.clone()))
+                } else {
+                    Ok(Type::Generic(class_name.clone(), type_args.clone()))
+                }
             }
 
             // ── inject T — point d'entrée du conteneur d'injection ──────────
@@ -1444,7 +1853,8 @@ impl TypeChecker {
                 if self.current_class.is_some() || self.current_enum.is_some() {
                     return type_err!(
                         "'inject' n'est autorisé que dans main ou les fonctions de \
-                         haut niveau (point de composition unique)");
+                         haut niveau (point de composition unique)"
+                    );
                 }
                 let name = match ty {
                     Type::UserDefined(n) => n.clone(),
@@ -1455,41 +1865,73 @@ impl TypeChecker {
                 Ok(Type::UserDefined(name))
             }
 
-            Expr::EnumConstructor { enum_name, type_args, variant, args } => {
-                let ed = self.enums.get(enum_name)
-                    .ok_or_else(|| TypeError(format!("Enum inconnu '{}'", enum_name)))?.clone();
-                if !ed.type_params.is_empty() && !type_args.is_empty()
+            Expr::EnumConstructor {
+                enum_name,
+                type_args,
+                variant,
+                args,
+            } => {
+                let ed = self
+                    .enums
+                    .get(enum_name)
+                    .ok_or_else(|| TypeError(format!("Enum inconnu '{}'", enum_name)))?
+                    .clone();
+                if !ed.type_params.is_empty()
+                    && !type_args.is_empty()
                     && type_args.len() != ed.type_params.len()
                 {
-                    return type_err!("'{}' attend {} paramètre(s) de type, {} fourni(s)",
-                        enum_name, ed.type_params.len(), type_args.len());
+                    return type_err!(
+                        "'{}' attend {} paramètre(s) de type, {} fourni(s)",
+                        enum_name,
+                        ed.type_params.len(),
+                        type_args.len()
+                    );
                 }
-                let subst: Vec<(String, Type)> = ed.type_params.iter()
+                let subst: Vec<(String, Type)> = ed
+                    .type_params
+                    .iter()
                     .zip(type_args.iter())
                     .map(|(p, t)| (p.clone(), t.clone()))
                     .collect();
-                let vd = ed.variants.iter().find(|v| &v.name == variant)
-                    .ok_or_else(|| TypeError(format!(
-                        "Variante '{}' inconnue dans '{}'", variant, enum_name)))?.clone();
+                let vd = ed
+                    .variants
+                    .iter()
+                    .find(|v| &v.name == variant)
+                    .ok_or_else(|| {
+                        TypeError(format!(
+                            "Variante '{}' inconnue dans '{}'",
+                            variant, enum_name
+                        ))
+                    })?
+                    .clone();
                 if args.len() != vd.fields.len() {
-                    return type_err!("'{}::{}' : {} champ(s), {} fourni(s)",
-                        enum_name, variant, vd.fields.len(), args.len());
+                    return type_err!(
+                        "'{}::{}' : {} champ(s), {} fourni(s)",
+                        enum_name,
+                        variant,
+                        vd.fields.len(),
+                        args.len()
+                    );
                 }
                 for (arg, f) in args.iter().zip(vd.fields.iter()) {
                     if let Ok(at) = self.infer_expr(arg, env) {
                         let expected = substitute(&f.ty, &subst);
                         if !self.is_compatible(&at, &expected) {
-                            self.err(format!("Champ '{}' de '{}::{}' : type incompatible {} ≠ {}",
-                                f.name, enum_name, variant, at, expected));
+                            self.err(format!(
+                                "Champ '{}' de '{}::{}' : type incompatible {} ≠ {}",
+                                f.name, enum_name, variant, at, expected
+                            ));
                         }
                     }
                 }
-                if type_args.is_empty() { Ok(Type::UserDefined(enum_name.clone())) }
-                else { Ok(Type::Generic(enum_name.clone(), type_args.clone())) }
+                if type_args.is_empty() {
+                    Ok(Type::UserDefined(enum_name.clone()))
+                } else {
+                    Ok(Type::Generic(enum_name.clone(), type_args.clone()))
+                }
             }
 
             // ── Navigation sûre  ?.field  et  ?.method() ─────────────────────
-
             Expr::SafeFieldAccess { object, field } => {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
@@ -1499,12 +1941,17 @@ impl TypeChecker {
                 };
                 // Les champs sont privés — vérifier l'accès (jamais via this pour ?.)
                 self.check_field_access_visibility(&inner, field, false);
-                let ft = self.find_field_type(&inner, field)
+                let ft = self
+                    .find_field_type(&inner, field)
                     .ok_or_else(|| TypeError(format!("Champ inconnu '{}'", field)))?;
                 Ok(Type::Generic("Option".to_string(), vec![ft]))
             }
 
-            Expr::SafeMethodCall { object, method, args } => {
+            Expr::SafeMethodCall {
+                object,
+                method,
+                args,
+            } => {
                 let ot = self.infer_expr(object, env)?;
                 let ot = self.resolve(&ot);
                 let inner = match &ot {
@@ -1513,22 +1960,31 @@ impl TypeChecker {
                 };
                 let (ptys, rty, subst) = self.resolve_method(&inner, method)?;
                 if args.len() != ptys.len() {
-                    return type_err!("{}() : {} arg(s) attendus, {} fournis",
-                        method, ptys.len(), args.len());
+                    return type_err!(
+                        "{}() : {} arg(s) attendus, {} fournis",
+                        method,
+                        ptys.len(),
+                        args.len()
+                    );
                 }
                 for (arg, pt) in args.iter().zip(ptys.iter()) {
                     if let Some(at) = self.infer(arg, env) {
                         let expected = substitute(pt, &subst);
                         if !self.is_compatible(&at, &expected) {
-                            self.err(format!("Arg de {}() : type incompatible {} ≠ {}", method, at, expected));
+                            self.err(format!(
+                                "Arg de {}() : type incompatible {} ≠ {}",
+                                method, at, expected
+                            ));
                         }
                     }
                 }
-                Ok(Type::Generic("Option".to_string(), vec![substitute(&rty, &subst)]))
+                Ok(Type::Generic(
+                    "Option".to_string(),
+                    vec![substitute(&rty, &subst)],
+                ))
             }
 
             // ── Null coalescing  expr ?? default ─────────────────────────────
-
             Expr::NullCoalesce { expr, default } => {
                 let et = self.infer_expr(expr, env)?;
                 let et = self.resolve(&et);
@@ -1538,7 +1994,8 @@ impl TypeChecker {
                         if !self.is_compatible(&dt, &args[0]) {
                             self.err(format!(
                                 "?? : valeur par défaut {} incompatible avec Option<{}>",
-                                dt, args[0]));
+                                dt, args[0]
+                            ));
                         }
                         Ok(args[0].clone())
                     }
@@ -1548,17 +2005,26 @@ impl TypeChecker {
 
             // ── Lambda non annotée : sentinelle Type::Fn ──────────────────────
             Expr::Lambda { params, body } => {
-                let mut lenv = TypeEnv::new(); lenv.push();
-                for (k, v) in env.snapshot() { lenv.declare(k, v); }
-                for p in params { lenv.declare(p.clone(), Type::Fn); }
+                let mut lenv = TypeEnv::new();
+                lenv.push();
+                for (k, v) in env.snapshot() {
+                    lenv.declare(k, v);
+                }
+                for p in params {
+                    lenv.declare(p.clone(), Type::Fn);
+                }
                 let saved = self.expected_return.clone();
                 // Type::Fn = sentinelle "tout type de retour accepté"
                 self.expected_return = Type::Fn;
                 match body {
-                    LambdaBody::Expr(e)      => { self.infer(e, &lenv); }
+                    LambdaBody::Expr(e) => {
+                        self.infer(e, &lenv);
+                    }
                     LambdaBody::Block(stmts) => {
                         let mut le = lenv;
-                        for s in stmts { self.check_stmt(s, &mut le); }
+                        for s in stmts {
+                            self.check_stmt(s, &mut le);
+                        }
                     }
                 }
                 self.expected_return = saved;
@@ -1572,20 +2038,28 @@ impl TypeChecker {
                 match ct {
                     Type::FnType(ptys, rty) => {
                         if args.len() != ptys.len() {
-                            return type_err!("Lambda : {} arg(s) attendus, {} fournis",
-                                ptys.len(), args.len());
+                            return type_err!(
+                                "Lambda : {} arg(s) attendus, {} fournis",
+                                ptys.len(),
+                                args.len()
+                            );
                         }
                         for (arg, pt) in args.iter().zip(ptys.iter()) {
                             if let Some(at) = self.infer(arg, env) {
                                 if !self.is_compatible(&at, pt) {
-                                    self.err(format!("Arg lambda : type incompatible {} ≠ {}", at, pt));
+                                    self.err(format!(
+                                        "Arg lambda : type incompatible {} ≠ {}",
+                                        at, pt
+                                    ));
                                 }
                             }
                         }
                         Ok(*rty)
                     }
                     Type::Fn => {
-                        for a in args { self.infer(a, env); }
+                        for a in args {
+                            self.infer(a, env);
+                        }
                         Ok(Type::Fn) // type de retour inconnu — compatible avec tout
                     }
                     _ => type_err!("LambdaCall sur non-lambda ({})", ct),
@@ -1593,12 +2067,17 @@ impl TypeChecker {
             }
 
             // ── Tableau littéral : new T[]{a, b, ...} ────────────────────────
-            Expr::ArrayLit { elem_type, elements } => {
+            Expr::ArrayLit {
+                elem_type,
+                elements,
+            } => {
                 for e in elements {
                     if let Ok(et) = self.infer_expr(e, env) {
                         if !self.is_compatible(&et, elem_type) {
                             self.err(format!(
-                                "Élément de tableau : type incompatible {} ≠ {}", et, elem_type));
+                                "Élément de tableau : type incompatible {} ≠ {}",
+                                et, elem_type
+                            ));
                         }
                     }
                 }
@@ -1606,7 +2085,11 @@ impl TypeChecker {
             }
 
             // ── Nouveau tableau : new T[n] ou new T[n](fill) ─────────────────
-            Expr::ArrayNew { elem_type, size, fill } => {
+            Expr::ArrayNew {
+                elem_type,
+                size,
+                fill,
+            } => {
                 if let Ok(st) = self.infer_expr(size, env) {
                     if st != Type::Int {
                         self.err(format!("Taille de tableau doit être int, trouvé {}", st));
@@ -1634,10 +2117,7 @@ impl TypeChecker {
                     self.err(format!("Index doit être int, trouvé {}", it));
                 }
                 match ot {
-                    Type::Array(elem) => Ok(Type::Generic(
-                        "Option".to_string(),
-                        vec![*elem],
-                    )),
+                    Type::Array(elem) => Ok(Type::Generic("Option".to_string(), vec![*elem])),
                     _ => type_err!("Accès index sur non-tableau : {}", ot),
                 }
             }
@@ -1648,57 +2128,98 @@ impl TypeChecker {
 
     pub fn is_compatible(&self, actual: &Type, expected: &Type) -> bool {
         // Résolution des alias pour la comparaison
-        let actual   = self.resolve(actual);
+        let actual = self.resolve(actual);
         let expected = self.resolve(expected);
 
-        if let Type::UserDefined(n) = &actual   { if self.type_params.contains(n) { return true; } }
-        if let Type::UserDefined(n) = &expected { if self.type_params.contains(n) { return true; } }
-        if actual == expected { return true; }
+        if let Type::UserDefined(n) = &actual {
+            if self.type_params.contains(n) {
+                return true;
+            }
+        }
+        if let Type::UserDefined(n) = &expected {
+            if self.type_params.contains(n) {
+                return true;
+            }
+        }
+        if actual == expected {
+            return true;
+        }
         // Object est le supertype universel : tout est compatible avec Object
-        if let Type::UserDefined(n) = &expected { if n == "Object" { return true; } }
-        if matches!(actual, Type::Void) { return true; }
+        if let Type::UserDefined(n) = &expected {
+            if n == "Object" {
+                return true;
+            }
+        }
+        if matches!(actual, Type::Void) {
+            return true;
+        }
 
         // Type::Fn (non annoté) = compatible avec TOUT
-        if matches!(actual, Type::Fn) || matches!(expected, Type::Fn) { return true; }
+        if matches!(actual, Type::Fn) || matches!(expected, Type::Fn) {
+            return true;
+        }
 
         // Promotions numériques
-        if matches!(expected, Type::Double) && self.is_numeric(&actual) { return true; }
-        if matches!(expected, Type::Float)  && matches!(actual, Type::Int) { return true; }
+        if matches!(expected, Type::Double) && self.is_numeric(&actual) {
+            return true;
+        }
+        if matches!(expected, Type::Float) && matches!(actual, Type::Int) {
+            return true;
+        }
 
         // Sous-typage de classes
         match (&actual, &expected) {
             (Type::UserDefined(a), Type::UserDefined(e)) => self.is_subclass(a, e),
             (Type::Generic(an, _), Type::UserDefined(en)) => self.is_subclass(an, en),
             (Type::UserDefined(an), Type::Generic(en, _)) => self.is_subclass(an, en),
-            (Type::Generic(an, aa), Type::Generic(en, ea)) =>
-                self.is_subclass(an, en) && aa.len() == ea.len()
-                    && aa.iter().zip(ea.iter()).all(|(a, e)| self.is_compatible(a, e)),
+            (Type::Generic(an, aa), Type::Generic(en, ea)) => {
+                self.is_subclass(an, en)
+                    && aa.len() == ea.len()
+                    && aa
+                        .iter()
+                        .zip(ea.iter())
+                        .all(|(a, e)| self.is_compatible(a, e))
+            }
             // FnType compatible si params et retour compatibles
-            (Type::FnType(ap, ar), Type::FnType(ep, er)) =>
+            (Type::FnType(ap, ar), Type::FnType(ep, er)) => {
                 ap.len() == ep.len()
-                    && ap.iter().zip(ep.iter()).all(|(a, e)| self.is_compatible(a, e))
-                    && self.is_compatible(ar, er),
+                    && ap
+                        .iter()
+                        .zip(ep.iter())
+                        .all(|(a, e)| self.is_compatible(a, e))
+                    && self.is_compatible(ar, er)
+            }
             _ => false,
         }
     }
 
     fn is_subclass(&self, sub: &str, sup: &str) -> bool {
-        if sub == sup { return true; }
-        if sup == "Object" { return true; }
+        if sub == sup {
+            return true;
+        }
+        if sup == "Object" {
+            return true;
+        }
         // Interface étendant (transitivement) sup
         if let Some(i) = self.interfaces.get(sub) {
             for p in &i.parents {
-                if self.is_subclass(p.ref_name().unwrap_or(""), sup) { return true; }
+                if self.is_subclass(p.ref_name().unwrap_or(""), sup) {
+                    return true;
+                }
             }
         }
         if let Some(c) = self.classes.get(sub) {
             if let Some(p) = &c.parent {
-                if self.is_subclass(p.ref_name().unwrap_or(""), sup) { return true; }
+                if self.is_subclass(p.ref_name().unwrap_or(""), sup) {
+                    return true;
+                }
             }
             for iface in &c.implements {
                 // iface == sup, ou iface étend sup (transitif)
                 let in_ = iface.ref_name().unwrap_or("");
-                if in_ == sup || self.is_subclass(in_, sup) { return true; }
+                if in_ == sup || self.is_subclass(in_, sup) {
+                    return true;
+                }
             }
         }
         false
@@ -1710,59 +2231,82 @@ impl TypeChecker {
         // Type::Fn (param non annoté) → on skip la vérification, type résultat inconnu
         if matches!(lt, Type::Fn) || matches!(rt, Type::Fn) {
             return Ok(match op {
-                BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le
-                | BinOp::Gt | BinOp::Ge | BinOp::And | BinOp::Or => Type::Bool,
+                BinOp::Eq
+                | BinOp::Ne
+                | BinOp::Lt
+                | BinOp::Le
+                | BinOp::Gt
+                | BinOp::Ge
+                | BinOp::And
+                | BinOp::Or => Type::Bool,
                 _ => Type::Fn,
             });
         }
         match op {
             BinOp::Add => {
-                if self.is_numeric(lt) && self.is_numeric(rt) { Ok(self.numeric_result(lt, rt)) }
-                else if matches!((lt, rt), (Type::Str, Type::Str)) { Ok(Type::Str) }
-                else { type_err!("+ non applicable à {} et {}", lt, rt) }
+                if self.is_numeric(lt) && self.is_numeric(rt) {
+                    Ok(self.numeric_result(lt, rt))
+                } else if matches!((lt, rt), (Type::Str, Type::Str)) {
+                    Ok(Type::Str)
+                } else {
+                    type_err!("+ non applicable à {} et {}", lt, rt)
+                }
             }
             BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
-                if self.is_numeric(lt) && self.is_numeric(rt) { Ok(self.numeric_result(lt, rt)) }
-                else { type_err!("Opérateur arithmétique non applicable à {} et {}", lt, rt) }
+                if self.is_numeric(lt) && self.is_numeric(rt) {
+                    Ok(self.numeric_result(lt, rt))
+                } else {
+                    type_err!("Opérateur arithmétique non applicable à {} et {}", lt, rt)
+                }
             }
             BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                if self.is_numeric(lt) && self.is_numeric(rt) { Ok(Type::Bool) }
-                else { type_err!("Comparaison non applicable à {} et {}", lt, rt) }
+                if self.is_numeric(lt) && self.is_numeric(rt) {
+                    Ok(Type::Bool)
+                } else {
+                    type_err!("Comparaison non applicable à {} et {}", lt, rt)
+                }
             }
             BinOp::Eq | BinOp::Ne => Ok(Type::Bool),
             BinOp::And | BinOp::Or => {
-                if matches!((lt, rt), (Type::Bool, Type::Bool)) { Ok(Type::Bool) }
-                else { type_err!("&& / || requièrent bool, trouvé {} et {}", lt, rt) }
+                if matches!((lt, rt), (Type::Bool, Type::Bool)) {
+                    Ok(Type::Bool)
+                } else {
+                    type_err!("&& / || requièrent bool, trouvé {} et {}", lt, rt)
+                }
             }
         }
     }
 
-    fn is_numeric(&self, t: &Type) -> bool { matches!(t, Type::Int | Type::Float | Type::Double) }
+    fn is_numeric(&self, t: &Type) -> bool {
+        matches!(t, Type::Int | Type::Float | Type::Double)
+    }
 
     fn numeric_result(&self, lt: &Type, rt: &Type) -> Type {
         match (lt, rt) {
             (Type::Double, _) | (_, Type::Double) => Type::Double,
-            (Type::Float,  _) | (_, Type::Float)  => Type::Float,
+            (Type::Float, _) | (_, Type::Float) => Type::Float,
             _ => Type::Int,
         }
     }
 
     // ── Résolution de méthode ─────────────────────────────────────────────────
 
-    fn resolve_method(&self, obj_ty: &Type, method: &str)
-        -> Result<(Vec<Type>, Type, Vec<(String, Type)>), TypeError>
-    {
+    fn resolve_method(
+        &self,
+        obj_ty: &Type,
+        method: &str,
+    ) -> Result<(Vec<Type>, Type, Vec<(String, Type)>), TypeError> {
         let (cn, type_args) = match obj_ty {
-            Type::UserDefined(n)   => (n.clone(), vec![]),
+            Type::UserDefined(n) => (n.clone(), vec![]),
             Type::Generic(n, args) => (n.clone(), args.clone()),
-            Type::Array(inner)     => ("Array".to_string(), vec![*inner.clone()]),
-            Type::Str              => ("String".to_string(),    vec![]),
-            Type::Char             => ("Character".to_string(), vec![]),
-            Type::Bool             => ("Boolean".to_string(),   vec![]),
-            Type::Int              => ("Integer".to_string(),   vec![]),
-            Type::Byte             => ("Byte".to_string(),      vec![]),
-            Type::Float            => ("Float".to_string(),     vec![]),
-            Type::Double           => ("Double".to_string(),    vec![]),
+            Type::Array(inner) => ("Array".to_string(), vec![*inner.clone()]),
+            Type::Str => ("String".to_string(), vec![]),
+            Type::Char => ("Character".to_string(), vec![]),
+            Type::Bool => ("Boolean".to_string(), vec![]),
+            Type::Int => ("Integer".to_string(), vec![]),
+            Type::Byte => ("Byte".to_string(), vec![]),
+            Type::Float => ("Float".to_string(), vec![]),
+            Type::Double => ("Double".to_string(), vec![]),
             _ => return type_err!("Appel '{}' sur type non-objet {}", method, obj_ty),
         };
 
@@ -1776,7 +2320,9 @@ impl TypeChecker {
         }
         if let Some(ed) = self.enums.get(&cn) {
             if let Some(m) = ed.methods.iter().find(|m| m.name == method) {
-                let subst: Vec<(String, Type)> = ed.type_params.iter()
+                let subst: Vec<(String, Type)> = ed
+                    .type_params
+                    .iter()
                     .zip(type_args.iter())
                     .map(|(p, t)| (p.clone(), t.clone()))
                     .collect();
@@ -1804,12 +2350,19 @@ impl TypeChecker {
     /// Trouve une méthode dans la classe `cn<args>` ou un ancêtre, en composant
     /// la substitution de paramètres de type le long de la chaîne `extends`.
     /// Retourne (types des paramètres, type de retour) entièrement substitués.
-    fn class_method_subst(&self, cn: &str, args: &[Type], method: &str)
-        -> Option<(Vec<Type>, Type)>
-    {
+    fn class_method_subst(
+        &self,
+        cn: &str,
+        args: &[Type],
+        method: &str,
+    ) -> Option<(Vec<Type>, Type)> {
         let c = self.classes.get(cn)?;
-        let subst: Vec<(String, Type)> = c.type_params.iter().cloned()
-            .zip(args.iter().cloned()).collect();
+        let subst: Vec<(String, Type)> = c
+            .type_params
+            .iter()
+            .cloned()
+            .zip(args.iter().cloned())
+            .collect();
         if let Some(m) = c.methods.iter().find(|m| m.name == method) {
             return Some((
                 m.params.iter().map(|p| substitute(&p.ty, &subst)).collect(),
@@ -1818,12 +2371,15 @@ impl TypeChecker {
         }
         if let Some(p) = &c.parent {
             let pn = p.ref_name().unwrap_or("");
-            let pargs: Vec<Type> = p.ref_args().iter()
-                .map(|a| substitute(a, &subst)).collect();
-            if let Some(r) = self.class_method_subst(pn, &pargs, method) { return Some(r); }
+            let pargs: Vec<Type> = p.ref_args().iter().map(|a| substitute(a, &subst)).collect();
+            if let Some(r) = self.class_method_subst(pn, &pargs, method) {
+                return Some(r);
+            }
         }
         // Repli sur Object (méthodes universelles : equals, …).
-        if cn != "Object" { return self.class_method_subst("Object", &[], method); }
+        if cn != "Object" {
+            return self.class_method_subst("Object", &[], method);
+        }
         None
     }
 
@@ -1831,9 +2387,15 @@ impl TypeChecker {
 
     fn find_method_def<'a>(&'a self, cn: &str, mn: &str) -> Option<&'a Method> {
         let c = self.classes.get(cn)?;
-        if let Some(m) = c.methods.iter().find(|m| m.name == mn) { return Some(m); }
-        if let Some(p) = &c.parent { return self.find_method_def(p.ref_name().unwrap_or(""), mn); }
-        if cn != "Object" { return self.find_method_def("Object", mn); }
+        if let Some(m) = c.methods.iter().find(|m| m.name == mn) {
+            return Some(m);
+        }
+        if let Some(p) = &c.parent {
+            return self.find_method_def(p.ref_name().unwrap_or(""), mn);
+        }
+        if cn != "Object" {
+            return self.find_method_def("Object", mn);
+        }
         None
     }
 
@@ -1848,8 +2410,12 @@ impl TypeChecker {
         if let Some(m) = c.methods.iter().find(|m| m.name == mn) {
             return Some((m.visibility.clone(), cn.to_string()));
         }
-        if let Some(p) = &c.parent { return self.find_method_visibility(p.ref_name().unwrap_or(""), mn); }
-        if cn != "Object"          { return self.find_method_visibility("Object", mn); }
+        if let Some(p) = &c.parent {
+            return self.find_method_visibility(p.ref_name().unwrap_or(""), mn);
+        }
+        if cn != "Object" {
+            return self.find_method_visibility("Object", mn);
+        }
         None
     }
 
@@ -1863,9 +2429,13 @@ impl TypeChecker {
             _ => return, // primitifs / enums → pas de contrôle de visibilité de classe
         };
         // On ne contrôle que les classes (pas les interfaces ni les enums)
-        if !self.classes.contains_key(&cn) { return; }
+        if !self.classes.contains_key(&cn) {
+            return;
+        }
 
-        let Some((visibility, declaring)) = self.find_method_visibility(&cn, method_name) else { return };
+        let Some((visibility, declaring)) = self.find_method_visibility(&cn, method_name) else {
+            return;
+        };
 
         match visibility {
             Visibility::Public => {} // toujours OK
@@ -1873,13 +2443,14 @@ impl TypeChecker {
                 if self.current_class.as_deref() != Some(&declaring) {
                     self.err(format!(
                         "Méthode privée '{}' de '{}' : inaccessible depuis ce contexte",
-                        method_name, declaring));
+                        method_name, declaring
+                    ));
                 }
             }
             Visibility::Protected => {
                 let allowed = match &self.current_class {
                     Some(cc) => cc == &declaring || self.is_subclass(cc, &declaring),
-                    None     => false,
+                    None => false,
                 };
                 if !allowed {
                     self.err(format!(
@@ -1897,8 +2468,12 @@ impl TypeChecker {
             Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
             _ => return,
         };
-        if !self.classes.contains_key(&cn) { return; }
-        if via_this { return; }
+        if !self.classes.contains_key(&cn) {
+            return;
+        }
+        if via_this {
+            return;
+        }
         let same_class = match &self.current_class {
             Some(cc) => cc == &cn || self.is_subclass(cc, &cn),
             None => false,
@@ -1906,7 +2481,8 @@ impl TypeChecker {
         if !same_class {
             self.err(format!(
                 "Champ '{}' de '{}' est privé : accessible uniquement depuis la classe",
-                field, cn));
+                field, cn
+            ));
         }
     }
 
@@ -1917,11 +2493,11 @@ impl TypeChecker {
     fn method_is_mutable(&self, obj_ty: &Type, method: &str) -> bool {
         let cn = match obj_ty {
             Type::UserDefined(n) | Type::Generic(n, _) => n.as_str(),
-            Type::Str    => "String",
-            Type::Int    => "Integer",
-            Type::Bool   => "Boolean",
-            Type::Char   => "Character",
-            Type::Float  => "Float",
+            Type::Str => "String",
+            Type::Int => "Integer",
+            Type::Bool => "Boolean",
+            Type::Char => "Character",
+            Type::Float => "Float",
             Type::Double => "Double",
             _ => return false,
         };
@@ -1947,9 +2523,19 @@ impl TypeChecker {
     /// Les types valeur ne propagent pas les qualificateurs :
     /// appeler `.size()` sur un `readonly List` retourne un `int` mutable.
     fn is_value_type(ty: &Type) -> bool {
-        matches!(ty, Type::Int | Type::Byte | Type::Bool | Type::Str | Type::Char
-                   | Type::Float | Type::Double | Type::Void
-                   | Type::Fn | Type::FnType(_, _))
+        matches!(
+            ty,
+            Type::Int
+                | Type::Byte
+                | Type::Bool
+                | Type::Str
+                | Type::Char
+                | Type::Float
+                | Type::Double
+                | Type::Void
+                | Type::Fn
+                | Type::FnType(_, _)
+        )
     }
 
     /// Retourne le qualificateur effectif d'une expression.
@@ -1965,7 +2551,11 @@ impl TypeChecker {
     fn qualifier_of_expr(&mut self, expr: &Expr, env: &TypeEnv) -> Qualifier {
         match expr {
             Expr::Ident(name) if name == "this" => {
-                if self.current_method_mutable { Qualifier::Mutable } else { Qualifier::Readonly }
+                if self.current_method_mutable {
+                    Qualifier::Mutable
+                } else {
+                    Qualifier::Readonly
+                }
             }
             Expr::Ident(name) => env.get_qualifier(name),
 
@@ -1979,7 +2569,7 @@ impl TypeChecker {
     fn find_field_type(&self, obj_ty: &Type, field: &str) -> Option<Type> {
         let (cn, args) = match obj_ty {
             Type::UserDefined(n) => (n.clone(), vec![]),
-            Type::Generic(n, a)  => (n.clone(), a.clone()),
+            Type::Generic(n, a) => (n.clone(), a.clone()),
             _ => return None,
         };
         self.find_field_in(&cn, &args, field)
@@ -1989,22 +2579,27 @@ impl TypeChecker {
     /// de type le long de la chaîne `extends` (`Sub extends Base<int>`).
     fn find_field_in(&self, cn: &str, args: &[Type], field: &str) -> Option<Type> {
         let c = self.classes.get(cn)?;
-        let subst: Vec<(String, Type)> = c.type_params.iter().cloned()
-            .zip(args.iter().cloned()).collect();
+        let subst: Vec<(String, Type)> = c
+            .type_params
+            .iter()
+            .cloned()
+            .zip(args.iter().cloned())
+            .collect();
         if let Some(f) = c.fields.iter().find(|f| f.name == field) {
             return Some(self.resolve(&substitute(&f.ty, &subst)));
         }
         if let Some(p) = &c.parent {
             let pn = p.ref_name().unwrap_or("");
-            let pargs: Vec<Type> = p.ref_args().iter()
-                .map(|a| substitute(a, &subst)).collect();
+            let pargs: Vec<Type> = p.ref_args().iter().map(|a| substitute(a, &subst)).collect();
             return self.find_field_in(pn, &pargs, field);
         }
         None
     }
 
     fn field_of_current_class(&self, field: &str) -> Option<Type> {
-        self.current_class.as_ref().and_then(|cn| self.find_field_in(cn, &[], field))
+        self.current_class
+            .as_ref()
+            .and_then(|cn| self.find_field_in(cn, &[], field))
     }
 
     /// Retourne le type primitif correspondant à une classe wrapper, ou None.
@@ -2012,14 +2607,14 @@ impl TypeChecker {
     /// Integer, Boolean, Character, Float, Double.
     fn primitive_type_for_class(class_name: &str) -> Option<Type> {
         match class_name {
-            "String"    => Some(Type::Str),
-            "Integer"   => Some(Type::Int),
-            "Byte"      => Some(Type::Byte),
-            "Boolean"   => Some(Type::Bool),
+            "String" => Some(Type::Str),
+            "Integer" => Some(Type::Int),
+            "Byte" => Some(Type::Byte),
+            "Boolean" => Some(Type::Bool),
             "Character" => Some(Type::Char),
-            "Float"     => Some(Type::Float),
-            "Double"    => Some(Type::Double),
-            _           => None,
+            "Float" => Some(Type::Float),
+            "Double" => Some(Type::Double),
+            _ => None,
         }
     }
 
@@ -2028,24 +2623,36 @@ impl TypeChecker {
     fn check_type_is_mut(&mut self, ty: &Type, var_name: &str, qualifier: &Qualifier) {
         let cn = match ty {
             // Les primitifs sont des types valeur — toujours OK
-            Type::Int | Type::Byte | Type::Bool | Type::Str | Type::Char
-            | Type::Float | Type::Double | Type::Void => return,
+            Type::Int
+            | Type::Byte
+            | Type::Bool
+            | Type::Str
+            | Type::Char
+            | Type::Float
+            | Type::Double
+            | Type::Void => return,
             // Arrays et lambdas → on laisse passer pour l'instant
             Type::Array(_) | Type::Fn | Type::FnType(_, _) => return,
             Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
         };
         // Les enums sont toujours `mut` implicitement
-        if self.enums.contains_key(&cn) { return; }
+        if self.enums.contains_key(&cn) {
+            return;
+        }
         // Vérifier dans les classes
         if let Some(c) = self.classes.get(&cn) {
             if !c.is_mut {
                 self.err(format!(
                     "Variable '{}' ({}) : la classe '{}' doit être déclarée `mut` \
                      pour être utilisée avec le qualificateur `{}`",
-                    var_name, qualifier, cn,
-                    match qualifier { Qualifier::Readonly => "readonly",
-                                      Qualifier::Immutable => "immutable",
-                                      Qualifier::Mutable => "" }
+                    var_name,
+                    qualifier,
+                    cn,
+                    match qualifier {
+                        Qualifier::Readonly => "readonly",
+                        Qualifier::Immutable => "immutable",
+                        Qualifier::Mutable => "",
+                    }
                 ));
             }
             return;
@@ -2056,10 +2663,14 @@ impl TypeChecker {
                 self.err(format!(
                     "Variable '{}' ({}) : l'interface '{}' doit être déclarée `mut` \
                      pour être utilisée avec le qualificateur `{}`",
-                    var_name, qualifier, cn,
-                    match qualifier { Qualifier::Readonly => "readonly",
-                                      Qualifier::Immutable => "immutable",
-                                      Qualifier::Mutable => "" }
+                    var_name,
+                    qualifier,
+                    cn,
+                    match qualifier {
+                        Qualifier::Readonly => "readonly",
+                        Qualifier::Immutable => "immutable",
+                        Qualifier::Mutable => "",
+                    }
                 ));
             }
         }
@@ -2087,27 +2698,39 @@ impl TypeChecker {
             }
         };
 
-        if constraints.is_empty() { return; }
+        if constraints.is_empty() {
+            return;
+        }
 
         for (param_name, type_arg) in param_names.iter().zip(type_args.iter()) {
             // Y a-t-il une contrainte sur ce paramètre ?
-            let constraint = constraints.iter()
+            let constraint = constraints
+                .iter()
                 .find(|(n, _)| n == param_name)
                 .map(|(_, q)| q.clone());
-            let Some(constraint) = constraint else { continue };
-            if constraint == Qualifier::Mutable { continue; }
+            let Some(constraint) = constraint else {
+                continue;
+            };
+            if constraint == Qualifier::Mutable {
+                continue;
+            }
 
             // L'argument de type doit être `mut` (classe ou interface auditée)
             let is_ok = match type_arg {
                 // Types valeur — toujours acceptés
-                Type::Int | Type::Byte | Type::Bool | Type::Str | Type::Char
-                | Type::Float | Type::Double => true,
+                Type::Int
+                | Type::Byte
+                | Type::Bool
+                | Type::Str
+                | Type::Char
+                | Type::Float
+                | Type::Double => true,
                 // Paramètre de type générique en cours de résolution — on fait confiance
                 Type::UserDefined(n) if self.type_params.contains(n.as_str()) => true,
                 Type::UserDefined(n) | Type::Generic(n, _) => {
-                    self.classes   .get(n).map(|c| c.is_mut).unwrap_or(false)
-                    || self.interfaces.get(n).map(|i| i.is_mut).unwrap_or(false)
-                    || self.enums  .contains_key(n.as_str()) // enums sont mut implicitement
+                    self.classes.get(n).map(|c| c.is_mut).unwrap_or(false)
+                        || self.interfaces.get(n).map(|i| i.is_mut).unwrap_or(false)
+                        || self.enums.contains_key(n.as_str()) // enums sont mut implicitement
                 }
                 _ => true, // autres types → permissif
             };
@@ -2115,8 +2738,8 @@ impl TypeChecker {
             if !is_ok {
                 let qual_str = match constraint {
                     Qualifier::Immutable => "immutable",
-                    Qualifier::Readonly  => "readonly",
-                    Qualifier::Mutable   => "",
+                    Qualifier::Readonly => "readonly",
+                    Qualifier::Mutable => "",
                 };
                 self.err(format!(
                     "Argument de type '{}' pour le paramètre '{}' de '{}' : \
@@ -2145,7 +2768,9 @@ impl TypeChecker {
     fn field_of_current_enum(&self, field: &str) -> Option<Type> {
         let en = self.current_enum.as_ref()?;
         let ed = self.enums.get(en)?;
-        ed.variants.iter().flat_map(|v| &v.fields)
+        ed.variants
+            .iter()
+            .flat_map(|v| &v.fields)
             .find(|p| p.name == field)
             .map(|p| self.resolve(&p.ty))
     }
@@ -2160,6 +2785,9 @@ pub fn check_source(src: &str) -> Result<(), Vec<String>> {
         .parse(full.as_str())
         .map_err(|e| e.iter().map(|x| x.to_string()).collect::<Vec<_>>())?;
     let errors = TypeChecker::new(&program).check(&program);
-    if errors.is_empty() { Ok(()) }
-    else { Err(errors.iter().map(|e| e.0.clone()).collect()) }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.iter().map(|e| e.0.clone()).collect())
+    }
 }

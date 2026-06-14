@@ -18,10 +18,10 @@
 //  ```
 // ─────────────────────────────────────────────────────────────────────────────
 
+use crate::ast::Program;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use serde::Deserialize;
-use crate::ast::Program;
 
 /// Nom du fichier de configuration cherché à la racine du projet.
 pub const CONFIG_FILE: &str = "minilang.toml";
@@ -37,11 +37,11 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub sources: SourcesSection,
     #[serde(default)]
-    pub di:      DiSection,
+    pub di: DiSection,
     #[serde(default)]
-    pub tests:   TestsSection,
+    pub tests: TestsSection,
     #[serde(default)]
-    pub files:   FilesSection,
+    pub files: FilesSection,
     #[serde(default)]
     pub runtime: RuntimeSection,
 }
@@ -88,8 +88,8 @@ pub struct DiSection {
 #[serde(rename_all = "kebab-case")]
 pub enum FileMode {
     #[default]
-    Read,        // "read"        — lecture seule (défaut, sûr-par-défaut)
-    ReadWrite,   // "read-write"  — lecture/écriture
+    Read, // "read"        — lecture seule (défaut, sûr-par-défaut)
+    ReadWrite, // "read-write"  — lecture/écriture
 }
 
 /// Une racine fichiers nommée : un chemin + son mode d'accès.
@@ -157,7 +157,9 @@ pub fn find_config(start_dir: &Path) -> Option<PathBuf> {
     let mut dir = Some(start_dir);
     while let Some(d) = dir {
         let candidate = d.join(CONFIG_FILE);
-        if candidate.is_file() { return Some(candidate); }
+        if candidate.is_file() {
+            return Some(candidate);
+        }
         dir = d.parent();
     }
     None
@@ -168,11 +170,13 @@ pub fn find_config(start_dir: &Path) -> Option<PathBuf> {
 /// - Fichier trouvé mais illisible ou invalide → `Err` (erreur fatale :
 ///   une configuration présente mais cassée ne doit pas être ignorée).
 pub fn load(start_dir: &Path) -> Result<Option<(ProjectConfig, PathBuf)>, String> {
-    let Some(path) = find_config(start_dir) else { return Ok(None) };
+    let Some(path) = find_config(start_dir) else {
+        return Ok(None);
+    };
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("{} : lecture impossible : {}", path.display(), e))?;
-    let config = ProjectConfig::parse(&content)
-        .map_err(|e| format!("{} : {}", path.display(), e))?;
+    let config =
+        ProjectConfig::parse(&content).map_err(|e| format!("{} : {}", path.display(), e))?;
     Ok(Some((config, path)))
 }
 
@@ -182,10 +186,13 @@ pub fn load(start_dir: &Path) -> Result<Option<(ProjectConfig, PathBuf)>, String
 ///   canonicalisé (absolu, liens résolus) — c'est la racine de confinement.
 /// Retourne une map `nom → (chemin absolu, writable)`.
 pub fn resolve_roots(
-    files: &FilesSection, cfg_dir: Option<&Path>,
+    files: &FilesSection,
+    cfg_dir: Option<&Path>,
 ) -> Result<HashMap<String, (String, bool)>, String> {
     let mut out = HashMap::new();
-    let Some(roots) = &files.roots else { return Ok(out) };
+    let Some(roots) = &files.roots else {
+        return Ok(out);
+    };
     let base = cfg_dir.unwrap_or(Path::new("."));
     // Ordre déterministe pour des messages d'erreur stables.
     let mut names: Vec<&String> = roots.keys().collect();
@@ -193,15 +200,31 @@ pub fn resolve_roots(
     for name in names {
         let rc = &roots[name];
         let raw = Path::new(&rc.path);
-        let joined = if raw.is_absolute() { raw.to_path_buf() } else { base.join(raw) };
-        let canon = std::fs::canonicalize(&joined).map_err(|e| format!(
-            "racine '{}' : répertoire introuvable '{}' ({})", name, joined.display(), e))?;
+        let joined = if raw.is_absolute() {
+            raw.to_path_buf()
+        } else {
+            base.join(raw)
+        };
+        let canon = std::fs::canonicalize(&joined).map_err(|e| {
+            format!(
+                "racine '{}' : répertoire introuvable '{}' ({})",
+                name,
+                joined.display(),
+                e
+            )
+        })?;
         if !canon.is_dir() {
-            return Err(format!("racine '{}' : '{}' n'est pas un répertoire",
-                name, canon.display()));
+            return Err(format!(
+                "racine '{}' : '{}' n'est pas un répertoire",
+                name,
+                canon.display()
+            ));
         }
         let writable = rc.mode == FileMode::ReadWrite;
-        out.insert(name.clone(), (canon.to_string_lossy().to_string(), writable));
+        out.insert(
+            name.clone(),
+            (canon.to_string_lossy().to_string(), writable),
+        );
     }
     Ok(out)
 }
@@ -212,16 +235,21 @@ pub fn resolve_roots(
 pub fn select_modules(program: &mut Program, active: &[String]) -> Result<(), String> {
     for name in active {
         if !program.modules.iter().any(|m| &m.name == name) {
-            let mut known: Vec<&str> = program.modules.iter()
-                .map(|m| m.name.as_str()).collect();
+            let mut known: Vec<&str> = program.modules.iter().map(|m| m.name.as_str()).collect();
             known.sort();
             return Err(format!(
                 "Module DI inconnu '{}' dans [di] modules (modules déclarés : {})",
                 name,
-                if known.is_empty() { "aucun".to_string() } else { known.join(", ") }
+                if known.is_empty() {
+                    "aucun".to_string()
+                } else {
+                    known.join(", ")
+                }
             ));
         }
     }
-    program.modules.retain(|m| active.iter().any(|a| a == &m.name));
+    program
+        .modules
+        .retain(|m| active.iter().any(|a| a == &m.name));
     Ok(())
 }

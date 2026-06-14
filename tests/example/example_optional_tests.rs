@@ -6,7 +6,7 @@ fn run_example() -> (i64, Vec<String>) {
     let src = include_str!("../../examples/example_optional.mini");
     match run_source_with_output(src) {
         Ok(result) => result,
-        Err(e)     => panic!("Erreur d'exécution :\n{}", e),
+        Err(e) => panic!("Erreur d'exécution :\n{}", e),
     }
 }
 
@@ -31,23 +31,32 @@ fn example_optional_output_lines() {
         // .get()
         "valeur : 42",
         // ?? valeur par défaut
-        "a = 42",    // Some(42) ?? 0  → 42
-        "b = 99",    // None     ?? 99 → 99
+        "a = 42", // Some(42) ?? 0  → 42
+        "b = 99", // None     ?? 99 → 99
         "s = bonjour",
         // ?. appel de méthode sûr
-        "Bonjour Alice",   // u1?.greet() → Some("Bonjour Alice") ?? "personne"
-        "personne",        // u2?.greet() → None ?? "personne"
+        "Bonjour Alice", // u1?.greet() → Some("Bonjour Alice") ?? "personne"
+        "personne",      // u2?.greet() → None ?? "personne"
         // ?. + ?? sur int
-        "age1 = 31",  // u1?.nextAge() = Some(31) ?? 0
-        "age2 = 0",   // u2?.nextAge() = None     ?? 0
+        "age1 = 31", // u1?.nextAge() = Some(31) ?? 0
+        "age2 = 0",  // u2?.nextAge() = None     ?? 0
         // match sur Option<User>
-        "trouvé : Bob",   // findUser(2)
+        "trouvé : Bob", // findUser(2)
     ];
 
-    assert_eq!(lines.len(), expected.len(),
+    assert_eq!(
+        lines.len(),
+        expected.len(),
         "Nombre de lignes attendu : {}, obtenu : {}\nLignes réelles :\n{}",
-        expected.len(), lines.len(),
-        lines.iter().enumerate().map(|(i,l)| format!("[{}] {:?}", i, l)).collect::<Vec<_>>().join("\n"));
+        expected.len(),
+        lines.len(),
+        lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| format!("[{}] {:?}", i, l))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 
     for (i, (got, exp)) in lines.iter().zip(expected.iter()).enumerate() {
         assert_eq!(got, exp, "Ligne {} incorrecte", i);

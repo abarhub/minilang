@@ -6,7 +6,7 @@ fn run_example5() -> (i64, Vec<String>) {
     let src = include_str!("../../examples/example5.mini");
     match run_source_with_output(src) {
         Ok(result) => result,
-        Err(e)     => panic!("Erreur d'exécution :\n{}", e),
+        Err(e) => panic!("Erreur d'exécution :\n{}", e),
     }
 }
 
@@ -42,25 +42,25 @@ fn example5_output_lines() {
         "clamp(-3,0,10) = 0",
         // Alias de types
         "\n=== Alias de types ===",
-        "triple(14) = 42",             // 14 * 3
+        "triple(14) = 42", // 14 * 3
         // Capture lexicale
         "\n=== Capture de variables ===",
-        "times_factor(8) = 40",        // 8 * factor(5)
+        "times_factor(8) = 40", // 8 * factor(5)
         // Lambda passée en argument
         "\n=== Lambda passée en argument ===",
-        "c.apply(x=>x*4)  = 40",       // f(base=10) = 10 * 4
-        "c.apply(x=>x+32) = 42",       // f(base=10) = 10 + 32
+        "c.apply(x=>x*4)  = 40", // f(base=10) = 10 * 4
+        "c.apply(x=>x+32) = 42", // f(base=10) = 10 + 32
         // Lambda retournée
         "\n=== Lambda retournée ===",
-        "adder(1)  = 16",              // 1 + base(10) + offset(5)
-        "adder(20) = 35",              // 20 + base(10) + offset(5)
+        "adder(1)  = 16", // 1 + base(10) + offset(5)
+        "adder(20) = 35", // 20 + base(10) + offset(5)
         // Appel inline
         "\n=== Appel inline (x => x)(args) ===",
         "(x=>x*x)(8)         = 64",
         "((a,b)=>a+b)(10,32) = 42",
         // Composition
         "\n=== Composition ===",
-        "times2(add1(20)) = 42",       // (20+1)*2
+        "times2(add1(20)) = 42", // (20+1)*2
         // Enum → lambda typée
         "\n=== Enum → lambda typée ===",
         "fadd(3, 4) = 7",
@@ -73,10 +73,19 @@ fn example5_output_lines() {
         "factorial(7) = 5040",
     ];
 
-    assert_eq!(lines.len(), expected.len(),
+    assert_eq!(
+        lines.len(),
+        expected.len(),
         "Nombre de lignes attendu : {}, obtenu : {}\nLignes réelles :\n{}",
-        expected.len(), lines.len(),
-        lines.iter().enumerate().map(|(i,l)| format!("[{}] {:?}", i, l)).collect::<Vec<_>>().join("\n"));
+        expected.len(),
+        lines.len(),
+        lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| format!("[{}] {:?}", i, l))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 
     for (i, (got, exp)) in lines.iter().zip(expected.iter()).enumerate() {
         assert_eq!(got, exp, "Ligne {} incorrecte", i);

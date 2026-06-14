@@ -3,8 +3,8 @@
 //! StandardInput, qui lirait le vrai stdin et bloquerait les tests. Le câblage
 //! StandardInput est validé au typecheck et par vérification manuelle (pipe).
 
-use mini_parser::typechecker::check_source;
 use mini_parser::interpreter::{run_source, run_source_with_output};
+use mini_parser::typechecker::check_source;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -16,10 +16,18 @@ fn assert_tc_ok(src: &str) {
 
 fn assert_tc_err(src: &str, fragment: &str) {
     match check_source(src) {
-        Ok(()) => panic!("Typecheck should have failed (expected '{}'):\n{}", fragment, src),
+        Ok(()) => panic!(
+            "Typecheck should have failed (expected '{}'):\n{}",
+            fragment, src
+        ),
         Err(e) => {
             let all = e.join("\n");
-            assert!(all.contains(fragment), "Expected '{}' in:\n{}", fragment, all);
+            assert!(
+                all.contains(fragment),
+                "Expected '{}' in:\n{}",
+                fragment,
+                all
+            );
         }
     }
 }
@@ -40,7 +48,8 @@ fn run_output(src: &str) -> (i64, Vec<String>) {
 
 #[test]
 fn string_input_read_lines_until_eof() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             StringInput in = new StringInput();
             in.feed("alpha\nbeta\ngamma");
@@ -53,7 +62,8 @@ fn string_input_read_lines_until_eof() {
             }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["alpha", "beta", "gamma"]);
 }
@@ -62,7 +72,8 @@ fn string_input_read_lines_until_eof() {
 fn string_input_strips_crlf() {
     // Politique de fin de ligne : '\r\n' et '\n' sont des terminateurs, le '\r'
     // final est retiré (cohérent avec StandardInput). Un '\r' interne est gardé.
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             StringInput in = new StringInput();
             in.feed("alpha\r\nb\reta\r\n");
@@ -75,7 +86,8 @@ fn string_input_strips_crlf() {
             }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     // "alpha" (CR retiré) ; "b\reta" (CR interne gardé)
     assert_eq!(lines, vec!["[alpha]", "[b\reta]"]);
@@ -83,7 +95,8 @@ fn string_input_strips_crlf() {
 
 #[test]
 fn string_input_eof_returns_ok_none() {
-    let ret = run_ok(r#"
+    let ret = run_ok(
+        r#"
         int main() {
             StringInput in = new StringInput();
             in.feed("x\n");
@@ -92,13 +105,15 @@ fn string_input_eof_returns_ok_none() {
             if (r.isNone()) { return 1; }  // EOF
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 1);
 }
 
 #[test]
 fn string_input_read_char() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             StringInput in = new StringInput();
             in.feed("ab");
@@ -116,28 +131,32 @@ fn string_input_read_char() {
             }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["a", "b", "eof"]);
 }
 
 #[test]
 fn string_input_read_all() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             StringInput in = new StringInput();
             in.feed("tout le contenu");
             print(in.readAll().getValue());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["tout le contenu"]);
 }
 
 #[test]
 fn string_input_usable_as_input_interface() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         string firstLine(Input src) {
             match src.readLine().getValue() {
                 Option::Some(l) => { return l; }
@@ -150,7 +169,8 @@ fn string_input_usable_as_input_interface() {
             print(firstLine(in));
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["première"]);
 }
@@ -163,7 +183,8 @@ fn string_input_usable_as_input_interface() {
 fn bind_input_to_string_input() {
     // Un service consomme Input ; un module le binde sur StringInput ; on
     // alimente le même singleton avant de faire travailler le consommateur.
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         service class Echoer {
             Input src;
             Echoer(Input src) { this.src = src; }
@@ -185,7 +206,8 @@ fn bind_input_to_string_input() {
             e.echo();
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["> un", "> deux"]);
 }
@@ -196,7 +218,8 @@ fn bind_input_to_string_input() {
 
 #[test]
 fn buffered_writer_holds_until_flush() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             StringOutput sink = new StringOutput();
             BufferedWriter bw = new BufferedWriter(sink);
@@ -207,7 +230,8 @@ fn buffered_writer_holds_until_flush() {
             print("après flush: [" + sink.content() + "]");
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["avant flush: []", "après flush: [ab\n]"]);
 }
@@ -215,7 +239,8 @@ fn buffered_writer_holds_until_flush() {
 #[test]
 fn buffered_writer_is_buffered_output() {
     // BufferedWriter implémente BufferedOutput, utilisable de façon abstraite
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         void emit(BufferedOutput o) {
             o.write("x");
             o.flush();
@@ -227,7 +252,8 @@ fn buffered_writer_is_buffered_output() {
             print(sink.content());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["x"]);
 }
@@ -238,23 +264,28 @@ fn buffered_writer_is_buffered_output() {
 
 #[test]
 fn tc_standard_input_injectable() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int main() {
             StandardInput in = inject StandardInput;
             Result<Option<string>, IoError> r = in.readLine();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_err_class_missing_input_method() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         mut class HalfInput implements Input {
             mutable Result<Option<string>, IoError> readLine() {
                 return Result<Option<string>, IoError>::Ok(Option<string>::None);
             }
         }
         int main() { return 0; }
-    "#, "n'implémente pas");
+    "#,
+        "n'implémente pas",
+    );
 }

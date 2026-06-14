@@ -4,10 +4,10 @@
 //! fail) ; main optionnel ; isolation : interpréteur (et conteneur DI) neuf
 //! pour chaque test.
 
-use mini_parser::typechecker::check_source;
-use mini_parser::test_runner::{run_tests, run_tests_source, TestResult};
 use chumsky::Parser;
 use mini_parser::parser::program_parser;
+use mini_parser::test_runner::{TestResult, run_tests, run_tests_source};
+use mini_parser::typechecker::check_source;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -15,8 +15,14 @@ fn parses_ok(src: &str) {
     let full = format!("{}\n{}", mini_parser::STDLIB, src);
     match program_parser().parse(full.as_str()) {
         Ok(_) => {}
-        Err(e) => panic!("Parse failed:\n{}\n---\n{}",
-            src, e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")),
+        Err(e) => panic!(
+            "Parse failed:\n{}\n---\n{}",
+            src,
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
     }
 }
 
@@ -28,11 +34,18 @@ fn assert_tc_ok(src: &str) {
 
 fn assert_tc_err(src: &str, fragment: &str) {
     match check_source(src) {
-        Ok(()) => panic!("Typecheck should have failed (expected '{}'):\n{}", fragment, src),
+        Ok(()) => panic!(
+            "Typecheck should have failed (expected '{}'):\n{}",
+            fragment, src
+        ),
         Err(e) => {
             let all = e.join("\n");
-            assert!(all.contains(fragment),
-                "Expected '{}' in:\n{}", fragment, all);
+            assert!(
+                all.contains(fragment),
+                "Expected '{}' in:\n{}",
+                fragment,
+                all
+            );
         }
     }
 }
@@ -48,31 +61,37 @@ fn run(src: &str) -> Vec<TestResult> {
 
 #[test]
 fn parse_test_function() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         test void monTest() {
             assertTrue(true);
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_file_without_main() {
     // Un fichier de tests n'a pas besoin de main
-    parses_ok(r#"
+    parses_ok(
+        r#"
         test void monTest() {
             assertEquals(1, 1);
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_function_named_test_still_works() {
     // `test` n'est pas réservé comme nom de fonction
-    parses_ok(r#"
+    parses_ok(
+        r#"
         int test() { return 1; }
         int main() { return test(); }
-    "#);
+    "#,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,7 +100,8 @@ fn parse_function_named_test_still_works() {
 
 #[test]
 fn tc_assertions_ok() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         int add(int a, int b) { return a + b; }
         test void lesAssertions() {
             assertTrue(1 < 2);
@@ -89,67 +109,87 @@ fn tc_assertions_ok() {
             assertEquals(add(2, 3), 5);
             assertNotEquals("a", "b");
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_err_test_with_params() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         test void monTest(int x) {
             assertTrue(true);
         }
-    "#, "ne doit pas avoir de paramètres");
+    "#,
+        "ne doit pas avoir de paramètres",
+    );
 }
 
 #[test]
 fn tc_err_test_non_void() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         test int monTest() {
             return 1;
         }
-    "#, "doit retourner void");
+    "#,
+        "doit retourner void",
+    );
 }
 
 #[test]
 fn tc_err_assert_true_non_bool() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         test void monTest() {
             assertTrue(42);
         }
-    "#, "doit être bool");
+    "#,
+        "doit être bool",
+    );
 }
 
 #[test]
 fn tc_err_assert_equals_incomparable() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         test void monTest() {
             assertEquals(1, "un");
         }
-    "#, "incomparables");
+    "#,
+        "incomparables",
+    );
 }
 
 #[test]
 fn tc_err_assert_equals_arity() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         test void monTest() {
             assertEquals(1);
         }
-    "#, "attend 2 arguments");
+    "#,
+        "attend 2 arguments",
+    );
 }
 
 #[test]
 fn tc_err_fail_non_string() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         test void monTest() {
             fail(42);
         }
-    "#, "doit être string");
+    "#,
+        "doit être string",
+    );
 }
 
 #[test]
 fn tc_inject_allowed_in_test() {
     // Les fonctions test sont des fonctions de haut niveau → inject autorisé
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         service class Foo {
             int answer() { return 42; }
         }
@@ -157,7 +197,8 @@ fn tc_inject_allowed_in_test() {
             Foo f = inject Foo;
             assertEquals(f.answer(), 42);
         }
-    "#);
+    "#,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,8 +213,11 @@ fn runner_passing_tests() {
         test void comparaison() { assertTrue(add(1, 1) == 2); }
     "#);
     assert_eq!(results.len(), 2);
-    assert!(results.iter().all(|r| r.passed()),
-        "tous les tests doivent passer : {:?}", results);
+    assert!(
+        results.iter().all(|r| r.passed()),
+        "tous les tests doivent passer : {:?}",
+        results
+    );
     // Ordre de déclaration préservé
     assert_eq!(results[0].name, "addition");
     assert_eq!(results[1].name, "comparaison");
@@ -186,8 +230,11 @@ fn runner_failing_assertion_message() {
     "#);
     assert_eq!(results.len(), 1);
     let err = results[0].error.as_deref().expect("le test doit échouer");
-    assert!(err.contains("assertEquals") && err.contains("4") && err.contains("5"),
-        "message inattendu : {}", err);
+    assert!(
+        err.contains("assertEquals") && err.contains("4") && err.contains("5"),
+        "message inattendu : {}",
+        err
+    );
 }
 
 #[test]
@@ -200,7 +247,7 @@ fn runner_continues_after_failure() {
     "#);
     assert_eq!(results.len(), 3);
     assert!(!results[0].passed());
-    assert!( results[1].passed());
+    assert!(results[1].passed());
     assert!(!results[2].passed());
     assert!(results[0].error.as_deref().unwrap().contains("boum"));
 }
@@ -234,8 +281,11 @@ fn runner_resets_di_container_between_tests() {
             assertEquals(c.get(), 1);   // 2 si le singleton fuyait du test précédent
         }
     "#);
-    assert!(results.iter().all(|r| r.passed()),
-        "isolation des singletons attendue : {:?}", results);
+    assert!(
+        results.iter().all(|r| r.passed()),
+        "isolation des singletons attendue : {:?}",
+        results
+    );
 }
 
 #[test]
@@ -257,13 +307,23 @@ fn runner_test_with_di_profile() {
         }
     "#;
     let full = format!("{}\n{}", mini_parser::STDLIB, src);
-    let mut program = program_parser().parse(full.as_str())
-        .unwrap_or_else(|e| panic!("Parse failed:\n{}",
-            e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")));
+    let mut program = program_parser().parse(full.as_str()).unwrap_or_else(|e| {
+        panic!(
+            "Parse failed:\n{}",
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    });
     mini_parser::config::select_modules(&mut program, &["TestModule".to_string()])
         .expect("sélection ok");
     let results = run_tests(&program);
-    assert!(results[0].passed(), "le fake doit être injecté : {:?}", results);
+    assert!(
+        results[0].passed(),
+        "le fake doit être injecté : {:?}",
+        results
+    );
 }
 
 #[test]
@@ -282,20 +342,31 @@ fn runner_no_test_functions() {
 #[test]
 fn run_mode_without_main_is_runtime_error() {
     use mini_parser::interpreter::Interpreter;
-    let full = format!("{}\n{}", mini_parser::STDLIB, "test void t() { assertTrue(true); }");
+    let full = format!(
+        "{}\n{}",
+        mini_parser::STDLIB,
+        "test void t() { assertTrue(true); }"
+    );
     let program = program_parser().parse(full.as_str()).expect("parse ok");
     let err = Interpreter::new(&program).run(&program).unwrap_err();
-    assert!(err.to_string().contains("main"), "message inattendu : {}", err);
+    assert!(
+        err.to_string().contains("main"),
+        "message inattendu : {}",
+        err
+    );
 }
 
 #[test]
 fn assertions_usable_in_main_too() {
     // Les assertions sont des fonctions normales, utilisables hors tests
-    let ret = mini_parser::interpreter::run_source(r#"
+    let ret = mini_parser::interpreter::run_source(
+        r#"
         int main() {
             assertEquals(1 + 1, 2);
             return 0;
         }
-    "#).expect("run ok");
+    "#,
+    )
+    .expect("run ok");
     assert_eq!(ret, 0);
 }

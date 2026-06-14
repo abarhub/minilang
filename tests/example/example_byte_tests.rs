@@ -14,6 +14,6 @@ fn example_byte_typechecks_and_runs() {
     }
     match run_source(src) {
         Ok(code) => assert_eq!(code, 0),
-        Err(e)   => panic!("Erreur d'exécution :\n{}", e),
+        Err(e) => panic!("Erreur d'exécution :\n{}", e),
     }
 }

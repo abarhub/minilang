@@ -5,8 +5,8 @@
 //! COMPILATION. Les répertoires temporaires (préfixe minilang_cap_) sont
 //! nettoyés en fin de test.
 
-use mini_parser::typechecker::check_source;
 use mini_parser::interpreter::{run_source, run_source_with_output};
+use mini_parser::typechecker::check_source;
 use std::sync::Mutex;
 
 // Sérialise les tests qui créent/nettoient des répertoires temporaires :
@@ -36,10 +36,18 @@ fn assert_tc_ok(src: &str) {
 
 fn assert_tc_err(src: &str, fragment: &str) {
     match check_source(src) {
-        Ok(()) => panic!("Typecheck should have failed (expected '{}'):\n{}", fragment, src),
+        Ok(()) => panic!(
+            "Typecheck should have failed (expected '{}'):\n{}",
+            fragment, src
+        ),
         Err(e) => {
             let all = e.join("\n");
-            assert!(all.contains(fragment), "Expected '{}' in:\n{}", fragment, all);
+            assert!(
+                all.contains(fragment),
+                "Expected '{}' in:\n{}",
+                fragment,
+                all
+            );
         }
     }
 }
@@ -64,7 +72,8 @@ fn run_output(src: &str) -> (i64, Vec<String>) {
 
 #[test]
 fn temp_dir_write_read_roundtrip() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -72,14 +81,16 @@ fn temp_dir_write_read_roundtrip() {
             print(dir.readText("notes.txt").getValue());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["bonjour\nmonde"]);
 }
 
 #[test]
 fn write_creates_parent_dirs() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -87,14 +98,16 @@ fn write_creates_parent_dirs() {
             print(dir.readText("a/b/c.txt").getValue());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["profond"]);
 }
 
 #[test]
 fn append_accumulates() {
-    let ret = run_ok(r#"
+    let ret = run_ok(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -104,13 +117,15 @@ fn append_accumulates() {
             if (content == "ab") { return 1; }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 1);
 }
 
 #[test]
 fn exists_and_delete() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -121,7 +136,8 @@ fn exists_and_delete() {
             print(dir.exists("f.txt").toString());   // false
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["false", "true", "false"]);
 }
@@ -130,7 +146,8 @@ fn exists_and_delete() {
 
 #[test]
 fn escape_with_parent_dir_is_rejected() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -138,14 +155,16 @@ fn escape_with_parent_dir_is_rejected() {
             if (r.isErr()) { print("bloqué: " + r.getError().message()); }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["bloqué: chemin hors de la capacité"]);
 }
 
 #[test]
 fn absolute_path_is_rejected() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -153,7 +172,8 @@ fn absolute_path_is_rejected() {
             if (r.isErr()) { print("bloqué"); }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["bloqué"]);
 }
@@ -162,7 +182,8 @@ fn absolute_path_is_rejected() {
 
 #[test]
 fn subrw_derives_writable_child() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir  = fs.tempDir().getValue();
@@ -172,7 +193,8 @@ fn subrw_derives_writable_child() {
             print(dir.readText("logs/app.log").getValue());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["demarrage"]);
 }
@@ -180,7 +202,8 @@ fn subrw_derives_writable_child() {
 #[test]
 fn sub_gives_read_only_view() {
     // sub() renvoie un ReadDir : lecture OK, écriture impossible (voir test tc)
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir dir = fs.tempDir().getValue();
@@ -189,7 +212,8 @@ fn sub_gives_read_only_view() {
             print(ro.readText("x.txt").getValue());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["lu"]);
 }
@@ -198,28 +222,35 @@ fn sub_gives_read_only_view() {
 
 #[test]
 fn tc_err_write_through_readdir() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         void f(ReadDir d) {
             d.writeText("x.txt", "y");   // writeText absent de ReadDir
         }
         int main() { return 0; }
-    "#, "inconnue");
+    "#,
+        "inconnue",
+    );
 }
 
 #[test]
 fn tc_err_subrw_through_readdir() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         void f(ReadDir d) {
             ReadWriteDir rw = d.subRW("x");   // subRW absent de ReadDir
         }
         int main() { return 0; }
-    "#, "inconnue");
+    "#,
+        "inconnue",
+    );
 }
 
 #[test]
 fn tc_readwritedir_usable_as_readdir() {
     // Atténuation : un ReadWriteDir passe là où un ReadDir est attendu
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         string firstByteCount(ReadDir d) {
             return d.readBytes("f").getValue().length().toString();
         }
@@ -230,21 +261,24 @@ fn tc_readwritedir_usable_as_readdir() {
             print(firstByteCount(dir));   // ReadWriteDir -> ReadDir
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Racine non-forgeable : new Directory() est inerte ───────────────────────
 
 #[test]
 fn new_directory_is_inert() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         int main() {
             Directory d = new Directory();   // capacité non initialisée
             Result<string, IoError> r = d.readText("anything");
             if (r.isErr()) { print("inerte: " + r.getError().message()); }
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["inerte: capacité non initialisée"]);
 }
@@ -253,7 +287,8 @@ fn new_directory_is_inert() {
 
 #[test]
 fn temp_dirs_are_isolated() {
-    let ret = run_ok(r#"
+    let ret = run_ok(
+        r#"
         int main() {
             FileSystem fs = inject FileSystem;
             ReadWriteDir a = fs.tempDir().getValue();
@@ -262,6 +297,7 @@ fn temp_dirs_are_isolated() {
             if (b.exists("f.txt")) { return 0; }   // b ne voit pas le fichier de a
             return 1;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 1);
 }

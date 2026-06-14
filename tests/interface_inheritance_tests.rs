@@ -3,10 +3,10 @@
 //! ses parents (transitif) ; une sous-interface est sous-type de ses parents ;
 //! la résolution de méthode remonte la chaîne des parents.
 
-use mini_parser::typechecker::check_source;
-use mini_parser::interpreter::run_source_with_output;
 use chumsky::Parser;
+use mini_parser::interpreter::run_source_with_output;
 use mini_parser::parser::program_parser;
+use mini_parser::typechecker::check_source;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -14,8 +14,14 @@ fn parses_ok(src: &str) {
     let full = format!("{}\n{}", mini_parser::STDLIB, src);
     match program_parser().parse(full.as_str()) {
         Ok(_) => {}
-        Err(e) => panic!("Parse failed:\n{}\n---\n{}",
-            src, e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")),
+        Err(e) => panic!(
+            "Parse failed:\n{}\n---\n{}",
+            src,
+            e.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
     }
 }
 
@@ -27,10 +33,18 @@ fn assert_tc_ok(src: &str) {
 
 fn assert_tc_err(src: &str, fragment: &str) {
     match check_source(src) {
-        Ok(()) => panic!("Typecheck should have failed (expected '{}'):\n{}", fragment, src),
+        Ok(()) => panic!(
+            "Typecheck should have failed (expected '{}'):\n{}",
+            fragment, src
+        ),
         Err(e) => {
             let all = e.join("\n");
-            assert!(all.contains(fragment), "Expected '{}' in:\n{}", fragment, all);
+            assert!(
+                all.contains(fragment),
+                "Expected '{}' in:\n{}",
+                fragment,
+                all
+            );
         }
     }
 }
@@ -44,28 +58,33 @@ fn run_output(src: &str) -> (i64, Vec<String>) {
 
 #[test]
 fn parse_single_extends() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         interface A { void a(); }
         interface B extends A { void b(); }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn parse_multiple_extends() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         interface A { void a(); }
         interface B { void b(); }
         interface C extends A, B { void c(); }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 // ── Typecheck ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn tc_class_must_implement_inherited_methods() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
@@ -73,38 +92,46 @@ fn tc_class_must_implement_inherited_methods() {
             string owner() { return "Alice"; }
         }
         int main() { Dog d = new Dog(); return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_err_missing_inherited_method() {
     // Dog implémente Pet mais oublie name() (héritée d'Animal)
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
             string owner() { return "Alice"; }
         }
         int main() { return 0; }
-    "#, "n'implémente pas");
+    "#,
+        "n'implémente pas",
+    );
 }
 
 #[test]
 fn tc_err_missing_own_method() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
             string name() { return "Rex"; }
         }
         int main() { return 0; }
-    "#, "n'implémente pas");
+    "#,
+        "n'implémente pas",
+    );
 }
 
 #[test]
 fn tc_multilevel_inheritance() {
     // A <- B <- C : une classe implémentant C doit tout fournir
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         interface A { void a(); }
         interface B extends A { void b(); }
         interface C extends B { void c(); }
@@ -114,13 +141,15 @@ fn tc_multilevel_inheritance() {
             void c() {}
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_diamond_inheritance() {
     // Diamant : D étend B et C qui étendent toutes deux A
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         interface A { void a(); }
         interface B extends A { void b(); }
         interface C extends A { void c(); }
@@ -132,30 +161,38 @@ fn tc_diamond_inheritance() {
             void d() {}
         }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_err_extends_unknown() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         interface B extends Fantome { void b(); }
         int main() { return 0; }
-    "#, "extends 'Fantome' inconnu");
+    "#,
+        "extends 'Fantome' inconnu",
+    );
 }
 
 #[test]
 fn tc_err_extends_cycle() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         interface A extends B { void a(); }
         interface B extends A { void b(); }
         int main() { return 0; }
-    "#, "Cycle d'héritage d'interface");
+    "#,
+        "Cycle d'héritage d'interface",
+    );
 }
 
 #[test]
 fn tc_subinterface_is_subtype_of_parent() {
     // Une variable typée par le parent accepte une valeur typée par l'enfant
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
@@ -167,13 +204,15 @@ fn tc_subinterface_is_subtype_of_parent() {
             Animal a = p;          // Pet est sous-type d'Animal
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_call_inherited_method_on_interface_type() {
     // Appel d'une méthode héritée via une variable typée par la sous-interface
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
@@ -187,12 +226,14 @@ fn tc_call_inherited_method_on_interface_type() {
             Pet p = new Dog();
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn tc_class_implementing_subinterface_compatible_with_parent_param() {
-    assert_tc_ok(r#"
+    assert_tc_ok(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
@@ -205,14 +246,16 @@ fn tc_class_implementing_subinterface_compatible_with_parent_param() {
             string s = greet(d);   // Dog -> Pet -> Animal
             return 0;
         }
-    "#);
+    "#,
+    );
 }
 
 // ── Exécution ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn run_inherited_method_dispatch() {
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         interface Animal { string name(); }
         interface Pet extends Animal { string owner(); }
         class Dog implements Pet {
@@ -227,7 +270,8 @@ fn run_inherited_method_dispatch() {
             print(describe(p));
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["Rex (de Alice)"]);
 }
@@ -239,17 +283,20 @@ fn run_inherited_method_dispatch() {
 
 #[test]
 fn parse_generic_extends_with_args() {
-    parses_ok(r#"
+    parses_ok(
+        r#"
         interface Container<T> { T get(); }
         interface Box<E> extends Container<E> { void put(E x); }
         int main() { return 0; }
-    "#);
+    "#,
+    );
 }
 
 #[test]
 fn run_iface_inherited_generic_method_renamed_param() {
     // Box<E> extends Container<E> : le retour T de Container devient int via E↦int
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         interface Container<T> { T get(); }
         interface Box<E> extends Container<E> { void put(E x); }
         class IntBox implements Box<int> {
@@ -264,7 +311,8 @@ fn run_iface_inherited_generic_method_renamed_param() {
             print(v);
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["7"]);
 }
@@ -272,7 +320,8 @@ fn run_iface_inherited_generic_method_renamed_param() {
 #[test]
 fn run_iface_extends_concrete_arg() {
     // IntSource extends Source<int> : arg concret indépendant des params enfant
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         interface Source<T> { T produce(); }
         interface IntSource extends Source<int> {}
         class Fixed implements IntSource {
@@ -284,7 +333,8 @@ fn run_iface_extends_concrete_arg() {
             print(p);
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["42"]);
 }
@@ -292,7 +342,8 @@ fn run_iface_extends_concrete_arg() {
 #[test]
 fn run_class_extends_generic_parent() {
     // IntCell extends Base<int> : méthode ET champ hérités substitués T↦int
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         mut class Base<T> {
             T val;
             T getVal() { return val; }
@@ -311,7 +362,8 @@ fn run_class_extends_generic_parent() {
             print(c.doubled());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["21", "42"]);
 }
@@ -319,7 +371,8 @@ fn run_class_extends_generic_parent() {
 #[test]
 fn tc_err_generic_parent_wrong_arg_type() {
     // get() hérité retourne int (via Box<int>) → incompatible avec une string
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         interface Container<T> { T get(); }
         interface Box<E> extends Container<E> { void put(E x); }
         class IntBox implements Box<int> {
@@ -333,22 +386,28 @@ fn tc_err_generic_parent_wrong_arg_type() {
             string s = bx.get();    // get() retourne int, pas string
             return 0;
         }
-    "#, "incompatible");
+    "#,
+        "incompatible",
+    );
 }
 
 #[test]
 fn tc_err_generic_extends_arity() {
-    assert_tc_err(r#"
+    assert_tc_err(
+        r#"
         interface Pair<A, B> { A first(); }
         interface Bad extends Pair<int> { void x(); }
         int main() { return 0; }
-    "#, "argument(s) de type attendu(s)");
+    "#,
+        "argument(s) de type attendu(s)",
+    );
 }
 
 #[test]
 fn run_subinterface_with_di() {
     // Héritage d'interface combiné à l'injection : on injecte via le parent
-    let (ret, lines) = run_output(r#"
+    let (ret, lines) = run_output(
+        r#"
         interface Greeter { string greet(); }
         interface FancyGreeter extends Greeter { string wave(); }
         service class Hello implements FancyGreeter {
@@ -360,7 +419,8 @@ fn run_subinterface_with_di() {
             print(g.greet(), g.wave());
             return 0;
         }
-    "#);
+    "#,
+    );
     assert_eq!(ret, 0);
     assert_eq!(lines, vec!["bonjour (salut)"]);
 }
