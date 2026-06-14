@@ -788,17 +788,23 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .delimited_by(just('<').padded_by(ws()), just('>').padded_by(ws()))
         .or_not().map(|v| v.unwrap_or_default());
 
-    // extends Iface1, Iface2  — interfaces étendues (type args éventuels ignorés)
+    // Référence de supertype : `Nom` ou `Nom<args>` → Type (args conservés).
+    let type_ref = text::ident().padded_by(ws())
+        .then(
+            just('<')
+                .ignore_then(type_parser().separated_by(just(',').padded_by(ws())).at_least(1))
+                .then_ignore(just('>').padded_by(ws()))
+                .or_not()
+        )
+        .map(|(name, args)| match args {
+            Some(a) => Type::Generic(name, a),
+            None    => Type::UserDefined(name),
+        });
+
+    // extends Iface1, Iface2<int>  — interfaces étendues (args de type conservés)
     let extends_ifaces = kw("extends")
         .ignore_then(
-            text::ident().padded_by(ws())
-                .then(
-                    just('<')
-                        .ignore_then(type_parser().separated_by(just(',').padded_by(ws())).at_least(1))
-                        .then_ignore(just('>').padded_by(ws()))
-                        .or_not()
-                )
-                .map(|(name, _)| name)
+            type_ref.clone()
                 .separated_by(just(',').padded_by(ws())).at_least(1)
         )
         .or_not().map(|v| v.unwrap_or_default());
@@ -825,17 +831,10 @@ pub fn program_parser() -> impl Parser<char, Program, Error = Simple<char>> {
         .then_ignore(kw("class"))
         .then(text::ident().padded_by(ws()))
         .then(type_param_list.clone())
-        .then(kw("extends").ignore_then(text::ident().padded_by(ws())).or_not())
+        .then(kw("extends").ignore_then(type_ref.clone()).or_not())
         .then(kw("implements")
             .ignore_then(
-                text::ident().padded_by(ws())
-                    .then(
-                        just('<')
-                            .ignore_then(type_parser().separated_by(just(',').padded_by(ws())).at_least(1))
-                            .then_ignore(just('>').padded_by(ws()))
-                            .or_not()
-                    )
-                    .map(|(name, _)| name)
+                type_ref.clone()
                     .separated_by(just(',').padded_by(ws())).at_least(1)
             )
             .or_not().map(|v| v.unwrap_or_default()))

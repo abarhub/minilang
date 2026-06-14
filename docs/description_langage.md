@@ -220,7 +220,30 @@ Pet    p = new Dog();
 Animal a = p;                          // Pet est sous-type d'Animal
 ```
 
-L'héritage multiple et le diamant sont autorisés (`interface D extends B, C`) ; un cycle d'héritage est une erreur de compilation. Limitation actuelle : les arguments de type sur un parent générique (`extends Base<int>`) sont ignorés.
+L'héritage multiple et le diamant sont autorisés (`interface D extends B, C`) ; un cycle d'héritage est une erreur de compilation.
+
+Les arguments de type passés à un supertype générique sont conservés et substitués le long de la chaîne d'héritage — pour `extends`/`implements` d'interface comme pour `extends` de classe. Le nombre d'arguments doit correspondre aux paramètres du supertype (0 argument reste toléré, paramètres non liés).
+
+```java
+interface Container<T> { T get(); }
+interface Box<E> extends Container<E> { void put(E x); }  // T de Container ↦ E
+
+class IntBox implements Box<int> {        // E ↦ int sur toute la chaîne
+    int value;
+    IntBox(int v) { this.value = v; }
+    int get() { return this.value; }      // satisfait Container<int>.get()
+    void put(int x) {}
+}
+
+Box<int> bx = new IntBox(7);
+int v = bx.get();                          // get() héritée de Container, retour int
+
+// Héritage de classe générique avec argument concret
+mut class Base<T> { T val; T getVal() { return val; } }
+mut class IntCell extends Base<int> {      // getVal() et le champ val sont des int
+    int doubled() { return this.getVal() * 2; }
+}
+```
 
 ### Entrées/sorties
 

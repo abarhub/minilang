@@ -75,6 +75,25 @@ pub enum Type {
     FnType(Vec<Type>, Box<Type>),
 }
 
+impl Type {
+    /// Nom de tête d'un type de référence (`UserDefined` ou `Generic`).
+    /// `None` pour les primitifs, arrays, lambdas, etc.
+    pub fn ref_name(&self) -> Option<&str> {
+        match self {
+            Type::UserDefined(n) | Type::Generic(n, _) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Arguments de type d'une référence générique (vide si non générique).
+    pub fn ref_args(&self) -> &[Type] {
+        match self {
+            Type::Generic(_, a) => a,
+            _ => &[],
+        }
+    }
+}
+
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -247,7 +266,10 @@ pub struct ClassDef {
     /// Contraintes de qualificateur sur les paramètres de type.
     /// Ex. : `mut class Map<immutable K, V>` → `[("K", Immutable)]`
     pub type_param_constraints: Vec<(String, Qualifier)>,
-    pub parent: Option<String>, pub implements: Vec<String>,
+    /// Classe parente (`extends Base<int>`). `Type::UserDefined` ou `Type::Generic`.
+    pub parent: Option<Type>,
+    /// Interfaces implémentées (`implements Box<int>`). Args de type conservés.
+    pub implements: Vec<Type>,
     pub fields: Vec<Field>, pub constructors: Vec<Constructor>, pub methods: Vec<Method>,
 }
 
@@ -258,9 +280,10 @@ pub struct InterfaceDef {
     pub is_mut: bool,
     pub name: String, pub type_params: Vec<String>,
     pub type_param_constraints: Vec<(String, Qualifier)>,
-    /// Interfaces étendues (`interface Sub extends A, B`). Une classe qui
+    /// Interfaces étendues (`interface Sub extends A<int>, B`). Une classe qui
     /// implémente Sub doit fournir les méthodes de Sub et de ses parents.
-    pub parents: Vec<String>,
+    /// Les args de type sur le parent sont conservés (`Type::Generic`/`UserDefined`).
+    pub parents: Vec<Type>,
     pub methods: Vec<MethodSig>,
 }
 

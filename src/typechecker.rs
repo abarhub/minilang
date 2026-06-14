@@ -85,6 +85,18 @@ fn substitute(ty: &Type, subst: &[(String, Type)]) -> Type {
     }
 }
 
+/// Applique une substitution de paramètres de type à une signature de méthode.
+fn subst_method_sig(sig: &MethodSig, subst: &[(String, Type)]) -> MethodSig {
+    MethodSig {
+        is_mutable:  sig.is_mutable,
+        return_type: substitute(&sig.return_type, subst),
+        name:        sig.name.clone(),
+        params:      sig.params.iter()
+            .map(|p| Param { name: p.name.clone(), ty: substitute(&p.ty, subst) })
+            .collect(),
+    }
+}
+
 // ── TypeChecker ───────────────────────────────────────────────────────────────
 
 pub struct TypeChecker {
@@ -221,8 +233,9 @@ impl TypeChecker {
             name:                   rd.name.clone(),
             type_params:            rd.type_params.clone(),
             type_param_constraints: rd.type_param_constraints.clone(),
-            parent:                 Some("Record".to_string()),
-            implements:             rd.implements.clone(),
+            parent:                 Some(Type::UserDefined("Record".to_string())),
+            implements:             rd.implements.iter()
+                                        .map(|s| Type::UserDefined(s.clone())).collect(),
             fields:                 rd.fields.clone(),
             constructors:           vec![constructor],
             methods,
@@ -246,7 +259,7 @@ impl TypeChecker {
             name: "Object".to_string(),
             type_params: vec![],
             type_param_constraints: vec![],
-            parent: None,
+            parent: None::<Type>,
             implements: vec![],
             fields: vec![],
             constructors: vec![],
@@ -267,7 +280,7 @@ impl TypeChecker {
             name: "Record".to_string(),
             type_params: vec![],
             type_param_constraints: vec![],
-            parent: Some("Object".to_string()),
+            parent: Some(Type::UserDefined("Object".to_string())),
             implements: vec![],
             fields: vec![],
             constructors: vec![],
@@ -434,17 +447,36 @@ impl TypeChecker {
 
     // ── Hiérarchie ────────────────────────────────────────────────────────────
 
+    /// Valide l'arité des arguments de type passés à un supertype.
+    /// 0 argument est toléré (usage « brut », paramètres non liés) ; sinon le
+    /// nombre doit correspondre exactement aux paramètres du supertype.
+    fn check_type_arg_arity(
+        &mut self, who: &str, kw: &str, target: &str, expected: usize, provided: usize,
+    ) {
+        if provided != 0 && provided != expected {
+            self.err(format!(
+                "'{}' {} '{}' : {} argument(s) de type attendu(s), {} fourni(s)",
+                who, kw, target, expected, provided));
+        }
+    }
+
     fn check_class_hierarchy(&mut self) {
         for name in &self.classes.keys().cloned().collect::<Vec<_>>() {
             let class = self.classes[name].clone();
             if let Some(p) = &class.parent {
-                if !self.classes.contains_key(p) {
-                    self.err(format!("Classe '{}' extends '{}' inconnu", name, p));
+                let pn = p.ref_name().unwrap_or("");
+                match self.classes.get(pn) {
+                    None => self.err(format!("Classe '{}' extends '{}' inconnu", name, pn)),
+                    Some(pc) => self.check_type_arg_arity(
+                        name, "extends", pn, pc.type_params.len(), p.ref_args().len()),
                 }
             }
             for iface in &class.implements {
-                if !self.interfaces.contains_key(iface) {
-                    self.err(format!("Classe '{}' implements '{}' inconnu", name, iface));
+                let in_ = iface.ref_name().unwrap_or("");
+                match self.interfaces.get(in_) {
+                    None => self.err(format!("Classe '{}' implements '{}' inconnu", name, in_)),
+                    Some(i) => self.check_type_arg_arity(
+                        name, "implements", in_, i.type_params.len(), iface.ref_args().len()),
                 }
             }
             if self.has_cycle(name) {
@@ -459,7 +491,9 @@ impl TypeChecker {
         loop {
             if visited.contains(&cur) { return true; }
             visited.insert(cur.clone());
-            match self.classes.get(&cur).and_then(|c| c.parent.clone()) {
+            match self.classes.get(&cur).and_then(|c| c.parent.as_ref())
+                .and_then(|p| p.ref_name()).map(|s| s.to_string())
+            {
                 Some(p) => cur = p,
                 None    => return false,
             }
@@ -469,7 +503,8 @@ impl TypeChecker {
     fn check_interface_impls(&mut self) {
         for cn in &self.classes.keys().cloned().collect::<Vec<_>>() {
             let class = self.classes[cn].clone();
-            for iname in &class.implements.clone() {
+            for iface in &class.implements.clone() {
+                let iname = iface.ref_name().unwrap_or("");
                 if self.interfaces.contains_key(iname) {
                     // Méthodes de l'interface ET de ses parents (transitif)
                     for sig in self.iface_all_methods(iname) {
@@ -488,10 +523,13 @@ impl TypeChecker {
         for name in &self.interfaces.keys().cloned().collect::<Vec<_>>() {
             let iface = self.interfaces[name].clone();
             for p in &iface.parents {
-                if !self.interfaces.contains_key(p) {
-                    self.err(format!(
+                let pn = p.ref_name().unwrap_or("");
+                match self.interfaces.get(pn) {
+                    None => self.err(format!(
                         "Interface '{}' extends '{}' inconnu (ou n'est pas une interface)",
-                        name, p));
+                        name, pn)),
+                    Some(pi) => self.check_type_arg_arity(
+                        name, "extends", pn, pi.type_params.len(), p.ref_args().len()),
                 }
             }
             let mut path = vec![]; let mut seen = HashSet::new();
@@ -508,7 +546,7 @@ impl TypeChecker {
         path.push(cur.to_string());
         if let Some(i) = self.interfaces.get(cur).cloned() {
             for p in &i.parents {
-                if self.iface_cycle(p, path, seen) { return true; }
+                if self.iface_cycle(p.ref_name().unwrap_or(""), path, seen) { return true; }
             }
         }
         path.pop();
@@ -536,26 +574,37 @@ impl TypeChecker {
             if seen_names.insert(sig.name.clone()) { out.push(sig.clone()); }
         }
         for p in &iface.parents {
-            self.collect_iface_methods(p, out, seen_names, visited);
+            self.collect_iface_methods(p.ref_name().unwrap_or(""), out, seen_names, visited);
         }
     }
 
-    /// Cherche la signature d'une méthode dans une interface et ses parents.
-    fn iface_find_sig(&self, iname: &str, method: &str) -> Option<MethodSig> {
+    /// Cherche la signature d'une méthode dans l'interface `iname<args>` et ses
+    /// parents (transitif), en composant la substitution de paramètres de type le
+    /// long de la chaîne. La signature retournée est entièrement substituée.
+    fn iface_find_sig(&self, iname: &str, args: &[Type], method: &str) -> Option<MethodSig> {
         let mut visited = HashSet::new();
-        self.iface_find_sig_inner(iname, method, &mut visited)
+        self.iface_find_sig_inner(iname, args, method, &mut visited)
     }
 
     fn iface_find_sig_inner(
-        &self, iname: &str, method: &str, visited: &mut HashSet<String>,
+        &self, iname: &str, args: &[Type], method: &str, visited: &mut HashSet<String>,
     ) -> Option<MethodSig> {
         if !visited.insert(iname.to_string()) { return None; }
-        let iface = self.interfaces.get(iname)?;
+        let iface = self.interfaces.get(iname)?.clone();
+        let subst: Vec<(String, Type)> = iface.type_params.iter().cloned()
+            .zip(args.iter().cloned()).collect();
         if let Some(s) = iface.methods.iter().find(|m| m.name == method) {
-            return Some(s.clone());
+            return Some(subst_method_sig(s, &subst));
         }
-        for p in &iface.parents.clone() {
-            if let Some(s) = self.iface_find_sig_inner(p, method, visited) { return Some(s); }
+        for p in &iface.parents {
+            let pn = p.ref_name().unwrap_or("");
+            // Args du parent réécrits dans le contexte de substitution courant :
+            // `Box<E> extends Container<E>` avec E↦int donne Container<int>.
+            let pargs: Vec<Type> = p.ref_args().iter()
+                .map(|a| substitute(a, &subst)).collect();
+            if let Some(s) = self.iface_find_sig_inner(pn, &pargs, method, visited) {
+                return Some(s);
+            }
         }
         None
     }
@@ -1639,14 +1688,17 @@ impl TypeChecker {
         // Interface étendant (transitivement) sup
         if let Some(i) = self.interfaces.get(sub) {
             for p in &i.parents {
-                if self.is_subclass(p, sup) { return true; }
+                if self.is_subclass(p.ref_name().unwrap_or(""), sup) { return true; }
             }
         }
         if let Some(c) = self.classes.get(sub) {
-            if let Some(p) = &c.parent { if self.is_subclass(p, sup) { return true; } }
+            if let Some(p) = &c.parent {
+                if self.is_subclass(p.ref_name().unwrap_or(""), sup) { return true; }
+            }
             for iface in &c.implements {
                 // iface == sup, ou iface étend sup (transitif)
-                if iface == sup || self.is_subclass(iface, sup) { return true; }
+                let in_ = iface.ref_name().unwrap_or("");
+                if in_ == sup || self.is_subclass(in_, sup) { return true; }
             }
         }
         false
@@ -1714,13 +1766,13 @@ impl TypeChecker {
             _ => return type_err!("Appel '{}' sur type non-objet {}", method, obj_ty),
         };
 
-        if let Some(m) = self.find_method_def(&cn, method) {
-            let m = m.clone();
-            let subst: Vec<_> = self.classes.get(&cn).map(|c| {
-                c.type_params.iter().zip(type_args.iter())
-                    .map(|(p, t)| (p.clone(), t.clone())).collect()
-            }).unwrap_or_default();
-            return Ok((m.params.iter().map(|p| p.ty.clone()).collect(), m.return_type, subst));
+        if self.classes.contains_key(&cn) {
+            // Recherche le long de la chaîne `extends`, en substituant les args de
+            // type des parents génériques (`Sub extends Base<int>`). Signature
+            // entièrement résolue → subst vide pour l'appelant.
+            if let Some((ptys, rty)) = self.class_method_subst(&cn, &type_args, method) {
+                return Ok((ptys, rty, vec![]));
+            }
         }
         if let Some(ed) = self.enums.get(&cn) {
             if let Some(m) = ed.methods.iter().find(|m| m.name == method) {
@@ -1735,21 +1787,44 @@ impl TypeChecker {
                 ));
             }
         }
-        if let Some(iface) = self.interfaces.get(&cn) {
-            // Méthode de l'interface ou d'un parent (transitif)
-            if let Some(sig) = self.iface_find_sig(&cn, method) {
-                let subst: Vec<(String, Type)> = iface.type_params.iter()
-                    .zip(type_args.iter())
-                    .map(|(p, t)| (p.clone(), t.clone()))
-                    .collect();
+        if self.interfaces.contains_key(&cn) {
+            // Méthode de l'interface ou d'un parent (transitif). La signature est
+            // déjà substituée le long de la chaîne par iface_find_sig.
+            if let Some(sig) = self.iface_find_sig(&cn, &type_args, method) {
                 return Ok((
-                    sig.params.iter().map(|p| substitute(&p.ty, &subst)).collect(),
-                    substitute(&sig.return_type, &subst),
-                    subst,
+                    sig.params.iter().map(|p| p.ty.clone()).collect(),
+                    sig.return_type,
+                    vec![],
                 ));
             }
         }
         type_err!("Méthode '{}' inconnue dans '{}'", method, cn)
+    }
+
+    /// Trouve une méthode dans la classe `cn<args>` ou un ancêtre, en composant
+    /// la substitution de paramètres de type le long de la chaîne `extends`.
+    /// Retourne (types des paramètres, type de retour) entièrement substitués.
+    fn class_method_subst(&self, cn: &str, args: &[Type], method: &str)
+        -> Option<(Vec<Type>, Type)>
+    {
+        let c = self.classes.get(cn)?;
+        let subst: Vec<(String, Type)> = c.type_params.iter().cloned()
+            .zip(args.iter().cloned()).collect();
+        if let Some(m) = c.methods.iter().find(|m| m.name == method) {
+            return Some((
+                m.params.iter().map(|p| substitute(&p.ty, &subst)).collect(),
+                substitute(&m.return_type, &subst),
+            ));
+        }
+        if let Some(p) = &c.parent {
+            let pn = p.ref_name().unwrap_or("");
+            let pargs: Vec<Type> = p.ref_args().iter()
+                .map(|a| substitute(a, &subst)).collect();
+            if let Some(r) = self.class_method_subst(pn, &pargs, method) { return Some(r); }
+        }
+        // Repli sur Object (méthodes universelles : equals, …).
+        if cn != "Object" { return self.class_method_subst("Object", &[], method); }
+        None
     }
 
     // ── Lookup ────────────────────────────────────────────────────────────────
@@ -1757,7 +1832,7 @@ impl TypeChecker {
     fn find_method_def<'a>(&'a self, cn: &str, mn: &str) -> Option<&'a Method> {
         let c = self.classes.get(cn)?;
         if let Some(m) = c.methods.iter().find(|m| m.name == mn) { return Some(m); }
-        if let Some(p) = &c.parent { return self.find_method_def(p, mn); }
+        if let Some(p) = &c.parent { return self.find_method_def(p.ref_name().unwrap_or(""), mn); }
         if cn != "Object" { return self.find_method_def("Object", mn); }
         None
     }
@@ -1773,7 +1848,7 @@ impl TypeChecker {
         if let Some(m) = c.methods.iter().find(|m| m.name == mn) {
             return Some((m.visibility.clone(), cn.to_string()));
         }
-        if let Some(p) = &c.parent { return self.find_method_visibility(p, mn); }
+        if let Some(p) = &c.parent { return self.find_method_visibility(p.ref_name().unwrap_or(""), mn); }
         if cn != "Object"          { return self.find_method_visibility("Object", mn); }
         None
     }
@@ -1856,7 +1931,8 @@ impl TypeChecker {
         }
         // Interface (méthode propre ou héritée d'un parent)
         if self.interfaces.contains_key(cn) {
-            if let Some(sig) = self.iface_find_sig(cn, method) {
+            // is_mutable est indépendant des args de type → substitution inutile.
+            if let Some(sig) = self.iface_find_sig(cn, &[], method) {
                 return sig.is_mutable;
             }
         }
@@ -1901,24 +1977,34 @@ impl TypeChecker {
     }
 
     fn find_field_type(&self, obj_ty: &Type, field: &str) -> Option<Type> {
-        let cn = match obj_ty {
-            Type::UserDefined(n) | Type::Generic(n, _) => n.clone(),
+        let (cn, args) = match obj_ty {
+            Type::UserDefined(n) => (n.clone(), vec![]),
+            Type::Generic(n, a)  => (n.clone(), a.clone()),
             _ => return None,
         };
-        self.find_field_in(&cn, field)
+        self.find_field_in(&cn, &args, field)
     }
 
-    fn find_field_in(&self, cn: &str, field: &str) -> Option<Type> {
+    /// Type d'un champ de `cn<args>` ou d'un ancêtre, avec substitution des args
+    /// de type le long de la chaîne `extends` (`Sub extends Base<int>`).
+    fn find_field_in(&self, cn: &str, args: &[Type], field: &str) -> Option<Type> {
         let c = self.classes.get(cn)?;
+        let subst: Vec<(String, Type)> = c.type_params.iter().cloned()
+            .zip(args.iter().cloned()).collect();
         if let Some(f) = c.fields.iter().find(|f| f.name == field) {
-            return Some(self.resolve(&f.ty));
+            return Some(self.resolve(&substitute(&f.ty, &subst)));
         }
-        if let Some(p) = &c.parent { return self.find_field_in(p, field); }
+        if let Some(p) = &c.parent {
+            let pn = p.ref_name().unwrap_or("");
+            let pargs: Vec<Type> = p.ref_args().iter()
+                .map(|a| substitute(a, &subst)).collect();
+            return self.find_field_in(pn, &pargs, field);
+        }
         None
     }
 
     fn field_of_current_class(&self, field: &str) -> Option<Type> {
-        self.current_class.as_ref().and_then(|cn| self.find_field_in(cn, field))
+        self.current_class.as_ref().and_then(|cn| self.find_field_in(cn, &[], field))
     }
 
     /// Retourne le type primitif correspondant à une classe wrapper, ou None.

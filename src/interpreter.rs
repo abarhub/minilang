@@ -188,7 +188,9 @@ impl Interpreter {
             funcs:    program.funcs  .iter().map(|f| (f.name.clone(), f.clone())).collect(),
             interfaces: program.interfaces.iter().map(|i| i.name.clone()).collect(),
             iface_parents: program.interfaces.iter()
-                .map(|i| (i.name.clone(), i.parents.clone())).collect(),
+                .map(|i| (i.name.clone(),
+                    i.parents.iter().filter_map(|p| p.ref_name().map(|s| s.to_string())).collect()))
+                .collect(),
             binds_to,
             with_values,
             singletons: HashMap::new(),
@@ -326,7 +328,8 @@ impl Interpreter {
 
     fn all_fields(&self, cn: &str) -> Vec<Field> {
         let Some(c) = self.classes.get(cn) else { return vec![]; };
-        let mut fs = c.parent.as_deref().map(|p| self.all_fields(p)).unwrap_or_default();
+        let mut fs = c.parent.as_ref().and_then(|p| p.ref_name())
+            .map(|p| self.all_fields(p)).unwrap_or_default();
         for f in &c.fields { fs.retain(|pf: &Field| pf.name != f.name); fs.push(f.clone()); }
         fs
     }
@@ -334,7 +337,7 @@ impl Interpreter {
     fn find_method(&self, cn: &str, mn: &str) -> Option<Method> {
         if let Some(c) = self.classes.get(cn) {
             if let Some(m) = c.methods.iter().find(|m| m.name == mn) { return Some(m.clone()); }
-            if let Some(p) = &c.parent { return self.find_method(p, mn); }
+            if let Some(p) = &c.parent { return self.find_method(p.ref_name().unwrap_or(""), mn); }
             // Fallback vers Object si pas de parent explicite
             if cn != "Object" { return self.find_method("Object", mn); }
         }
@@ -1691,10 +1694,11 @@ impl Interpreter {
     fn class_conforms(&self, cn: &str, iface: &str) -> bool {
         let Some(c) = self.classes.get(cn) else { return false };
         for i in &c.implements {
-            if i == iface || self.iface_extends(i, iface) { return true; }
+            let in_ = i.ref_name().unwrap_or("");
+            if in_ == iface || self.iface_extends(in_, iface) { return true; }
         }
         if let Some(p) = &c.parent {
-            if self.class_conforms(p, iface) { return true; }
+            if self.class_conforms(p.ref_name().unwrap_or(""), iface) { return true; }
         }
         false
     }

@@ -393,9 +393,12 @@ fn print_enum(e: &EnumDef) {
 fn print_class(c: &ClassDef) {
     let tps = if c.type_params.is_empty() { String::new() }
               else { format!("<{}>", c.type_params.join(", ")) };
-    let ext = c.parent.as_deref().map(|p| format!(" extends {}", p)).unwrap_or_default();
+    let ext = c.parent.as_ref().map(|p| format!(" extends {}", p)).unwrap_or_default();
     let imp = if c.implements.is_empty() { String::new() }
-              else { format!(" implements {}", c.implements.join(", ")) };
+              else {
+                  let names: Vec<String> = c.implements.iter().map(|t| t.to_string()).collect();
+                  format!(" implements {}", names.join(", "))
+              };
     let tr  = if c.is_transient { "transient " } else { "" };
     let svc = if c.is_service { "service " } else { "" };
     println!("{}{}class {}{}{}{} {{", tr, svc, c.name, tps, ext, imp);
