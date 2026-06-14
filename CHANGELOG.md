@@ -4,6 +4,27 @@ Toutes les évolutions notables du langage sont documentées ici.
 
 ---
 
+## [14/06/2026] — Généricité de l'héritage de types
+
+Les arguments de type passés à un supertype générique sont désormais **conservés et substitués** le long de la chaîne d'héritage, au lieu d'être ignorés. Cela vaut pour les trois clauses :
+
+- `interface Box<E> extends Container<E>` — propagation entre paramètres (même renommés) ;
+- `interface IntSource extends Source<int>` — argument concret sur le parent ;
+- `class IntCell extends Base<int>` — méthodes **et** champs hérités d'une classe générique sont substitués (`getVal()` retourne `int`, le champ `val` est un `int`).
+
+```java
+interface Container<T> { T get(); }
+interface Box<E> extends Container<E> { void put(E x); }
+class IntBox implements Box<int> { int get() { ... } void put(int x) {} }
+
+Box<int> bx = new IntBox(7);
+int v = bx.get();   // get() héritée de Container, retour résolu en int
+```
+
+L'arité des arguments de type est validée (0 argument toléré = paramètres non liés, sinon le nombre doit correspondre). Clôt la limitation « parents d'interface génériques » du backlog.
+
+---
+
 ## [13/06/2026] — Accès fichiers brut (`Files`) désactivé par défaut
 
 La classe `Files` (chemins bruts, sans confinement) donne une autorité totale sur le système de fichiers, ce qui contournait le modèle de capacités. Elle est désormais **interdite par défaut** : toute opération `Files` échoue tant que `[files] unrestricted = true` n'est pas explicitement positionné.
